@@ -69,7 +69,67 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 4. Is this a git repo?
+# 4. GitHub CLI (gh)
+# ──────────────────────────────────────────────
+if command -v gh &>/dev/null; then
+    GH_VER=$(gh --version 2>/dev/null | head -1)
+    green "gh_binary=$GH_VER"
+else
+    warn "gh_binary=missing note='install: https://cli.github.com'"
+fi
+
+if command -v gh &>/dev/null; then
+    # 4a. Auth status
+    GH_AUTH=$(gh auth status 2>&1) || true
+    if echo "$GH_AUTH" | grep -q "Logged in to github.com"; then
+        GH_USER=$(echo "$GH_AUTH" | grep -oP 'Logged in to github.com account \K\S+' | head -1 || echo "unknown")
+        green "gh_auth=authenticated user=$GH_USER"
+    else
+        warn "gh_auth=not_authenticated action=login_required"
+        if read -rp "  Run 'gh auth login' now? [y/N] " REPLY && [[ "$REPLY" =~ ^[Yy]$ ]]; then
+            gh auth login
+            GH_AUTH=$(gh auth status 2>&1) || true
+            GH_USER=$(echo "$GH_AUTH" | grep -oP 'Logged in to github.com account \K\S+' | head -1 || echo "unknown")
+            if echo "$GH_AUTH" | grep -q "Logged in to github.com"; then
+                fix "gh_auth=authenticated user=$GH_USER"
+            fi
+        fi
+    fi
+
+    # 4b. Repo access — extract owner/repo from remote
+    REPO_SLUG=""
+    LOCAL_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -n "$LOCAL_REMOTE" ]; then
+        REPO_SLUG=$(echo "$LOCAL_REMOTE" | sed -n 's|.*github\.com[:/]\(.*\)\.git|\1|p' | sed 's|/$||')
+    fi
+
+    if [ -n "$REPO_SLUG" ]; then
+        GH_REPO_OUTPUT=$(gh repo view "$REPO_SLUG" --json name,owner,nameWithOwner,defaultBranchRef,viewerPermission 2>&1) || true
+        if echo "$GH_REPO_OUTPUT" | grep -q '"nameWithOwner"'; then
+            REPO_OWNER=$(echo "$GH_REPO_OUTPUT" | grep -oP '"login":"\K[^"]+' || echo "unknown")
+            REPO_NAME=$(echo "$GH_REPO_OUTPUT" | grep -oP '"name":"\K[^"]+' | head -1 || echo "unknown")
+            REPO_DEFAULT=$(echo "$GH_REPO_OUTPUT" | grep -oP '"defaultBranchRef":\{"name":"\K[^"]+' || echo "unknown")
+            green "gh_repo=accessible slug=$REPO_SLUG default_branch=$REPO_DEFAULT"
+
+            # Verify active gh user can push to this repo (permission check)
+            PERMS=$(echo "$GH_REPO_OUTPUT" | grep -oP '"viewerPermission":"\K[^"]+' || echo "unknown")
+            if [ "$PERMS" = "ADMIN" ] || [ "$PERMS" = "MAINTAIN" ] || [ "$PERMS" = "WRITE" ]; then
+                green "gh_repo=permission level=$PERMS"
+            elif [ "$PERMS" = "READ" ]; then
+                warn "gh_repo=permission level=$PERMS note='read-only — cannot push'"
+            else
+                warn "gh_repo=permission level=$PERMS note='could not determine write access'"
+            fi
+        else
+            warn "gh_repo=inaccessible slug=$REPO_SLUG note='gh repo view failed — token may lack scope or repo is private'"
+        fi
+    else
+        warn "gh_repo=unknown note='no GitHub remote to validate against'"
+    fi
+fi
+
+# ──────────────────────────────────────────────
+# 5. Is this a git repo?
 # ──────────────────────────────────────────────
 echo ""
 echo "--- Repo ---"
@@ -82,7 +142,7 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 5. Remote origin
+# 6. Remote origin
 # ──────────────────────────────────────────────
 REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 if [ -n "$REMOTE" ]; then
@@ -98,7 +158,7 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 6. No detached HEAD
+# 7. No detached HEAD
 # ──────────────────────────────────────────────
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
 if [ -n "$CURRENT_BRANCH" ]; then
@@ -108,7 +168,7 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 7. No in-progress rebase/merge/cherry-pick
+# 8. No in-progress rebase/merge/cherry-pick
 # ──────────────────────────────────────────────
 for op in rebase merge cherry-pick revert; do
     if [ -d "$(git rev-parse --git-dir 2>/dev/null)/${op}-apply" ] || \
@@ -147,7 +207,7 @@ fi
 green "git_state=clean no_rebase no_merge no_cherry_pick"
 
 # ──────────────────────────────────────────────
-# 8. .gitignore
+# 9. .gitignore
 # ──────────────────────────────────────────────
 if [ -f "$ROOT_DIR/.gitignore" ]; then
     green "gitignore=exists"
@@ -188,7 +248,7 @@ IGNORE
 fi
 
 # ──────────────────────────────────────────────
-# 9. Working tree clean?
+# 10. Working tree clean?
 # ──────────────────────────────────────────────
 if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
     green "git_worktree=clean"
