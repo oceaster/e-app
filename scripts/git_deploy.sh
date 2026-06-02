@@ -134,7 +134,7 @@ echo "[deploy:4/5] step=push status=done"
 # ──────────────────────────────────────────────
 echo ""
 echo "[deploy:5/5] step=merge_feat into=main"
-"$SCRIPTS_DIR/git_merge_feat_branch.sh" 2>&1 || {
+"$SCRIPTS_DIR/git_merge_branch.sh" 2>&1 || {
     echo "[deploy:5/5] step=merge status=failed"
     echo "[deploy] status=aborted reason='merge failed — main is clean, feature branch preserved'"
     exit 1
@@ -146,4 +146,3 @@ MERGED=true
 # ──────────────────────────────────────────────
 echo ""
 echo "[deploy] status=done branch=main commit=${COMMIT_HASH:-N/A} remote=$REMOTE"
-# test comment
