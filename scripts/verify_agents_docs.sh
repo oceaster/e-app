@@ -4,19 +4,21 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 AGENTS_MD="$ROOT_DIR/docs/AGENTS.md"
 TODO_MD="$ROOT_DIR/docs/AGENTS_TODO.md"
-ERRORS=0
+TOTAL=0
+PASSED=0
+FAILED=0
 
-red()   { printf '\033[31m%s\033[0m\n' "$1"; }
-green() { printf '\033[32m%s\033[0m\n' "$1"; }
+green() { printf '\033[32m  PASS: %s\033[0m\n' "$1"; }
+red()   { printf '\033[31m  FAIL: %s\033[0m\n' "$1"; }
 
-fail() { red "  FAIL: $1"; ERRORS=$((ERRORS + 1)); }
-pass() { green "  PASS: $1"; }
+pass() { green "$1"; PASSED=$((PASSED + 1)); TOTAL=$((TOTAL + 1)); }
+fail() { red "$1";   FAILED=$((FAILED + 1)); TOTAL=$((TOTAL + 1)); }
 
 check_file_exists() {
     if [ -f "$1" ]; then
-        pass "$1 exists"
+        pass "file=$1 exists=true"
     else
-        fail "$1 does not exist"
+        fail "file=$1 exists=false"
         return 1
     fi
 }
@@ -25,86 +27,64 @@ check_has_h1() {
     local label="$1"
     local file="$2"
     if grep -q '^# ' "$file"; then
-        pass "$label has H1 heading"
+        pass "file=$label check=h1 status=ok"
     else
-        fail "$label missing H1 heading"
+        fail "file=$label check=h1 status=missing"
     fi
 }
 
-# ──────────────────────────────────────────────
-echo "=== Verifying docs/AGENTS.md ==="
+echo "[verify_docs] action=start targets=AGENTS.md,AGENTS_TODO.md"
 echo ""
 
+# ── AGENTS.md ──
+echo "--- AGENTS.md ---"
 if check_file_exists "$AGENTS_MD"; then
-
     check_has_h1 "AGENTS.md" "$AGENTS_MD"
 
-    # Must have Work Log section
-    if grep -q '^## Work Log' "$AGENTS_MD"; then
-        pass "Has '## Work Log' section"
-    else
-        fail "Missing '## Work Log' section"
-    fi
+    grep -q '^## Work Log' "$AGENTS_MD" \
+        && pass "file=AGENTS.md check=section_Work_Log status=ok" \
+        || fail "file=AGENTS.md check=section_Work_Log status=missing"
 
-    # Must have Project Conventions section
-    if grep -q '^## Project Conventions' "$AGENTS_MD"; then
-        pass "Has '## Project Conventions' section"
-    else
-        fail "Missing '## Project Conventions' section"
-    fi
+    grep -q '^## Project Conventions' "$AGENTS_MD" \
+        && pass "file=AGENTS.md check=section_Project_Conventions status=ok" \
+        || fail "file=AGENTS.md check=section_Project_Conventions status=missing"
 
-    # Work log entries should be dated (### YYYY-MM-DD)
     if grep -qP '^### \d{4}-\d{2}-\d{2}' "$AGENTS_MD"; then
-        pass "Work log has dated entries (### YYYY-MM-DD format)"
+        pass "file=AGENTS.md check=dated_entries format=YYYY-MM-DD status=ok"
     else
-        fail "Work log missing dated entries (### YYYY-MM-DD format)"
+        fail "file=AGENTS.md check=dated_entries format=YYYY-MM-DD status=missing"
     fi
 
-    # Each dated section should have at least one bullet
-    DATED_SECTIONS=$(grep -cP '^### \d{4}-\d{2}-\d{2}' "$AGENTS_MD" || true)
-    BULLET_COUNT=$(grep -cP '^- ' "$AGENTS_MD" || true)
-    if [ "$BULLET_COUNT" -ge "$DATED_SECTIONS" ]; then
-        pass "Each dated section has bullet entries ($BULLET_COUNT bullets, $DATED_SECTIONS sections)"
+    DATED=$(grep -cP '^### \d{4}-\d{2}-\d{2}' "$AGENTS_MD" || true)
+    BULLETS=$(grep -cP '^- ' "$AGENTS_MD" || true)
+    if [ "$BULLETS" -ge "$DATED" ]; then
+        pass "file=AGENTS.md check=bullet_coverage sections=$DATED bullets=$BULLETS status=ok"
     else
-        fail "Some dated sections may be missing bullet entries ($BULLET_COUNT bullets, $DATED_SECTIONS sections)"
+        fail "file=AGENTS.md check=bullet_coverage sections=$DATED bullets=$BULLETS status=under"
     fi
-
 fi
 
 echo ""
-echo "=== Verifying docs/AGENTS_TODO.md ==="
-echo ""
-
+echo "--- AGENTS_TODO.md ---"
 if check_file_exists "$TODO_MD"; then
-
     check_has_h1 "AGENTS_TODO.md" "$TODO_MD"
 
-    # Must have a Legend section
-    if grep -q '^## Legend' "$TODO_MD"; then
-        pass "Has '## Legend' section"
-    else
-        fail "Missing '## Legend' section"
-    fi
+    grep -q '^## Legend' "$TODO_MD" \
+        && pass "file=AGENTS_TODO.md check=section_Legend status=ok" \
+        || fail "file=AGENTS_TODO.md check=section_Legend status=missing"
 
-    # Required task-status tokens in legend
     for tok in '\[ \]' '\[~\]' '\[x\]' '\[-\]'; do
-        if grep -q "$tok" "$TODO_MD"; then
-            pass "Legend includes token: $tok"
-        else
-            fail "Legend missing token: $tok"
-        fi
+        grep -q "$tok" "$TODO_MD" \
+            && pass "file=AGENTS_TODO.md check=legend_token token=$tok status=ok" \
+            || fail "file=AGENTS_TODO.md check=legend_token token=$tok status=missing"
     done
 
-    # Required board columns
     for col in Backlog "In Progress" Done; do
-        if grep -q "^## $col$" "$TODO_MD"; then
-            pass "Has '## $col' column"
-        else
-            fail "Missing '## $col' column"
-        fi
+        grep -q "^## $col$" "$TODO_MD" \
+            && pass "file=AGENTS_TODO.md check=column column=$col status=ok" \
+            || fail "file=AGENTS_TODO.md check=column column=$col status=missing"
     done
 
-    # All task lines (under a ## column) must start with one of the valid tokens
     COLUMNS=('Backlog' 'In Progress' 'Done')
     for col in "${COLUMNS[@]}"; do
         INVALID=$(awk -v col="$col" '
@@ -118,29 +98,27 @@ if check_file_exists "$TODO_MD"; then
             in_col && $0 !~ /^- \[[- x~]\] / { print NR ": " $0 }
         ' "$TODO_MD")
         if [ -z "$INVALID" ]; then
-            pass "All items in '$col' use valid format - [ ] / - [~] / - [x] / - [-]"
+            pass "file=AGENTS_TODO.md check=task_format column=$col status=ok"
         else
             while IFS= read -r line; do
-                fail "Invalid task line in '$col': $line"
+                fail "file=AGENTS_TODO.md check=task_format column=$col status=invalid line=\"$line\""
             done <<< "$INVALID"
         fi
     done
 
-    # Must have "Last updated" footer
     if grep -qP '\*Last updated: \d{4}-\d{2}-\d{2}\*' "$TODO_MD"; then
-        pass "Has 'Last updated: YYYY-MM-DD' footer"
+        pass "file=AGENTS_TODO.md check=footer format=Last_updated_YYYY-MM-DD status=ok"
     else
-        fail "Missing or malformed '*Last updated: YYYY-MM-DD*' footer"
+        fail "file=AGENTS_TODO.md check=footer format=Last_updated_YYYY-MM-DD status=missing"
     fi
-
 fi
 
 echo ""
 echo "============================================"
-if [ "$ERRORS" -eq 0 ]; then
-    green "All checks passed (0 errors)"
+if [ "$FAILED" -eq 0 ]; then
+    echo "[verify_docs] status=pass total=$TOTAL passed=$PASSED failed=$FAILED"
     exit 0
 else
-    red "Found $ERRORS error(s)"
+    echo "[verify_docs] status=fail total=$TOTAL passed=$PASSED failed=$FAILED"
     exit 1
 fi

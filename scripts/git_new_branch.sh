@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BRANCH="$(git branch --show-current)"
+CURRENT="$(git branch --show-current)"
+REMOTE="$(git remote get-url origin 2>/dev/null || echo 'unknown')"
 
-if [ "$BRANCH" != "main" ]; then
-    echo "ERROR: Must be on 'main' branch to create a new feature branch. Currently on '$BRANCH'." >&2
+if [ "$CURRENT" != "main" ]; then
+    echo "[FATAL] current=$CURRENT guard=deny reason='new_branch must run from main'" >&2
     exit 1
 fi
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <branch-name>" >&2
+    echo "[FATAL] reason='missing branch name' usage=\"$0 <branch-name>\"" >&2
     exit 1
 fi
 
 NEW_BRANCH="$1"
+BASE_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'empty-repo')"
 
-echo "Creating and switching to new branch: $NEW_BRANCH"
+echo "[new_branch] from=main to=$NEW_BRANCH base=$BASE_COMMIT action=create"
+
+git fetch origin main 2>/dev/null || true
 git checkout -b "$NEW_BRANCH"
-echo "Done. Now on branch '$NEW_BRANCH'."
+
+NEW_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'empty-repo')"
+
+echo "[new_branch] from=main to=$NEW_BRANCH base=$BASE_COMMIT head=$NEW_COMMIT status=done remote=$REMOTE"
