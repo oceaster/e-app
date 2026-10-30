@@ -2,8 +2,16 @@
 const path=require('node:path'),crypto=require('node:crypto');
 let raw;try{raw=require('original-fs');}catch{raw=require('node:fs');}
 const fs=raw.promises;
-const REPO='https://github.com/EasterCompany/e-server-client/releases/download/';
-const LATEST='https://github.com/EasterCompany/e-server-client/releases/latest/download/';
+// WHERE THIS CLIENT LOOKS FOR ITS OWN UPDATES is the repository it is built from.
+// The client moved to oceaster/e-app (Owen, 2026-10-30: "make sure that the e-app auto
+// update feature is still going to work now we moved the repo location"), so the feed
+// moved with it - the old EasterCompany/e-server-client path is not where releases are
+// published any more. An install built before this change still asks the old address and
+// will never see a new release: 1.0.5 needs one fresh download and install, and every
+// release after it updates itself from here. tests/update-feed.test.cjs holds this line
+// to the repository the checkout came from.
+const REPO='https://github.com/oceaster/e-app/releases/download/';
+const LATEST='https://github.com/oceaster/e-app/releases/latest/download/';
 const BOOTSTRAP=1,MAX_BYTES=200*1024*1024;
 // WHICH package names this client accepts as ITS OWN update payload, and why that is a list.
 //

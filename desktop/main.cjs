@@ -12,7 +12,7 @@ const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
 const development=!app.isPackaged,fixture=development?process.env.E_SERVER_CLIENT_TEST_ORIGIN:null;
 const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.html');
-const installer='https://github.com/EasterCompany/e-server-client/releases/latest';
+const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
 let state={phase:'auth',version:VERSION,server:'',accountBusy:true};
@@ -175,7 +175,7 @@ async function microsoft(){
  }catch(error){return {ok:false,error:error.message};}finally{auth=null;}
 }
 async function cancelSignIn(){auth?.abort();externalAuth=false;await ask('/desktop/auth/cancel',{method:'POST',body:{}}).catch(()=>{});await ask('/profiles/providers/cancel',{method:'POST',body:{}}).catch(()=>{});if(win)win.loadURL(config.server+'/account');}
-function probe(){return new Promise((resolve,reject)=>{const request=https.get(installer,{timeout:15000},response=>{response.resume();const prefix='https://github.com/EasterCompany/e-server-client/releases/tag/client-v';if(response.statusCode!==302||!response.headers.location?.startsWith(prefix))return reject(Error('Update service did not return a release.'));const version=response.headers.location.slice(prefix.length);try{updater.version(version);resolve(version);}catch(error){reject(error);}});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Update check timed out.')));});}
+function probe(){return new Promise((resolve,reject)=>{const request=https.get(installer,{timeout:15000},response=>{response.resume();const prefix='https://github.com/oceaster/e-app/releases/tag/client-v';if(response.statusCode!==302||!response.headers.location?.startsWith(prefix))return reject(Error('Update service did not return a release.'));const version=response.headers.location.slice(prefix.length);try{updater.version(version);resolve(version);}catch(error){reject(error);}});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Update check timed out.')));});}
 async function mayRestart(){
  if(!win||setup?.isVisible()||win.isFocused()||win.webContents.isCurrentlyAudible()||captureGranted||Date.now()-activity<60000||auth||externalAuth||company?.busy||downloads||requests.size)return false;
  try{return await win.webContents.executeJavaScript("(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return !e.defaultPrevented;})()");}catch{return false;}
