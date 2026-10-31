@@ -1,0 +1,275 @@
+/* ONE MODAL BACKDROP: colour and blur are declared here and nowhere else. */
+/* THE SHARED ACCOUNT CONTROL'S OWN STYLESHEET — the menu's identity lines and the
+   account-wide User Settings panel.
+ *
+ * WHY THIS FILE IS LOADED BY THE MODULE AND NOT BY A PAGE. The control is mounted by two
+ * surfaces: this site (launcher.easter.company) and the corporate site, which imports
+ * site/account-control.mjs over the network and therefore gets whatever this module brings
+ * with it. The corporate repository keeps its own copy of the pill's rules for the same
+ * reason — it cannot link a stylesheet it does not host — and a copy is exactly what would
+ * silently miss new rules added here. So site/account-control.mjs injects this file as a
+ * <link> resolved against its OWN url (one request to launcher.easter.company whichever page
+ * loaded it), and every surface that mounts the control paints the same menu and the same
+ * panel. Nothing in a page's markup has to change for a new surface to be added.
+ *
+ * FIVE TOKENS, FROM THE HOST. Diana's handoff (DESIGN-SPEC.md, "Tokens / theme contract")
+ * freezes exactly five inputs — --surface, --border, --text, --muted, --accent — and forbids
+ * the component from importing a product palette or inventing a sixth colour. Both hosts
+ * already publish them under their own names, so the panel's five are mapped once, below,
+ * from the host's own declarations: --app-panel, --app-border, --app-muted and --app-gold
+ * (the .web-mode block both surfaces carry) and --ink. Every colour the component paints is one
+ * of those five or a mix of two of them; the only literals in this file are the fallbacks inside
+ * that one mapping, for a host that publishes no tokens at all, and they are the same six values
+ * both hosts already use.
+ *
+ * Accent-filled controls use --es-surface as their foreground, which is why the host must keep
+ * accent/surface at 4.5:1 or better. Both hosts do, measured with the WCAG relative-luminance
+ * formula on 2026-10-30 against the shared panel colour #11252d: this site's gold #e4c486 is
+ * 9.45:1, the corporate site's lilac #c9b1ff is 8.46:1, text #edf1e9 is 13.84:1, and muted
+ * #a8b9b4 is 7.74:1.
+ */
+
+/* The account control's menu: the identity pair, the rule, then the actions.
+   Owen's pair, already on the launcher's pill and on e-server's menu: the display name over the
+   bare username, one line each. When the account document carries no username yet — a fresh
+   Microsoft signup that has not claimed one — the second line is absent rather than guessed
+   (site/account-control.mjs sets `hidden`), which is the rule the launcher's own menu follows. */
+.desktop-profile-menu .web-account-identity{display:flex;flex-direction:column;gap:1px;min-width:0;padding:8px 10px 6px}
+.desktop-profile-menu .web-account-identity-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650;font-size:.9rem;line-height:1.25;color:var(--ink)}
+.desktop-profile-menu .web-account-identity-username{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;line-height:1.25;color:var(--app-muted)}
+.desktop-profile-menu .web-account-identity[hidden]{display:none}
+.desktop-profile-menu .web-account-menu-rule{border:0;border-top:1px solid var(--app-border);margin:2px 0}
+.desktop-profile-menu .web-account-menu-rule[hidden]{display:none}
+
+/* THE MENU PANEL. This is the control's own markup (`site/account-control.mjs` creates
+   `.desktop-profile-menu`), so its rules belong to this sheet like the identity pair above them,
+   and every host that mounts the control paints the same panel: the launcher window, the
+   launcher's web pages, and easter.company. Moved here from the launcher's site/desktop.css,
+   which used to be the only place it was written. */
+/* THE SAME DROP DOWN AS E-SERVER'S, in size, type and rhythm (api/page_utils.py
+   USER_MENU_CSS: a 4px inset, 10px radius, .85rem type and 8px/10px rows). Owen, 2026-10-28:
+   "e-server also has a better more compact user drop down menu, please update the other ones
+   to use the same style of drop down". min-width rather than a fixed width so a short list
+   stays narrow the way it does there; max-width keeps the long ones off the viewport edge.
+   position:fixed is kept because this menu is placed by JS against the button. The launcher's
+   window rules for this panel moved out of site/desktop.css on 2026-10-31; the corporate site
+   used to hold a hand-copied third version (ticket DRY-6). */
+.desktop-profile-menu{position:fixed;inset:auto;margin:0;min-width:200px;max-width:min(280px,calc(100vw - 24px));max-height:calc(100dvh - 90px);overflow:auto;padding:4px;border:1px solid #ffffff30;border-radius:10px;background:var(--app-panel);color:#e5e9df;box-shadow:0 12px 32px #0005;font-size:.85rem}
+.desktop-profile-menu button{display:block;width:100%;margin-top:4px;text-align:left;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:.85rem;line-height:1.3;cursor:pointer}
+.desktop-profile-menu button:hover,.desktop-profile-menu button:focus-visible{background:#ffffff0a}
+
+/* ---- the panel -------------------------------------------------------------------------
+   Everything below is the frozen component: identical structure, labels, geometry and
+   interaction on every surface, differing only in the five tokens above. Measurements are
+   Diana's (DESIGN-SPEC.md, "Layout & type"), not this file's invention. */
+.web-user-settings{
+ --es-surface:var(--app-panel,#10232b);
+ --es-border:var(--app-border,#ffffff24);
+ --es-text:var(--ink,#edf1e9);
+ --es-muted:var(--app-muted,#a8b9b4);
+ --es-accent:var(--app-gold,#e4c486);
+ width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 48px);padding:0;margin:auto;
+ border:1px solid var(--es-border);border-radius:20px;background:var(--es-surface);color:var(--es-text);
+ overflow:hidden;font:14px/1.5 system-ui,sans-serif;
+ box-shadow:0 28px 90px color-mix(in srgb,var(--es-text) 15%,transparent);
+}
+.web-user-settings::backdrop{background:var(--modal-scrim);backdrop-filter:blur(var(--modal-blur))}
+.web-user-settings [hidden]{display:none!important}
+.web-user-settings :is(button,input,select):focus-visible{outline:2px solid var(--es-accent);outline-offset:3px}
+.web-user-settings button{min-height:44px;padding:10px 16px;border:1px solid var(--es-border);border-radius:10px;background:var(--es-surface);color:var(--es-text);font:inherit;cursor:pointer}
+.web-user-settings button:hover:not(:disabled){background:color-mix(in srgb,var(--es-accent) 10%,var(--es-surface))}
+.web-user-settings button:disabled{cursor:wait;opacity:.6}
+.web-user-settings .es-shell{display:flex;flex-direction:column;max-height:calc(100dvh - 50px)}
+.web-user-settings .es-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:26px 28px 22px;border-bottom:1px solid var(--es-border)}
+.web-user-settings h2{margin:0 0 6px;font-size:24px;line-height:1.25;font-weight:650;letter-spacing:-.035em}
+.web-user-settings .es-sub{margin:0;font-size:13px;line-height:1.5;color:var(--es-muted)}
+.web-user-settings .es-close{width:44px;min-width:44px;padding:0;border-color:transparent;font-size:24px;line-height:1}
+.web-user-settings .es-body{overflow:auto;padding:4px 28px 0;overscroll-behavior:contain}
+.web-user-settings section{padding:20px 0;border-bottom:1px solid var(--es-border)}
+.web-user-settings section:last-of-type{border-bottom:0}
+.web-user-settings h3{margin:0 0 4px;font-size:14px;font-weight:650;line-height:1.5}
+.web-user-settings fieldset{margin:0;padding:0;border:0;min-width:0}
+.web-user-settings legend{padding:0;font-size:14px;font-weight:650;line-height:1.5}
+.web-user-settings .es-help{margin:0 0 12px;font-size:12px;line-height:1.5;color:var(--es-muted)}
+.web-user-settings .es-secondary{font-size:12px;line-height:1.5;color:var(--es-muted)}
+/* The language row: the current choice over its own descriptor, and the chevron that opens it. */
+.web-user-settings .es-wide{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left}
+.web-user-settings .es-choice{display:flex;flex-direction:column;min-width:0;gap:1px}
+.web-user-settings .es-chevron{flex:none;font-size:16px;color:var(--es-muted)}
+.web-user-settings .es-picker{padding-top:14px}
+.web-user-settings .es-picker-label{margin-top:12px}
+.web-user-settings label{display:block;font-size:12px;line-height:1.5;color:var(--es-muted)}
+.web-user-settings input[type=search],.web-user-settings select{min-width:0;width:100%;min-height:44px;margin:4px 0 0;padding:9px 12px;border:1px solid var(--es-border);border-radius:9px;background:var(--es-surface);color:var(--es-text);font:inherit}
+.web-user-settings select option{padding:8px}
+/* Three radio chips. The input is visually removed but stays focusable, so arrow keys move the
+   choice and the group is one tab stop (DESIGN-SPEC.md, "Keyboard & accessibility acceptance"). */
+.web-user-settings .es-segments{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:4px;padding:4px;border:1px solid var(--es-border);border-radius:12px}
+.web-user-settings .es-segments label{position:relative;display:grid;place-items:center;min-height:42px;padding:9px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--es-text);text-align:center}
+.web-user-settings .es-segments label:has(input:checked){background:var(--es-accent);color:var(--es-surface);font-weight:650}
+.web-user-settings .es-segments label:has(input:focus-visible){outline:2px solid var(--es-accent);outline-offset:3px}
+.web-user-settings .es-segments input{position:absolute;width:1px;height:1px;opacity:0}
+/* The three chat bindings: the key as a chip, the behaviour as a select. */
+.web-user-settings .es-chat-row{display:grid;grid-template-columns:140px 1fr;align-items:center;gap:12px;margin-top:8px}
+.web-user-settings kbd{justify-self:start;padding:4px 7px;border:1px solid var(--es-border);border-radius:5px;color:var(--es-muted);font:12px system-ui,sans-serif}
+/* The editor switch. Disabled by aria-disabled and inert by construction: there is no feature
+   behind it yet, so it is not a control the panel pretends works. */
+.web-user-settings .es-editor{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.web-user-settings .es-badge{margin-left:6px;font-size:11px;letter-spacing:.02em;color:var(--es-muted)}
+.web-user-settings .es-switch{flex:none;position:relative;display:block;width:44px;height:24px;border:1px solid var(--es-border);border-radius:999px}
+.web-user-settings .es-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--es-muted)}
+.web-user-settings .es-foot{padding:16px 28px 24px;border-top:1px solid var(--es-border)}
+.web-user-settings .es-status{display:flex;align-items:center;gap:8px;margin:0;font-size:12px;line-height:1.5;color:var(--es-muted)}
+.web-user-settings .es-mark{flex:none;display:grid;place-items:center;width:17px;height:17px;border:1px solid currentColor;border-radius:50%;font-size:11px;font-weight:700;line-height:1}
+.web-user-settings .es-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px}
+.web-user-settings .es-primary{border-color:var(--es-accent);background:var(--es-accent);color:var(--es-surface);font-weight:650}
+.web-user-settings .es-primary:hover:not(:disabled){background:color-mix(in srgb,var(--es-accent) 88%,var(--es-surface))}
+/* The attention outlines: the same geometry as focus, worn by BOTH resolution buttons while a
+   blocked close is being answered. Static — never a pulse, never a fill, never a colour change
+   (DESIGN-SPEC.md, "Attention behaviour"). */
+.web-user-settings.es-attend .es-actions button{outline:2px solid var(--es-accent);outline-offset:3px}
+.web-user-settings.es-attend .es-status{color:var(--es-text)}
+
+/* 390px and every narrow effective width, including 200% zoom (DESIGN-SPEC.md, "Layout & type"). */
+@media (max-width:520px){
+ .web-user-settings{max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:16px}
+ .web-user-settings .es-shell{max-height:calc(100dvh - 18px)}
+ .web-user-settings .es-head{padding:20px}
+ .web-user-settings h2{font-size:22px}
+ .web-user-settings .es-body{padding:0 20px}
+ .web-user-settings .es-foot{padding:16px 20px 20px}
+ .web-user-settings .es-chat-row{grid-template-columns:104px 1fr;gap:8px}
+ .web-user-settings .es-actions{flex-direction:column}
+ .web-user-settings .es-actions button{width:100%}
+}
+
+/* Reduced motion changes what moves, never what is said: the nudge is not started here and the
+   outlines and the copy appear at once (site/user-settings.mjs checks the same query in script). */
+@media (prefers-reduced-motion:reduce){
+ .web-user-settings,.web-user-settings *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+/* The host's live region for the two announcements that must be heard after the dialog is gone
+   ("Settings saved.", "Changes discarded."). Off screen, never display:none — a hidden live
+   region is silent to a screen reader, which is the whole reason it exists. */
+.web-settings-announce{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* ---- THE COMPANY DIALOG FAMILY, WHICH IS THE CONTROL'S MARKUP TOO -----------------------
+   My Profile, Linked Accounts, the sign-in chooser, username and password setup and Verified
+   emails are drawn by site/company-profile.mjs and site/company-auth.mjs, and those files travel
+   with the control over the wire. Their styles therefore travel with it as well: this sheet is
+   the one file every host mounting the control already loads, so a rule written here reaches the
+   launcher window, the launcher's web pages and easter.company at once, and none of the three can
+   drift from the others. The rules below moved here from the launcher's site/desktop.css on
+   2026-10-31 (ticket DRY-6), which the corporate site had hand-copied 61 blocks of; nothing in
+   them is window-only - the window's own chrome keeps its `.desktop-mode` scope in that file.
+
+   The two things they read from the host are the four --app-* tokens the panel's own --es-*
+   mapping above already names, and --modal-scrim/--modal-blur, which each host declares once. */
+.desktop-company-dialog{width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:28px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-panel);color:#e5e9df;box-shadow:0 18px 65px #0007}
+.desktop-company-dialog::backdrop{background:var(--modal-scrim);backdrop-filter:blur(var(--modal-blur))}
+.desktop-company-dialog h2{margin:0 32px 12px 0;font:600 22px/1.3 Inter,system-ui,sans-serif}.desktop-company-dialog p{font-size:12px;line-height:1.6;color:var(--app-muted)}
+.desktop-company-dialog label{display:block;font-size:12px;margin:16px 0;color:#d1ded5}.desktop-company-dialog input:not([type=checkbox]):not([type=radio]){display:block;width:100%;padding:10px 12px;margin-top:7px;border:1px solid #ffffff28;border-radius:6px;background:#0b1d25;color:#e5e9df;font:13px/1.5 system-ui}
+.desktop-company-dialog .company-microsoft,.desktop-company-dialog .company-submit{width:100%;padding:12px;border:1px solid var(--app-gold);border-radius:6px;background:var(--app-gold);color:#11252d;font:600 13px/1.4 system-ui;cursor:pointer}.desktop-company-dialog .company-microsoft{margin-top:10px}
+.desktop-company-dialog .company-provider-note{font-size:11px}.desktop-company-dialog .company-step{margin:0 0 6px;font:600 10px/1.4 system-ui;letter-spacing:.08em;text-transform:uppercase;color:var(--app-gold)}
+.desktop-company-dialog .company-no-reset{margin:14px 0 0;font-size:11px}.desktop-company-dialog .company-error{color:#f4b6a6}.desktop-company-dialog .company-username{color:var(--app-gold);font-size:15px}.desktop-company-dialog .company-show{display:flex;align-items:center;gap:8px}.company-show input{accent-color:var(--app-gold)}
+/* The identity conflict is three lines rather than one paragraph: the sentence, what did not
+   change, and the way out. They share the refusal colour and the slot's own spacing, so the
+   dialog reads as one answer and each part is separately scannable. */
+.desktop-company-dialog .company-error p{margin:0;color:inherit}
+.desktop-company-dialog .company-error p+p{margin-top:9px}
+/* The launcher's own minimum window is 800x600. Since provider sign-in put Google, Steam and
+   Discord above the provider note, the chooser's 621px of content is taller than the 566px box
+   that window gives it, so the box scrolls there with or without a refusal and nothing needs
+   this rule to stay reachable (doc/launcher-states.md, *A chooser may scroll when the window is
+   short*). It is kept for the smaller reason it is worth: on a short window,
+   the same breakpoint the settings dialog closes its own spacing up at, a dialog carrying a
+   refusal trims its bottom inset from 28px to 16px, which is 12px less travel to the refusal
+   and to the controls under it. A chooser with no refusal keeps its full padding, and at a
+   window tall enough to hold the dialog nothing changes at all. */
+@media(max-height:700px){.desktop-company-dialog:has(.company-error:not([hidden])){padding-bottom:16px}}
+
+/* Verified emails. One address per row, the selected one marked, and the copy that says
+   only that address is a login key. The rows wrap rather than scroll sideways, so a long
+   address never widens the dialog on a small window. */
+.desktop-company-dialog .company-emails{display:grid;gap:6px;margin:0 0 4px}
+.desktop-company-dialog .company-emails[hidden]{display:none}
+.desktop-company-dialog .company-email{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mark address" "mark meta";align-items:start;column-gap:10px;margin:0;padding:10px 12px;border:1px solid #ffffff1f;border-radius:7px;background:#0b1d25;cursor:pointer}
+.desktop-company-dialog .company-email:hover{border-color:#ffffff38}
+.desktop-company-dialog .company-email:has(input:checked){border-color:var(--app-gold);background:#12252c}
+.desktop-company-dialog .company-email input{grid-area:mark;width:16px;height:16px;margin:1px 0 0;padding:0;accent-color:var(--app-gold)}
+.desktop-company-dialog .company-email-address{grid-area:address;font-size:13px;line-height:1.4;color:#e5e9df;overflow-wrap:anywhere}
+.desktop-company-dialog .company-email-meta{grid-area:meta;font-size:11px;line-height:1.5;color:var(--app-muted)}
+.desktop-company-dialog .company-emails-empty,.desktop-company-dialog .company-emails-unset,.desktop-company-dialog .company-emails-loading{margin:0 0 10px;font-size:12px;line-height:1.6}
+.desktop-company-dialog .company-status{margin:10px 0 0;font-size:11px;line-height:1.6;color:var(--app-gold)}
+.desktop-company-dialog .company-email-actions{display:grid;gap:2px;margin-top:16px}
+.desktop-company-dialog .company-clear{display:block;margin:10px auto 0;font-size:11px}
+/* My Profile carries the sections the menu no longer has entries for: the verified emails and
+   the password. One heading each, and the sentence under it says what the section does. */
+.desktop-company-dialog h3{margin:20px 0 0;font:600 13px/1.4 system-ui;color:#e5e9df}
+.desktop-company-dialog .company-section-note{margin:6px 0 10px;font-size:11px}
+
+/* Provider choices share visible controls and remain usable on short screens. */
+.desktop-company-dialog .company-provider{display:block;width:100%;margin-top:8px;padding:12px;border:1px solid #ffffff38;border-radius:6px;background:#122b34;color:#e5e9df;font:600 13px/1.4 system-ui;cursor:pointer}
+.desktop-company-dialog button:disabled{opacity:.5;cursor:default}
+.desktop-company-dialog button:focus-visible{outline:2px solid var(--app-gold);outline-offset:3px}
+#company-profile form button,#company-profile [data-open-emails],.company-picture-actions button,.company-provider-link button{min-height:40px;padding:9px 13px;border:1px solid #ffffff38;border-radius:6px;background:#17333c;color:#e5e9df;font:600 12px/1.4 system-ui;cursor:pointer}
+#company-profile form button{width:100%;border-color:var(--app-gold)}
+.company-picture-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.company-provider-links{display:grid;gap:8px}
+.company-provider-link{display:grid;gap:3px;padding:8px 0;border-bottom:1px solid #ffffff18;font:13px/1.5 system-ui}
+.company-provider-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.company-provider-name{min-width:0;overflow-wrap:anywhere}
+.company-provider-head button{flex-shrink:0}
+/* What a linked provider itself holds: one line per value that exists. The block is drawn only
+   around lines that are there, so a provider with nothing known adds no space and no rule. */
+.company-provider-details{display:grid;gap:2px;margin:2px 0 2px;padding-left:10px;border-left:2px solid #ffffff20}
+.company-provider-detail{margin:0;font:12px/1.5 system-ui;color:var(--app-muted);overflow-wrap:anywhere}
+.company-provider-detail-label{color:#8fa39d}
+.company-provider-detail-value{color:#e5e9df}
+
+.desktop-company-dialog .company-wait{margin:12px 0;font-size:12px}.desktop-company-dialog .company-wait small{font-size:11px}
+
+/* API waits stay beside the action and reserve no overlay or attention-grabbing toast. */
+/* API waits stay beside the action and reserve no overlay or attention-grabbing toast. */
+.wait-feedback{display:flex;align-items:flex-start;gap:9px;color:var(--app-muted);font:12px/1.6 system-ui;text-align:left;overflow-wrap:anywhere}
+.wait-feedback[hidden]{display:none!important}
+.wait-feedback-mark{flex:none;width:13px;height:13px;margin-top:3px;border:1.5px solid #e4c48635;border-top-color:var(--app-gold);border-radius:50%;animation:account-wait-spin 1.3s linear infinite}
+.wait-feedback small{display:block;margin-top:4px;color:var(--app-muted);font-size:11px;line-height:1.6}
+/* The control's ring spins on its own animation name rather than borrowing the window's
+   `update-spin` keyframes, so the corporate page - which never loads site/desktop.css - gets a
+   turning ring too, and neither sheet has to know the other exists. */
+@keyframes account-wait-spin{to{transform:rotate(1turn)}}
+@media(prefers-reduced-motion:reduce){.wait-feedback-mark{animation:none;border-color:var(--app-gold);opacity:.7}}
+
+/* ---- Entry motion: one quiet movement per surface -------------------------------
+   Sol's rule for this launcher is that a wait reports itself at once and quietly; the
+   surfaces obey the same rule. A dialog arrives, a refusal lands in the slot the player is
+   already reading, and a status line opens under the control they pressed - each with one
+   short movement in the direction of its own content, then still. Nothing loops, nothing
+   bounces, nothing slides across the screen, and nothing moves at all when the system asks
+   for reduced motion: that is a preference, not a hint.
+
+   Only entrances are animated. Closes stay instant, because a dialog that lingers after
+   Escape is worse than one that disappears, and because every journey in tests/desktop
+   expects a closed dialog to be closed the moment it is closed. */
+/* The dialog fades; it does not slide or scale. These dialogs measure their own geometry to
+   decide where a refusal has to be scrolled to, and a transform in flight moves the box those
+   measurements read - at 800x600 that left the identity-conflict sentence a few pixels outside
+   the box the product had just scrolled it into. Motion that breaks a measurement is not
+   polish (tests/desktop/launcher-identity-conflict.electron.mjs). */
+@keyframes dialog-enter{from{opacity:0}to{opacity:1}}
+@keyframes backdrop-enter{from{opacity:0}to{opacity:1}}
+/* A refusal or a status line arrives where the player is already looking, so it fades in
+   rather than moving: a transform here would shift the box the dialogs measure to decide
+   whether the sentence is reachable, and a refusal that scrolls itself is worse than one
+   that simply appears (tests/desktop/launcher-identity-conflict.electron.mjs). */
+@keyframes line-enter{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:no-preference){
+ .desktop-company-dialog[open]{animation:dialog-enter 170ms cubic-bezier(.22,.61,.36,1) both}
+ .desktop-company-dialog[open]::backdrop{animation:backdrop-enter 170ms ease-out both}
+ /* Step 1 and step 2 of setup hand over rather than cut: the second dialog enters the same
+    way the first did, so the flow reads as one movement with the step line above it. */
+ .desktop-company-dialog .company-step{animation:line-enter 200ms ease-out both}
+ .wait-feedback:not([hidden]){animation:line-enter 160ms ease-out both}
+ .desktop-company-dialog .company-error:not([hidden]){animation:line-enter 160ms ease-out both}
+}

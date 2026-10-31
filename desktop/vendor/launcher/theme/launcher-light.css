@@ -1,0 +1,294 @@
+/* Launcher website light paint only. Load after all six product stylesheets.
+   No unscoped declarations, geometry changes, new animations, or dark overrides.
+   Delta owns repository tokenisation and browser acceptance. */
+html[data-easter-theme="light"]{
+ color-scheme:light;
+ --bg:#eef2f9;
+ --surface:#f8faff;
+ --panel-soft:#e5eaf2;
+ --ink:#2b2b36;
+ --muted:#515b70;
+ --gold:#805b1c;
+ --gold-hover:#694713;
+ --on-gold:#ffffff;
+ --gold-wash:#f0e6d2;
+ --line:#c7d1e0;
+ --control-line:#758299;
+ --selection:#ead7ac;
+ --danger:#9d352d;
+ --danger-bg:#f9e8e3;
+ --success:#236437;
+ --success-bg:#e5f0e8;
+ --navy:#28618a;
+ --pirate:#963f31;
+ --hunter:#805b1c;
+ --disabled-bg:#e0e5ee;
+ --disabled-ink:#515b70;
+ --hero-veil:#eef2f9f0;
+ --scrim:#28345280;
+ --shadow:#28345229;
+ --scrollbar-track:#e5eaf2;
+ --scrollbar-thumb:#758299;
+ --scrollbar-hover:#805b1c;
+ --scrollbar-active:#694713;
+ --app-panel:var(--surface);--app-border:var(--control-line);--app-muted:var(--muted);--app-gold:var(--gold);
+ background:var(--bg);color:var(--ink);
+}
+html[data-easter-theme="light"] body,
+html[data-easter-theme="light"] .atlas,
+html[data-easter-theme="light"] .store{background:var(--bg);color:var(--ink)}
+html[data-easter-theme="light"] ::selection{background:var(--selection);color:var(--ink)}
+html[data-easter-theme="light"] .store,
+html[data-easter-theme="light"] .store-app{--store-ink:var(--ink);--store-muted:var(--muted);--store-gold:var(--gold);--store-line:var(--line);--store-panel:var(--surface)}
+html[data-easter-theme="light"].web-mode,
+html[data-easter-theme="light"].desktop-mode{--app-panel:var(--surface);--app-border:var(--control-line);--app-muted:var(--muted);--app-gold:var(--gold)}
+/* Photograph stays untouched. Flatten the old dark scrims, not the picture. */
+html[data-easter-theme="light"] .harbour-background::after{background:var(--hero-veil)}
+html[data-easter-theme="light"] .home::after{background:linear-gradient(180deg,transparent 0,transparent 55vh,var(--bg) 100vh,var(--bg) 145vh)}
+html[data-easter-theme="light"] h1,
+html[data-easter-theme="light"] .signed-in-splash-title{text-shadow:none}
+html[data-easter-theme="light"] h1 em,
+html[data-easter-theme="light"] .hero-copy h1 em,
+html[data-easter-theme="light"] .site-wordmark,
+html[data-easter-theme="light"] .signed-in-splash-title{color:var(--gold)}
+html[data-easter-theme="light"] .site-wordmark .wordmark-mark,
+html[data-easter-theme="light"] .signed-in-splash-mark{filter:brightness(0)}
+html[data-easter-theme="light"] .site-wordmark span,
+html[data-easter-theme="light"] .site-header nav>a,
+html[data-easter-theme="light"] .site-header nav>button,
+html[data-easter-theme="light"] .map-caption,
+html[data-easter-theme="light"] .home-description,
+html[data-easter-theme="light"] .home-notes,
+html[data-easter-theme="light"] .home-footer,
+html[data-easter-theme="light"] .not-found-footer,
+html[data-easter-theme="light"] .hero-welcome,
+html[data-easter-theme="light"] .raid-note>p:not(.eyebrow){color:var(--muted)}
+html[data-easter-theme="light"] .site-header,
+html[data-easter-theme="light"] .site-header nav small{border-color:var(--line)}
+html[data-easter-theme="light"] .site-header nav>a:hover,
+html[data-easter-theme="light"] .site-header nav>button:not(:disabled):hover{background:var(--gold-wash);color:var(--gold-hover)}
+html[data-easter-theme="light"] .site-header nav>a[aria-current=page]{background:var(--gold-wash);color:var(--gold)}
+html[data-easter-theme="light"] .text-link,
+html[data-easter-theme="light"] .home-description a,
+html[data-easter-theme="light"] .legal-links a,
+html[data-easter-theme="light"] .not-found-footer a,
+html[data-easter-theme="light"] .map-bottom .legal-links a,
+html[data-easter-theme="light"] .dependencies summary,
+html[data-easter-theme="light"] .dependencies a,
+html[data-easter-theme="light"] .install-steps a{color:var(--gold);text-decoration-color:var(--gold)}
+html[data-easter-theme="light"] .legal-links a:hover,
+html[data-easter-theme="light"] .text-link:hover,
+html[data-easter-theme="light"] .not-found-footer a:hover{color:var(--gold-hover)}
+html[data-easter-theme="light"] .home-notes i{background:var(--gold)}
+html[data-easter-theme="light"] .crest-frame{background:var(--surface);border-color:var(--line);box-shadow:0 30px 80px var(--shadow)}
+html[data-easter-theme="light"] .crest-frame::after{border-color:var(--line)}
+html[data-easter-theme="light"] .map-link,
+html[data-easter-theme="light"] .launcher-button,
+html[data-easter-theme="light"] .launcher-picker,
+html[data-easter-theme="light"].desktop-mode .launcher-control .launcher-button,
+html[data-easter-theme="light"] .desktop-save-row button,
+html[data-easter-theme="light"] .desktop-update-actions button,
+html[data-easter-theme="light"] .desktop-company-dialog .company-microsoft,
+html[data-easter-theme="light"] .desktop-company-dialog .company-submit,
+html[data-easter-theme="light"] .store-button,
+html[data-easter-theme="light"] .store-skip:focus{background:var(--gold);color:var(--on-gold);border-color:var(--gold)}
+html[data-easter-theme="light"] .map-link:hover,
+html[data-easter-theme="light"] .launcher-button:hover,
+html[data-easter-theme="light"] .launcher-picker:hover,
+html[data-easter-theme="light"].desktop-mode .launcher-button:hover,
+html[data-easter-theme="light"] .store-button:hover{background:var(--gold-hover);color:var(--on-gold);border-color:var(--gold-hover)}
+html[data-easter-theme="light"] .launcher-button small{color:var(--on-gold)}
+html[data-easter-theme="light"] .launcher-picker{border-left-color:var(--on-gold)}
+html[data-easter-theme="light"] .hero-actions .map-link,
+html[data-easter-theme="light"].desktop-mode .hero-actions .desktop-settings-button{background:var(--surface);color:var(--gold);border-color:var(--control-line)}
+html[data-easter-theme="light"] .hero-actions .map-link:hover,
+html[data-easter-theme="light"].desktop-mode .hero-actions .desktop-settings-button:hover{background:var(--gold-wash);color:var(--gold-hover)}
+html[data-easter-theme="light"] .launcher-control,
+html[data-easter-theme="light"] .map-link,
+html[data-easter-theme="light"] .launcher-button,
+html[data-easter-theme="light"] .map-link:hover,
+html[data-easter-theme="light"] .launcher-button:hover,
+html[data-easter-theme="light"] .hero-actions .map-link,
+html[data-easter-theme="light"] .hero-actions .map-link:hover{box-shadow:0 8px 30px var(--shadow)}
+html[data-easter-theme="light"] dialog,
+html[data-easter-theme="light"] .launcher-downloads,
+html[data-easter-theme="light"] .atlas .site-header,
+html[data-easter-theme="light"] .store .site-header,
+html[data-easter-theme="light"].desktop-mode .site-header,
+html[data-easter-theme="light"].desktop-mode .hero-copy,
+html[data-easter-theme="light"].desktop-mode .home-hero>.hero-copy,
+html[data-easter-theme="light"] .discovery-card,
+html[data-easter-theme="light"] .launcher-bar,
+html[data-easter-theme="light"] .drawing-panel,
+html[data-easter-theme="light"] .map-location,
+html[data-easter-theme="light"] .map-tooltip{background:var(--surface);color:var(--ink);border-color:var(--line)}
+html[data-easter-theme="light"] dialog,
+html[data-easter-theme="light"] .launcher-downloads,
+html[data-easter-theme="light"] .desktop-profile-menu,
+html[data-easter-theme="light"] .desktop-company-dialog,
+html[data-easter-theme="light"] #desktop-launcher,
+html[data-easter-theme="light"] #desktop-signin,
+html[data-easter-theme="light"] .discovery-card,
+html[data-easter-theme="light"] .launcher-bar,
+html[data-easter-theme="light"] .map-tooltip,
+html[data-easter-theme="light"] .drawing-panel,
+html[data-easter-theme="light"].desktop-mode .home-hero>.hero-copy{box-shadow:0 12px 40px var(--shadow)}
+html[data-easter-theme="light"] dialog::backdrop,
+html[data-easter-theme="light"] .launcher-downloads::backdrop,
+html[data-easter-theme="light"] #desktop-launcher::backdrop,
+html[data-easter-theme="light"] #desktop-signin::backdrop,
+html[data-easter-theme="light"] .desktop-company-dialog::backdrop,
+html[data-easter-theme="light"] .discovery-dialog::backdrop,
+html[data-easter-theme="light"] .store-modal{background:var(--scrim)}
+html[data-easter-theme="light"] .launcher-downloads h2,
+html[data-easter-theme="light"] .platform-download strong,
+html[data-easter-theme="light"] .discovery-title,
+html[data-easter-theme="light"].desktop-mode .hero-copy .eyebrow{color:var(--ink)}
+html[data-easter-theme="light"] .platform-download small{color:var(--muted)}
+html[data-easter-theme="light"] .platform-download+.platform-download,
+html[data-easter-theme="light"] .company-provider-link,
+html[data-easter-theme="light"] .company-provider-details{border-color:var(--line)}
+html[data-easter-theme="light"] .platform-download:not(:disabled):hover,
+html[data-easter-theme="light"] .recommended-platform{background:var(--gold-wash);border-color:var(--gold)}
+html[data-easter-theme="light"] .platform-icon,
+html[data-easter-theme="light"] .recommended-platform .platform-icon{filter:none;color:var(--gold);background:var(--gold-wash);border-color:var(--gold)}
+html[data-easter-theme="light"] .skip-arrival{background:var(--surface);color:var(--ink);border-color:var(--control-line)}
+html[data-easter-theme="light"] .signed-in-splash{background:var(--bg)}
+html[data-easter-theme="light"] .setup-instructions pre{background:var(--panel-soft);color:var(--ink)}
+/* Chart imagery stays artwork; every reading/control island is opaque. */
+html[data-easter-theme="light"] .map-controls,
+html[data-easter-theme="light"] .map-key,
+html[data-easter-theme="light"] .map-bottom>div,
+html[data-easter-theme="light"] .map-status,
+html[data-easter-theme="light"] .map-drawing>summary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+html[data-easter-theme="light"] .compass,
+html[data-easter-theme="light"] .map-coordinates{background:var(--surface);color:var(--ink);text-shadow:none}
+html[data-easter-theme="light"] .legend label,
+html[data-easter-theme="light"] .map-bottom strong,
+html[data-easter-theme="light"] .map-tooltip strong,
+html[data-easter-theme="light"] .drawing-heading>strong,
+html[data-easter-theme="light"] .map-drawing{color:var(--ink)}
+html[data-easter-theme="light"] .key-content p,
+html[data-easter-theme="light"] .map-bottom small,
+html[data-easter-theme="light"] .map-tooltip small,
+html[data-easter-theme="light"] .drawing-heading label,
+html[data-easter-theme="light"] .drawing-options label,
+html[data-easter-theme="light"] .drawing-help{color:var(--muted)}
+html[data-easter-theme="light"] .map-bottom a,
+html[data-easter-theme="light"] .drawing-saved{color:var(--gold)}
+html[data-easter-theme="light"] .legend .region-dot{border-color:var(--gold)}
+html[data-easter-theme="light"] .map-controls button:hover,
+html[data-easter-theme="light"] .desktop-profile-menu button:hover,
+html[data-easter-theme="light"] .desktop-profile-menu button:focus-visible,
+html[data-easter-theme="light"].desktop-mode .dialog-close:hover,
+html[data-easter-theme="light"] .desktop-access button:hover,
+html[data-easter-theme="light"] .launcher-bar-button:hover{background:var(--gold-wash)}
+html[data-easter-theme="light"] .drawing-tools button,
+html[data-easter-theme="light"] .drawing-history button{background:var(--surface);color:var(--ink);border-color:var(--control-line)}
+html[data-easter-theme="light"] .drawing-tools button[aria-pressed=true]{background:var(--gold-wash);color:var(--gold);border-color:var(--gold)}
+html[data-easter-theme="light"] .drawing-options input,
+html[data-easter-theme="light"] .drawing-options select{background:var(--surface);color:var(--ink);border-color:var(--control-line)}
+/* Account host tokens remain the five-input shared component contract. */
+html[data-easter-theme="light"] #desktop-launcher,
+html[data-easter-theme="light"] #desktop-signin,
+html[data-easter-theme="light"] .desktop-company-dialog,
+html[data-easter-theme="light"] .desktop-profile-menu,
+html[data-easter-theme="light"] .desktop-account-name,
+html[data-easter-theme="light"] .desktop-company-dialog h3,
+html[data-easter-theme="light"] .desktop-company-dialog .company-email-address,
+html[data-easter-theme="light"] .company-provider-detail-value,
+html[data-easter-theme="light"] .desktop-folder strong,
+html[data-easter-theme="light"] .desktop-folder-button,
+html[data-easter-theme="light"] .hero-graphics-text strong{color:var(--ink)}
+html[data-easter-theme="light"] .desktop-settings label:not(.desktop-preference),
+html[data-easter-theme="light"] .desktop-company-dialog label,
+html[data-easter-theme="light"] .desktop-advanced summary,
+html[data-easter-theme="light"] .company-provider-detail-label{color:var(--muted)}
+html[data-easter-theme="light"] .desktop-settings input:not([type=range]):not([type=checkbox]),
+html[data-easter-theme="light"] .desktop-settings select,
+html[data-easter-theme="light"] .desktop-settings select option,
+html[data-easter-theme="light"] .desktop-company-dialog input:not([type=checkbox]):not([type=radio]),
+html[data-easter-theme="light"] .desktop-company-dialog .company-email,
+html[data-easter-theme="light"] .desktop-company-dialog .company-provider,
+html[data-easter-theme="light"] #company-profile form button,
+html[data-easter-theme="light"] #company-profile [data-open-emails],
+html[data-easter-theme="light"] .company-picture-actions button,
+html[data-easter-theme="light"] .company-provider-link button{background:var(--surface);color:var(--ink);border-color:var(--control-line)}
+html[data-easter-theme="light"] .desktop-company-dialog .company-email:hover{border-color:var(--gold)}
+html[data-easter-theme="light"] .desktop-company-dialog .company-email:has(input:checked){background:var(--gold-wash);border-color:var(--gold)}
+html[data-easter-theme="light"] .launcher-bar-button,
+html[data-easter-theme="light"] .launcher-bar-tab,
+html[data-easter-theme="light"] .desktop-access button{color:var(--gold)}
+html[data-easter-theme="light"] .hero-graphics-track,
+html[data-easter-theme="light"] .desktop-preference input[type=checkbox]{background:var(--panel-soft);border-color:var(--control-line)}
+html[data-easter-theme="light"] .hero-graphics-track i,
+html[data-easter-theme="light"] .desktop-preference input::after{background:var(--muted)}
+html[data-easter-theme="light"] .hero-graphics-switch input:checked+.hero-graphics-track i,
+html[data-easter-theme="light"] .desktop-preference input:checked::after{background:var(--on-gold)}
+html[data-easter-theme="light"] .desktop-game-status[data-tone=online],
+html[data-easter-theme="light"] .desktop-settings-result{color:var(--success)}
+html[data-easter-theme="light"] .desktop-game-status[data-tone=offline],
+html[data-easter-theme="light"].web-mode .web-account-notice,
+html[data-easter-theme="light"] .desktop-company-dialog .company-error{color:var(--danger)}
+html[data-easter-theme="light"] .desktop-install-error,
+html[data-easter-theme="light"] .desktop-graphics-error,
+html[data-easter-theme="light"] .desktop-page-notice,
+html[data-easter-theme="light"] .desktop-auth-error,
+html[data-easter-theme="light"] .store-feedback{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+html[data-easter-theme="light"] .desktop-auth-notice{background:var(--gold-wash);color:var(--gold);border-color:var(--gold)}
+html[data-easter-theme="light"] #desktop-update,
+html[data-easter-theme="light"] #desktop-update::backdrop{background:var(--bg);color:var(--ink)}
+html[data-easter-theme="light"] #desktop-update p{color:var(--muted)}
+html[data-easter-theme="light"] .desktop-update-spinner,
+html[data-easter-theme="light"] .wait-feedback-mark,
+html[data-easter-theme="light"] .store-busy{border-color:var(--line);border-top-color:var(--gold)}
+html[data-easter-theme="light"] .desktop-update-progress,
+html[data-easter-theme="light"] .launcher-bar-track{background:var(--panel-soft)}
+html[data-easter-theme="light"] .desktop-update-progress i{background:var(--gold)}
+html[data-easter-theme="light"].web-mode .site-header nav .web-account-nav{border-color:var(--gold)}
+html[data-easter-theme="light"] .web-user-settings .es-primary:hover:not(:disabled){background:var(--gold-hover);color:var(--surface)}
+/* Journal copy is chrome; illustrations and their dark captions are images. */
+html[data-easter-theme="light"] .world-journal h2,
+html[data-easter-theme="light"] .world-journal h3,
+html[data-easter-theme="light"] .journal-roles dt,
+html[data-easter-theme="light"] .survival-rules strong{color:var(--ink)}
+html[data-easter-theme="light"] .world-journal p,
+html[data-easter-theme="light"] .journal-roles dd,
+html[data-easter-theme="light"] .encounter-stats dd,
+html[data-easter-theme="light"] .world-journal .journal-credit{color:var(--muted)}
+html[data-easter-theme="light"] .world-journal h2 em,
+html[data-easter-theme="light"] .journal-nav a,
+html[data-easter-theme="light"] .journal-link,
+html[data-easter-theme="light"] .crime-details summary,
+html[data-easter-theme="light"] .encounter-stats dt,
+html[data-easter-theme="light"] .journal-credit a,
+html[data-easter-theme="light"] .world-journal .chapter-warning{color:var(--gold)}
+html[data-easter-theme="light"] .journal-nav a,
+html[data-easter-theme="light"] .journal-link,
+html[data-easter-theme="light"] .chapter-art,
+html[data-easter-theme="light"] .crafting-discovery,
+html[data-easter-theme="light"] .ship-law-note,
+html[data-easter-theme="light"] .world-journal .chapter-warning{border-color:var(--gold)}
+html[data-easter-theme="light"] .journal-nav a:hover,
+html[data-easter-theme="light"] .journal-link:hover,
+html[data-easter-theme="light"] .discovery-action:hover{color:var(--gold-hover);border-color:var(--gold-hover)}
+html[data-easter-theme="light"] .journal-roles>div{border-left-color:var(--navy)}
+html[data-easter-theme="light"] .journal-roles>div:nth-child(2){border-left-color:var(--pirate)}
+html[data-easter-theme="light"] .journal-roles>div:nth-child(3){border-left-color:var(--hunter)}
+html[data-easter-theme="light"] .path-dot.navy{background:var(--navy)}
+html[data-easter-theme="light"] .path-dot.pirate{background:var(--pirate)}
+html[data-easter-theme="light"] .path-dot.hunter{background:var(--hunter)}
+html[data-easter-theme="light"] .survival-rules .bounty-loss,
+html[data-easter-theme="light"] .combat-tactics .ramming-warning{background:var(--danger-bg);border-color:var(--danger)}
+html[data-easter-theme="light"] .bounty-loss .eyebrow,
+html[data-easter-theme="light"] .ramming-warning .eyebrow{color:var(--danger)}
+html[data-easter-theme="light"] .chapter-art figcaption{background:#10232b;color:#f2dfb7}
+html[data-easter-theme="light"] .chapter-art figcaption span{color:#d1dcd5}
+html[data-easter-theme="light"] .store-button:disabled{background:var(--disabled-bg);border-color:var(--control-line);color:var(--disabled-ink)}
+html[data-easter-theme="light"] .store-product-open{text-decoration-color:var(--gold)}
+html[data-easter-theme="light"] .store-back:hover{color:var(--gold-hover)}
+html[data-easter-theme="light"] .store-order-state{border-color:var(--gold)}
+html[data-easter-theme="light"] .store-modal-panel{box-shadow:0 18px 48px var(--shadow)}
+/* Credits are active text, not disabled controls. */
+html[data-easter-theme="light"] .download-icon-credit{opacity:1;color:var(--muted)}
+/* Existing forced-colors scrollbar reset remains untouched. */

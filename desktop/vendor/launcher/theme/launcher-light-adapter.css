@@ -1,0 +1,141 @@
+/* The three stylesheets Diana's palette was not drawn against, made to work in light.
+ *
+ * site/launcher-light.css is her palette, vendored byte for byte, and it paints the six
+ * stylesheets it was designed against. Two surfaces in this site bring stylesheets of their
+ * own that were not among them, and both were left painting dark on a light page:
+ *
+ *   site/minecraft/wiki/wiki.css  - cream heading #ede7d9 on #eef2f9, about 1.15:1, invisible;
+ *   site/account/account.css      - a dark sign-in card with its own --account-* tokens, and a
+ *                                   cream CTA gradient that reads as blank paper.
+ *
+ * This adapter is Delta's, built the way her PALETTE.md asks: families, not forty individually
+ * chosen literals. Cream headings and card titles become --ink; body copy and dim labels become
+ * --muted; gold accents become --gold; dark islands become --surface; the skip link's ink
+ * becomes --on-gold, because gold itself turns dark in light; the account card's five tokens
+ * point at the palette's own; the CTA becomes Diana's measured gold-and-white pair rather than
+ * a cream gradient. Alpha washes that are pure decoration are left alone, since a translucent
+ * white on a light ground is still nothing and a separator need not meet 3:1.
+ *
+ * Dark is untouched: every rule is scoped to the light attribute, and
+ * tests/test_launcher_light.py fails if any selector here loses that scope.
+ */
+html[data-easter-theme="light"] .wiki .site-header{background:var(--surface)}
+html[data-easter-theme="light"] .wiki-skip{color:var(--on-gold)}
+html[data-easter-theme="light"] .wiki-brand{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-search label{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-search input{background:var(--surface)}
+html[data-easter-theme="light"] .wiki-search input::placeholder{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-search kbd{color:var(--muted)}
+html[data-easter-theme="light"] #wiki-topics>a,
+html[data-easter-theme="light"] .wiki-topic-group>a{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-topic-group>a>svg{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-topic-group>p{color:var(--muted)}
+html[data-easter-theme="light"] #wiki-topics a:not([aria-current]):hover{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-sidebar-note{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-sidebar-note span{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-page-header h1{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-intro{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-section-heading>span{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-card>svg{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-card-group{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-card h2,
+html[data-easter-theme="light"] .wiki-result h2{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-card p,
+html[data-easter-theme="light"] .wiki-result p{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-card-arrow{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-breadcrumb{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-breadcrumb a{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-article-section h2{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-article-section h2 a:hover::after{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-article-section p,
+html[data-easter-theme="light"] .wiki-article-section li{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-inline-link{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-outline>p{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-outline a{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-related a{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-result-count{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-result>svg{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-empty>svg{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-empty p{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-empty>a{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-footer{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-mobile-toc{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-mobile-toc a{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-topics-toggle{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-section-links a{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-steps li::marker{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-note strong{color:var(--gold)}
+html[data-easter-theme="light"] .wiki-table caption{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-table th{color:var(--ink)}
+html[data-easter-theme="light"] .wiki-table td{color:var(--muted)}
+html[data-easter-theme="light"] .wiki-table th:first-child,
+html[data-easter-theme="light"] .wiki-table td:first-child{color:var(--ink)}
+
+/* ── The account card's own five tokens, and the literals around them ─────────────────── */
+/* The page defines these on `.account`, not on :root, so the override has to match that
+   element's own specificity: html[data-easter-theme] alone loses to a class token block. */
+html[data-easter-theme="light"] .account{
+ --account-panel:var(--surface);
+ --account-ink:var(--ink);
+ --account-muted:var(--muted);
+ --account-gold:var(--gold);
+ --account-line:var(--line);
+}
+/* The card's own paint is a dark gradient over that token; the gradient is the part a token
+   swap cannot reach, so it goes with the palette's surface. */
+html[data-easter-theme="light"] .account-panel{
+ background:var(--surface);border-color:var(--line);box-shadow:0 24px 70px #28345229}
+html[data-easter-theme="light"] .account-skip{background:var(--surface);color:var(--ink)}
+html[data-easter-theme="light"] .company-signin label{color:var(--muted)}
+/* The primary control: a cream gradient with dark ink in dark mode becomes Diana's own
+   measured pair, white on gold (6.12:1), because cream on paper is not a button. */
+html[data-easter-theme="light"] .company-microsoft,
+html[data-easter-theme="light"] .account-body .account-providers .account-provider:first-child{
+ border-color:var(--gold);background:var(--gold);color:var(--on-gold)}
+html[data-easter-theme="light"] .company-microsoft:hover,
+html[data-easter-theme="light"] .account-body .account-providers .account-provider:first-child:hover{
+ background:var(--gold-hover);border-color:var(--gold-hover);color:var(--on-gold)}
+html[data-easter-theme="light"] .company-provider,
+html[data-easter-theme="light"] .company-submit,
+html[data-easter-theme="light"] .account-provider{
+ background:var(--surface);border-color:var(--control-line);color:var(--ink)}
+html[data-easter-theme="light"] .company-provider:hover,
+html[data-easter-theme="light"] .account-provider:hover{border-color:var(--gold)}
+html[data-easter-theme="light"] .company-signin input:not([type=checkbox]){
+ background:var(--surface);border-color:var(--control-line);color:var(--ink)}
+html[data-easter-theme="light"] .account-error{background:var(--danger-bg);color:var(--danger)}
+
+/* ── The mark is the artwork, in both themes, untouched ─────────────────────────────────
+   Diana's sheet carries a provisional rule from before the SVGs were in her source set:
+
+     html[data-easter-theme="light"] .site-wordmark .wordmark-mark,
+     html[data-easter-theme="light"] .signed-in-splash-mark{filter:brightness(0)}
+
+   (site/launcher-light.css:54-55). brightness(0) drives every pixel to black, so the header
+   mark and the signed-in splash turned a detailed fire phoenix into a themed glyph. Owen,
+   2026-10-31: "it's a complex detailed fire-y phoenix icon, should not be impacted by the
+   theme at all." Her file is vendored byte for byte, so the correction is here: both marks
+   are the one full-colour asset, assets/ec-logo.svg, in both themes, with no filter, no swap
+   to a flattened cut, and no colour of their own. tests/test_launcher_light.py fails if
+   either override goes missing, or if a second mark asset reappears anywhere in site/. */
+html[data-easter-theme="light"] .site-wordmark .wordmark-mark{filter:none}
+html[data-easter-theme="light"] .signed-in-splash-mark{filter:none}
+
+/* ── The rail's current page, light only ────────────────────────────────────────────────
+   Diana, 2026-10-31: a wash alone was too close to paper, so the current item takes the gold
+   wash, gold text and a 3px inset gold stroke as a persistent non-text shape cue. The stroke
+   is a box-shadow, so padding, radius, weight and dimensions stay exactly as shipped and the
+   label cannot shift. The hook is the rail's own aria-current, which wiki.js and article.js
+   already set, never a guess from colour; hover is scoped to :not([aria-current]) so it stays
+   distinct from this state, and the site's external :focus-visible outline is untouched. */
+html[data-easter-theme="light"] #wiki-topics a[aria-current]{
+ background:var(--gold-wash);color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
+
+/* THE UPDATE DIALOG'S BACKDROP, ONCE. Diana's palette paints
+   `html[data-easter-theme="light"] #desktop-update::backdrop` with var(--bg), which is the page
+   surface at full opacity: in light mode the modal's backdrop stopped being a scrim and became a
+   white sheet, while every other dialog on the site darkened and blurred. Her file is vendored
+   byte for byte (tests/test_launcher_light.py), so the correction belongs here, in the adapter
+   that exists for exactly this. Measured 2026-10-31 with scripts/check_modal_backdrop.py in
+   e-server, which now fails any ::backdrop that does not read --modal-scrim and --modal-blur. */
+html[data-easter-theme="light"] #desktop-update::backdrop{background:var(--modal-scrim);backdrop-filter:blur(var(--modal-blur))}

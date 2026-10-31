@@ -1,8 +1,11 @@
 /* WHAT THIS SHEET IS. The sign-in screen in this window is the household's account page, not a
    copy of it: desktop/vendor/launcher/account/account.css is a byte-identical copy of
-   site/account/account.css and desktop/shell.html carries site/account/index.html's markup, so
-   the panel, its overline, its heading, its wait line, its alert region, the sign-in options and
-   every class inside them are painted by the page's own rules. shell.css is loaded AFTER it and
+   site/account/account.css, desktop/vendor/launcher/theme/ holds the site's light palette, the
+   light adapter and the sheet that owns the wait mark (so the client's theme is the site's
+   theme, resolved by the site's own pre-paint script), and desktop/shell.html carries
+   site/account/index.html's markup - so the panel, its overline, its heading, its wait line, its
+   alert region, the sign-in options and every class inside them are painted by the page's own
+   rules, in both themes. shell.css is loaded AFTER it and
    holds only what that page does not own: the renderer base a browser gets from the site's
    styles.css, and this client's own controls - the update progress bar, the cancel/retry/
    installer rows, the account status row, and the client's two sentences.
@@ -14,13 +17,27 @@
    heading, the options, the client's own steps - is hidden exactly as the page hides it. */
 
 /* THE RENDERER BASE. site/account/index.html is served inside a document whose base comes from
-   site/styles.css (:root's type stack, body{margin:0}, the one [hidden] rule). This window loads
-   no site stylesheet, so these three declarations are supplied here instead - they are the
-   document's base and not the account page's paint, which is why they are the only rules in this
-   file that could be mistaken for a restatement of the page. */
+   site/styles.css (:root's type stack, body{margin:0}, the one [hidden] rule) and site/web.css
+   (.web-mode's four --app-* host tokens, which site/web.js puts on <html> for every page that
+   carries the account control, the account page included). This window loads neither sheet, so
+   those declarations are supplied here instead - they are the document's base and not the account
+   page's paint, which is why they are the only rules in this file that could be mistaken for a
+   restatement of the page, and why the four token values below are quoted from site/web.css:3
+   rather than chosen here. */
 :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+:root{--app-panel:#11252d;--app-border:#ffffff24;--app-muted:#a8b9b4;--app-gold:#e4c486}
 body{margin:0}
 [hidden]{display:none!important}
+
+/* THE CARD IS NOT A COLUMN. main.account-main is a flex row that stretches its one item to the
+   window's height, and on the site that never shows while the options are on screen: the page
+   above the card (header) and below it (footer) are taller than any viewport, so the card keeps
+   the height its content asks for - 729.84px at 680x860. This window has no page above it, so the
+   same rule stretched the resting card to 742px. One declaration, on the page's own item, and it
+   is scoped to the resting card on purpose: the site's BUSY card does fill the page (its content
+   shrinks to one sentence, so the page is shorter than the viewport and the flex item stretches),
+   and this window still measures the same as the site in that state. Never in a vendored sheet. */
+.account-panel:not([data-busy="true"]){align-self:flex-start}
 
 /* THE CLIENT'S CONTROLS. Empty when nothing in them is visible, so a plain sign-in panel is
    exactly the page's panel: no margin, no gap and no row of its own to make the card taller. */

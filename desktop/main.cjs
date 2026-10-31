@@ -1,5 +1,5 @@
 'use strict';
-const {app,BrowserWindow,Menu,Tray,ipcMain,shell,dialog,session,safeStorage,desktopCapturer}=require('electron');
+const {app,BrowserWindow,Menu,Tray,ipcMain,shell,dialog,session,safeStorage,desktopCapturer,nativeTheme}=require('electron');
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto'),https=require('node:https');
 const {pathToFileURL}=require('node:url');
 const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trusted,localFrame,updateLevel,relaunchOptions}=require('./security.cjs');
@@ -12,6 +12,15 @@ const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
 const development=!app.isPackaged,fixture=development?process.env.E_SERVER_CLIENT_TEST_ORIGIN:null;
 const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.html');
+// THE GROUND THE WINDOW WEARS BEFORE THE PAGE PAINTS. It is the account page's own colour in
+// each theme - account.css's #0d2029 ground in dark, site/launcher-light.css's --bg #eef2f9 in
+// light - because the window paints for the frames before the document does. The old literal
+// was GitHub-dark #0d1117, which belongs to no surface of this product: it read as a colder,
+// bluer near-black against the page's teal ground, and in light mode it flashed dark under a
+// white card. The OS decides here for the same reason it decides in the page: the account has
+// published no theme preference yet, and site/theme-early.js (vendored beside the page) reads
+// exactly this signal.
+const ground=()=>nativeTheme.shouldUseDarkColors?'#0d2029':'#eef2f9';
 const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
@@ -77,7 +86,7 @@ function remote(event){company?.require();if(!config.server||!win||event.sender!
 const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
 function setupWindow(){
  if(setup&&!setup.isDestroyed()){setup.show();return setup;}
- setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:'#0d1117',icon,webPreferences:preferences(session.fromPartition('setup'))});
+ setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,webPreferences:preferences(session.fromPartition('setup'))});
  setup.setMenu(null);setup.setMenuBarVisibility(false);
  setup.loadFile(shellFile);setup.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  setup.webContents.on('will-navigate',(event,url)=>{if(url!==pathToFileURL(shellFile).href)event.preventDefault();});
@@ -130,7 +139,7 @@ async function connect(){
   item.setSaveDialogOptions({title:'Save from e-server',defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});
  });
  const bounds=config.bounds&&[config.bounds.width,config.bounds.height].every(n=>Number.isFinite(n)&&n>=360)?config.bounds:{width:1280,height:900};
- win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:'#0d1117',icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
+ win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
  current.webContents.setWindowOpenHandler(({url})=>{void openExternal(url);return {action:'deny'};});

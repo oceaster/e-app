@@ -49,8 +49,14 @@ function render(state){
  $('account-panel').dataset.busy=String(busy);
  // The wait line is never hidden, exactly as the page's own markup is not: at rest it is an empty
  // paragraph that still carries the sheet's 14px bottom margin, and a hidden one would make this
- // card 14px shorter than the site's for no reason a person could name.
+ // card 14px shorter than the site's for no reason a person could name. The second child is the
+ // page's own spinning mark - `.wait-feedback-mark`, painted by the vendored
+ // site/account-control.css - created for the length of the flow and removed after it, which is
+ // what site/account/account.mjs's busyMark()/end() do on the site.
  $('account-busy-line').textContent=busy?SIGN_IN_WAIT:'';
+ const mark=$('account-wait').querySelector('.wait-feedback-mark');
+ if(busy&&!mark){const ring=document.createElement('span');ring.className='wait-feedback-mark';ring.setAttribute('aria-hidden','true');$('account-wait').prepend(ring);}
+ else if(!busy&&mark)mark.remove();
  // The shared options are the sign-in face of this window; a client step or an update replaces them.
  $('account-root').hidden=ready||finish||updating;
  // The two client steps keep their own hidden flag - the wrapper exists only to give the page's
