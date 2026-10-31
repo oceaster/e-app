@@ -54,20 +54,27 @@
    position:fixed is kept because this menu is placed by JS against the button. The launcher's
    window rules for this panel moved out of site/desktop.css on 2026-10-31; the corporate site
    used to hold a hand-copied third version (ticket DRY-6). */
-.desktop-profile-menu{position:fixed;inset:auto;margin:0;min-width:200px;max-width:min(280px,calc(100vw - 24px));max-height:calc(100dvh - 90px);overflow:auto;padding:4px;border:1px solid #ffffff30;border-radius:10px;background:var(--app-panel);color:#e5e9df;box-shadow:0 12px 32px #0005;font-size:.85rem}
+.desktop-profile-menu{position:fixed;inset:auto;margin:0;min-width:200px;max-width:min(280px,calc(100vw - 24px));max-height:calc(100dvh - 90px);overflow:auto;padding:4px;border:1px solid #ffffff30;border-radius:10px;background:var(--app-panel);color:#e5e9df;box-shadow:0 12px 32px var(--shadow);font-size:.85rem}
 .desktop-profile-menu button{display:block;width:100%;margin-top:4px;text-align:left;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:.85rem;line-height:1.3;cursor:pointer}
 .desktop-profile-menu button:hover,.desktop-profile-menu button:focus-visible{background:#ffffff0a}
 
 /* ---- the panel -------------------------------------------------------------------------
    Everything below is the frozen component: identical structure, labels, geometry and
    interaction on every surface, differing only in the five tokens above. Measurements are
-   Diana's (DESIGN-SPEC.md, "Layout & type"), not this file's invention. */
+   Diana's (DESIGN-SPEC.md, "Layout & type"), not this file's invention.
+   THE FIVE TOKENS COME FROM THE THEME, NOT FROM A FALLBACK. This sheet used to carry a raw
+   hex after every var() ("and #10232b if the host said nothing"). Those hexes were a second
+   copy of the palette, and site/theme.css now declares --app-panel/--app-border/--app-muted/
+   --app-gold and --ink on :root, so a surface that vendors it always resolves them; the
+   corporate site declares the same four in its own account-host-tokens.css. A host that gave
+   none of the five would paint this panel from the initial values instead of from the
+   launcher's palette — that is the one behaviour this file no longer covers for itself. */
 .web-user-settings{
- --es-surface:var(--app-panel,#10232b);
- --es-border:var(--app-border,#ffffff24);
- --es-text:var(--ink,#edf1e9);
- --es-muted:var(--app-muted,#a8b9b4);
- --es-accent:var(--app-gold,#e4c486);
+ --es-surface:var(--app-panel);
+ --es-border:var(--app-border);
+ --es-text:var(--ink);
+ --es-muted:var(--app-muted);
+ --es-accent:var(--app-gold);
  width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 48px);padding:0;margin:auto;
  border:1px solid var(--es-border);border-radius:20px;background:var(--es-surface);color:var(--es-text);
  overflow:hidden;font:14px/1.5 system-ui,sans-serif;
@@ -168,8 +175,8 @@
 .desktop-company-dialog{width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:28px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-panel);color:#e5e9df;box-shadow:0 18px 65px #0007}
 .desktop-company-dialog::backdrop{background:var(--modal-scrim);backdrop-filter:blur(var(--modal-blur))}
 .desktop-company-dialog h2{margin:0 32px 12px 0;font:600 22px/1.3 Inter,system-ui,sans-serif}.desktop-company-dialog p{font-size:12px;line-height:1.6;color:var(--app-muted)}
-.desktop-company-dialog label{display:block;font-size:12px;margin:16px 0;color:#d1ded5}.desktop-company-dialog input:not([type=checkbox]):not([type=radio]){display:block;width:100%;padding:10px 12px;margin-top:7px;border:1px solid #ffffff28;border-radius:6px;background:#0b1d25;color:#e5e9df;font:13px/1.5 system-ui}
-.desktop-company-dialog .company-microsoft,.desktop-company-dialog .company-submit{width:100%;padding:12px;border:1px solid var(--app-gold);border-radius:6px;background:var(--app-gold);color:#11252d;font:600 13px/1.4 system-ui;cursor:pointer}.desktop-company-dialog .company-microsoft{margin-top:10px}
+.desktop-company-dialog label{display:block;font-size:12px;margin:16px 0;color:#d1ded5}.desktop-company-dialog input:not([type=checkbox]):not([type=radio]){display:block;width:100%;padding:10px 12px;margin-top:7px;border:1px solid #ffffff28;border-radius:6px;background:var(--panel-soft);color:#e5e9df;font:13px/1.5 system-ui}
+.desktop-company-dialog .company-microsoft,.desktop-company-dialog .company-submit{width:100%;padding:12px;border:1px solid var(--app-gold);border-radius:6px;background:var(--app-gold);color:var(--app-panel);font:600 13px/1.4 system-ui;cursor:pointer}.desktop-company-dialog .company-microsoft{margin-top:10px}
 .desktop-company-dialog .company-provider-note{font-size:11px}.desktop-company-dialog .company-step{margin:0 0 6px;font:600 10px/1.4 system-ui;letter-spacing:.08em;text-transform:uppercase;color:var(--app-gold)}
 .desktop-company-dialog .company-no-reset{margin:14px 0 0;font-size:11px}.desktop-company-dialog .company-error{color:#f4b6a6}.desktop-company-dialog .company-username{color:var(--app-gold);font-size:15px}.desktop-company-dialog .company-show{display:flex;align-items:center;gap:8px}.company-show input{accent-color:var(--app-gold)}
 /* The identity conflict is three lines rather than one paragraph: the sentence, what did not
@@ -193,7 +200,7 @@
    address never widens the dialog on a small window. */
 .desktop-company-dialog .company-emails{display:grid;gap:6px;margin:0 0 4px}
 .desktop-company-dialog .company-emails[hidden]{display:none}
-.desktop-company-dialog .company-email{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mark address" "mark meta";align-items:start;column-gap:10px;margin:0;padding:10px 12px;border:1px solid #ffffff1f;border-radius:7px;background:#0b1d25;cursor:pointer}
+.desktop-company-dialog .company-email{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mark address" "mark meta";align-items:start;column-gap:10px;margin:0;padding:10px 12px;border:1px solid #ffffff1f;border-radius:7px;background:var(--panel-soft);cursor:pointer}
 .desktop-company-dialog .company-email:hover{border-color:#ffffff38}
 .desktop-company-dialog .company-email:has(input:checked){border-color:var(--app-gold);background:#12252c}
 .desktop-company-dialog .company-email input{grid-area:mark;width:16px;height:16px;margin:1px 0 0;padding:0;accent-color:var(--app-gold)}

@@ -11,11 +11,11 @@ for Minecraft entitlement and never hands over a Microsoft refresh token.
 
 The setup renderer's sign-in screen IS the household's account page, so the page's own
 files are vendored here verbatim rather than reimplemented. Copied from
-/root/easter-co-smp.github.io at revision 6328d4c9e3ae91076f11af440b0ff2fd32dffcb7
-(the merge of feat/phoenix, "The phoenix is the artwork in both themes", 2026-10-31),
-byte for byte; tests/vendored-account.test.cjs compares them against that checkout and
-names the first differing byte when they drift - which it did on 2026-10-31, when the
-adapter's mark section changed under an earlier copy of this ticket.
+/root/easter-co-smp.github.io at revision 9c0cc23 ("One theme, two moods: launcher gold
+in dark, the corporate accent in light", 2026-10-31), byte for byte;
+tests/vendored-account.test.cjs compares them against that checkout, names the first
+differing byte when they drift, and holds the same bytes in VENDORED.sha256 so a runner
+without the site checkout still fails on a changed copy.
 
 - account.css          <- site/account/account.css (335 lines, 51 rules). The sheet that
                           paints the panel, the overline, the heading, the wait line, the
@@ -32,10 +32,28 @@ adapter's mark section changed under an earlier copy of this ticket.
                           prove the page's copy is still the page's, and so a future host
                           that needs that half starts from the site's bytes.
 
-## theme/ — the household's palette, its adapter, and the wait mark's owner
+## theme/ — the household theme, its bridge, the palette, and the wait mark's owner
 
 Same source revision, same rule: copied byte for byte, never edited here.
 
+- theme.css                 <- site/theme.css (v1.1, sha256 84a0a5d6...7f79). THE HOUSEHOLD
+                               THEME: tokens only, no paint and no layout selectors, canonical
+                               --ec-* names, dark by default and a light block under
+                               html[data-easter-theme="light"]. Owen's one rule, two moods:
+                               dark is the launcher's maritime teal with a GOLD accent
+                               (--ec-accent-action #e4c486, unchanged value for value), light is
+                               paper with the corporate page's violet-indigo (#6d4fd8). The
+                               accent family is named for its role, never its colour, and the
+                               label colour is --ec-on-accent, never assumed.
+- launcher-bindings.css     <- site/launcher-bindings.css. The launcher's own bridge: it maps
+                               every legacy product name the older sheets still read (--bg,
+                               --surface, --ink, --muted, --gold, --line, --control-line,
+                               --danger, ...) onto the theme's --ec-* tokens, and maps the four
+                               --app-* host tokens for a .web-mode/.desktop-mode host. It loads
+                               AFTER every sheet that still declares a literal, so the theme
+                               wins; that ordering is what turns the light card's accent from
+                               Diana's brown into the corporate violet without editing her
+                               sheet.
 - launcher-light.css        <- site/launcher-light.css. Diana's light palette, which every
                                page of the site links. It is the home of every colour the
                                light theme uses (--bg #eef2f9, --surface, --ink, --gold,
@@ -64,9 +82,10 @@ Same source revision, same rule: copied byte for byte, never edited here.
                                attribute the site's stylesheets answer.
 
 The client supplies those sheets with one thing they expect from a host: the four --app-*
-tokens site/web.css publishes under `.web-mode` (site/web.js puts that class on <html> for
-the account page too). They live in desktop/shell.css's base block, and the gate compares
-their values against site/web.css rather than trusting the copy.
+tokens (site/web.js puts `.web-mode` on <html> for the account page, and the bridge declares
+them for that class). This window has no such class, so it declares the same four itself in
+desktop/shell.css - as ALIASES onto the theme, mapped exactly as launcher-bindings.css maps
+them, so the file holds no colour of its own. The gate compares the two mappings.
 
 What is NOT vendored, deliberately: site/account/account.mjs. Its job is the browser
 page's - the OAuth callback, the return target, webAccount, navigating to the site root on

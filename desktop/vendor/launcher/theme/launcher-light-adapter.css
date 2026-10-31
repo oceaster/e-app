@@ -84,7 +84,7 @@ html[data-easter-theme="light"] .account{
 /* The card's own paint is a dark gradient over that token; the gradient is the part a token
    swap cannot reach, so it goes with the palette's surface. */
 html[data-easter-theme="light"] .account-panel{
- background:var(--surface);border-color:var(--line);box-shadow:0 24px 70px #28345229}
+ background:var(--surface);border-color:var(--line);box-shadow:0 24px 70px var(--shadow)}
 html[data-easter-theme="light"] .account-skip{background:var(--surface);color:var(--ink)}
 html[data-easter-theme="light"] .company-signin label{color:var(--muted)}
 /* The primary control: a cream gradient with dark ink in dark mode becomes Diana's own

@@ -1,0 +1,108 @@
+@charset "UTF-8";
+/* EASTER HOUSEHOLD THEME v1.1
+   Canonical household colour language. Tokens ONLY. No paint/layout selectors.
+   Import the identical bytes in each product. Product adapters bind component APIs.
+   Dark is the default. The host resolves system before publishing light or dark.
+   ec-* names are canonical; legacy product names are adapters, not new palettes.
+
+   ONE RULE, TWO MOODS (Owen, 2026-10-31: "Light mode: Light + Blue Accent (light the
+   corporate theme). Dark mode: Dark + Gold Accents beautiful style (exactly the same as the
+   current launcher dark mode theme)"):
+     dark   the launcher's maritime teal ground with a GOLD accent, unchanged value for value;
+     light  paper with the corporate page's LIGHT accent (#6d4fd8, its violet-indigo), on the
+            household's own ground, ink and border so there is one light theme and not two.
+   So the accent family is named for its ROLE (`--ec-accent*`), never for its colour: a
+   token called `gold` holding #0b5fb4 in light would be a lie the next reader has to learn.
+*/
+:root{
+ /* Body and display stacks. Product owns size, weight, spacing and placement. */
+ --ec-font-body:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+ --ec-font-display:Georgia,"Times New Roman",serif;
+ --ec-font-code:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+ --ec-color-scheme:dark;
+ /* Grounds: glass --surface for controlled flat grounds only; --panel is opaque for reading over artwork. */
+ --ec-bg:#0d2029;
+ --ec-surface:#10232bf2;
+ --ec-panel:#11252d;
+ --ec-panel-soft:#0b1d25;
+ /* Reading: primary dark/page >14:1; muted/page >8:1. Light pairs in CONTRAST.md, all enabled text >=4.5:1. */
+ --ec-ink:#edf1e9;
+ --ec-muted:#abb8b8;
+ --ec-muted-panel:#a8b9b4;
+ /* THE ACCENT IS GOLD IN DARK AND THE CORPORATE LIGHT VIOLET IN LIGHT. Text accent is distinct from the filled-action accent; the label colour is --ec-on-accent, never assumed. */
+ --ec-accent:#dbba79;
+ --ec-accent-action:#e4c486;
+ --ec-accent-hover:#f0d69f;
+ --ec-on-accent:#14262e;
+ --ec-accent-wash:#d6bc8512;
+ /* --line is decorative. Required controls use --control-line; focus uses gold. */
+ --ec-line:#ffffff24;
+ --ec-line-strong:#ffffff40;
+ --ec-control-line:#71857d;
+ --ec-selection:#b58f4e70;
+ --ec-selection-ink:#edf1e9;
+ /* Semantic messages retain words/icons, not colour alone. Notice fill/text are paired. */
+ --ec-danger:#f6c6b4;
+ --ec-danger-bg:#382924;
+ --ec-success:#8fd694;
+ --ec-success-bg:#11252d;
+ --ec-navy:#6ca6d1;
+ --ec-pirate:#c67463;
+ --ec-hunter:#d6bc80;
+ --ec-disabled-bg:#25383d;
+ --ec-disabled-ink:#c0cbc6;
+ /* Modal pair: scrim + blur. No text may sit directly on the translucent scrim. */
+ --ec-scrim:#06131bc9;
+ --ec-scrim-blur:5px;
+ --ec-shadow-color:#0005;
+ /* Scrollbar colour family. Native dimensions and forced-colors reset remain product-owned. */
+ --ec-scrollbar-track:#0a1c24;
+ --ec-scrollbar-thumb:#899b93;
+ --ec-scrollbar-hover:#b8a67d;
+ --ec-scrollbar-active:#dfc18a;
+ /* Artwork host washes. Hero document/artwork palettes are not owned or recoloured here. */
+ --ec-hero-veil-start:#0d2029e6;
+ --ec-hero-veil-middle:#0d2029b8;
+ --ec-hero-veil-lower:#0d2029cc;
+ --ec-photo-veil:#071820d9;
+}
+html[data-easter-theme="light"]{
+ --ec-color-scheme:light;
+ --ec-bg:#eef2f9;
+ --ec-surface:#f8faff;
+ --ec-panel:#f8faff;
+ --ec-panel-soft:#e5eaf2;
+ --ec-ink:#2b2b36;
+ --ec-muted:#515b70;
+ --ec-muted-panel:#515b70;
+ --ec-accent:#6d4fd8;
+ --ec-accent-action:#6d4fd8;
+ --ec-accent-hover:#5d40c4;
+ --ec-on-accent:#ffffff;
+ --ec-accent-wash:#ece7fb;
+ --ec-line:#c7d1e0;
+ --ec-line-strong:#b5c1d4;
+ --ec-control-line:#758299;
+ --ec-selection:#9466df33;
+ --ec-selection-ink:#2b2b36;
+ --ec-danger:#9d352d;
+ --ec-danger-bg:#f9e8e3;
+ --ec-success:#236437;
+ --ec-success-bg:#e5f0e8;
+ --ec-navy:#28618a;
+ --ec-pirate:#963f31;
+ --ec-hunter:#805b1c;
+ --ec-disabled-bg:#e0e5ee;
+ --ec-disabled-ink:#515b70;
+ --ec-scrim:#28345280;
+ --ec-scrim-blur:5px;
+ --ec-shadow-color:#28345229;
+ --ec-scrollbar-track:#e5eaf2;
+ --ec-scrollbar-thumb:#758299;
+ --ec-scrollbar-hover:#6d4fd8;
+ --ec-scrollbar-active:#5d40c4;
+ --ec-hero-veil-start:#eef2f9;
+ --ec-hero-veil-middle:#eef2f9f5;
+ --ec-hero-veil-lower:#eef2f9f7;
+ --ec-photo-veil:#eef2f9f0;
+}

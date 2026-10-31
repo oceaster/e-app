@@ -1,0 +1,30 @@
+/* Load AFTER frozen launcher-light.css, launcher-light-adapter.css and theme.css.
+   No palette literals. Same canonical token API in both modes. */
+:root,html[data-easter-theme="light"],html[data-easter-theme="dark"]{
+ --bg:var(--ec-bg);--surface:var(--ec-surface);--panel-soft:var(--ec-panel-soft);
+ --ink:var(--ec-ink);--muted:var(--ec-muted);--gold:var(--ec-accent);
+ --gold-hover:var(--ec-accent-hover);--on-gold:var(--ec-on-accent);--gold-wash:var(--ec-accent-wash);
+ --line:var(--ec-line);--control-line:var(--ec-control-line);
+ --selection:var(--ec-selection);--danger:var(--ec-danger);--danger-bg:var(--ec-danger-bg);
+ --success:var(--ec-success);--success-bg:var(--ec-success-bg);
+ --navy:var(--ec-navy);--pirate:var(--ec-pirate);--hunter:var(--ec-hunter);
+ --disabled-bg:var(--ec-disabled-bg);--disabled-ink:var(--ec-disabled-ink);
+ --hero-veil:var(--ec-photo-veil);--scrim:var(--ec-scrim);--shadow:var(--ec-shadow-color);
+ --scrollbar-track:var(--ec-scrollbar-track);--scrollbar-thumb:var(--ec-scrollbar-thumb);
+ --scrollbar-hover:var(--ec-scrollbar-hover);--scrollbar-active:var(--ec-scrollbar-active);
+ color-scheme:var(--ec-color-scheme);font-family:var(--ec-font-body);
+}
+html[data-easter-theme].web-mode,html[data-easter-theme].desktop-mode{
+ --app-panel:var(--ec-panel);--app-border:var(--ec-control-line);
+ --app-muted:var(--ec-muted-panel);--app-gold:var(--ec-accent-action);
+}
+html[data-easter-theme] .store,html[data-easter-theme] .store-app{
+ --store-panel:var(--ec-panel);--store-line:var(--ec-line);--store-ink:var(--ec-ink);
+ --store-muted:var(--ec-muted-panel);--store-gold:var(--ec-accent-action);
+}
+html[data-easter-theme] .site-wordmark .wordmark-mark,
+html[data-easter-theme] .signed-in-splash-mark{filter:none}
+/* Palette migrations must not weaken the shared primary hover. */
+.web-user-settings .es-primary:hover:not(:disabled){
+ background:var(--ec-accent-hover);color:var(--ec-panel);
+}

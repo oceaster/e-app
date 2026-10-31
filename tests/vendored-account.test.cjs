@@ -28,9 +28,11 @@ const VENDORED=[
  ['site/account/account.css','desktop/vendor/launcher/account/account.css'],
  ['site/account/microsoft-signin.mjs','desktop/vendor/launcher/account/microsoft-signin.mjs'],
  ['site/signin-options.mjs','desktop/vendor/launcher/signin-options.mjs'],
- // The theme: the palette, the adapter that makes the account card and the wiki work in it, the
- // sheet that owns .wait-feedback-mark, and the pre-paint script that publishes the attribute all
- // three of them are scoped to.
+ // The household theme and the launcher's bridge onto it, the palette, the adapter that makes the
+ // account card and the wiki work, the sheet that owns .wait-feedback-mark, and the pre-paint
+ // script that publishes the attribute all of them are scoped to.
+ ['site/theme.css','desktop/vendor/launcher/theme/theme.css'],
+ ['site/launcher-bindings.css','desktop/vendor/launcher/theme/launcher-bindings.css'],
  ['site/launcher-light.css','desktop/vendor/launcher/theme/launcher-light.css'],
  ['site/launcher-light-adapter.css','desktop/vendor/launcher/theme/launcher-light-adapter.css'],
  ['site/account-control.css','desktop/vendor/launcher/theme/account-control.css'],
@@ -41,10 +43,13 @@ const VENDORED=[
 //: be a second author of the same control.
 const RETIRED=['.company-signin','.company-microsoft','.company-provider','.company-provider-note','.company-submit','.company-error','.company-no-reset','.company-forgot','.eyebrow'];
 const RETIRED_PALETTE=['--bg','--card','--accent','--border','--text','--muted'];
-//: The four host tokens site/web.css publishes under `.web-mode` and site/web.js puts on <html>.
-//: The account control's sheet reads them, so the client supplies the same four values - copied,
-//: never chosen here - in its own base block.
+//: The four host tokens the account control's sheet reads. On the site, site/web.js puts
+//: `.web-mode` on <html> and site/launcher-bindings.css declares them for that class; this window
+//: has no such class, so it declares the same four itself - as ALIASES onto the household theme's
+//: --ec-* names, mapped exactly as the bridge maps them. A value here would be a second palette.
 const HOST_TOKENS=['--app-panel','--app-border','--app-muted','--app-gold'];
+//: The accent family, and the two moods one rule has to cover.
+const ACCENT_TOKENS=['--ec-accent','--ec-accent-action','--ec-accent-hover','--ec-on-accent'];
 //: The site's own markup for the panel, element for element (site/account/index.html).
 const MARKUP=[['<body class="account">',/body\b[^>]*class="account"/],['main.account-main',/class="account-main"/],['div#account-panel',/class="account-panel"[^>]*id="account-panel"/],['p.account-overline',/class="account-overline"/],['h1.account-heading',/class="account-heading"/],['p#account-wait',/class="account-wait"[^>]*id="account-wait"/],['div#account-error',/class="account-error"[^>]*id="account-error"/],['div#account-root',/class="account-body"[^>]*id="account-root"/]];
 
@@ -110,33 +115,36 @@ test('the client\'s own sheet brings no second palette',()=>{
  const sheet=fs.readFileSync(path.join(ROOT,'desktop/shell.css'),'utf8');
  const declared=RETIRED_PALETTE.filter(token=>new RegExp('(^|[;{\\s])'+token.replace(/-/g,'\\-')+'\\s*:').test(sheet));
  assert.deepEqual(declared,[],`desktop/shell.css declares its own ${declared.join(', ')} token(s) - the account page's five --account-* tokens are the only palette this window has`);
- // The four host tokens are allowed to carry values, because they are the site's: they are
- // compared against site/web.css below. Everything else in this file must be a var().
- const withoutHostTokens=sheet.replace(/--app-(?:panel|border|muted|gold):#[0-9a-fA-F]{3,8}/g,'');
- const painted=[...withoutHostTokens.matchAll(/:[^;{}]*?(#[0-9a-fA-F]{3,8})(?![\w-])/g)].map(match=>match[1]);
- assert.deepEqual(painted,[],`desktop/shell.css paints ${painted.join(', ')} - a colour literal here is a second palette; use the page's --account-* tokens`);
+ // Every colour this window shows comes from the household theme through the launcher's bridge,
+ // so there is no literal of any kind left to allow here.
+ const painted=[...sheet.matchAll(/:[^;{}]*?(#[0-9a-fA-F]{3,8})(?![\w-])/g)].map(match=>match[1]);
+ assert.deepEqual(painted,[],`desktop/shell.css paints ${painted.join(', ')} - a colour literal here is a second palette; read the theme's --ec-* tokens instead`);
 });
 
-//: The four values site/web.css publishes under `.web-mode`, recorded here for the same reason the
-//: manifest exists: a runner has no site checkout. The values are still the site's - the copy is
-//: compared against site/web.css wherever that checkout is present, below.
-const PUBLISHED_HOST_TOKENS={'--app-panel':'#11252d','--app-border':'#ffffff24','--app-muted':'#a8b9b4','--app-gold':'#e4c486'};
-
-test('the four host tokens are the site\'s values, not this window\'s choices',(t)=>{
- const site=fs.existsSync(path.join(SITE,'site/web.css'))?fs.readFileSync(path.join(SITE,'site/web.css'),'utf8'):null;
- if(!site)t.diagnostic(`no site checkout at ${SITE}: the recorded values are the check on this machine`);
- const block=site?/\.web-mode\{([^}]*)\}/.exec(site):null;
- if(site)assert.ok(block,'site/web.css no longer publishes a .web-mode token block - this gate reads its four --app-* values from there');
+test('the four host tokens are the bridge\'s aliases, not values this window chose',()=>{
+ const bridge=fs.readFileSync(path.join(ROOT,'desktop/vendor/launcher/theme/launcher-bindings.css'),'utf8');
  const sheet=fs.readFileSync(path.join(ROOT,'desktop/shell.css'),'utf8');
+ const mapping=text=>Object.fromEntries([...text.matchAll(/(--app-(?:panel|border|muted|gold)):\s*var\((--ec-[a-z-]+)\)/g)].map(match=>[match[1],match[2]]));
+ const published=mapping(bridge),supplied=mapping(sheet);
  for(const token of HOST_TOKENS){
-  const published=block?new RegExp(token.replace(/-/g,'\\-')+':([^;}]+)').exec(block[1]):null;
-  if(site)assert.ok(published,`site/web.css no longer publishes ${token}`);
-  const expected=site?published[1].trim():PUBLISHED_HOST_TOKENS[token];
-  if(site)assert.equal(expected,PUBLISHED_HOST_TOKENS[token],`site/web.css publishes ${token}:${expected} where this suite records ${PUBLISHED_HOST_TOKENS[token]} - update the record with the site`);
-  const supplied=new RegExp(token.replace(/-/g,'\\-')+':([^;}]+)').exec(sheet);
-  assert.ok(supplied,`desktop/shell.css does not supply ${token}, which the account control's own sheet reads`);
-  assert.equal(supplied[1].trim(),expected,`desktop/shell.css supplies ${token}:${supplied[1].trim()} where the site publishes ${expected}`);
+  assert.ok(published[token],`the launcher's bridge no longer maps ${token} onto a theme token`);
+  assert.ok(supplied[token],`desktop/shell.css does not alias ${token}, which the account control's own sheet reads`);
+  assert.equal(supplied[token],published[token],`desktop/shell.css maps ${token} onto ${supplied[token]} where the launcher's bridge maps it onto ${published[token]}`);
  }
+});
+
+test('the household theme is the only author of the accent, in both moods',()=>{
+ const theme=fs.readFileSync(path.join(ROOT,'desktop/vendor/launcher/theme/theme.css'),'utf8');
+ const block=selector=>{const at=theme.indexOf(selector);assert.notEqual(at,-1,`the theme no longer declares ${selector}`);const open=theme.indexOf('{',at),close=theme.indexOf('}',open);return theme.slice(open,close);};
+ const dark=block(':root{'),light=block('html[data-easter-theme="light"]{');
+ for(const token of ACCENT_TOKENS){
+  assert.match(dark,new RegExp(token.replace(/-/g,'\\-')+':#'),`the theme's dark mood no longer declares ${token}`);
+  assert.match(light,new RegExp(token.replace(/-/g,'\\-')+':#'),`the theme's light mood no longer declares ${token}`);
+ }
+ const accent=text=>(/--ec-accent-action:(#[0-9a-fA-F]{3,8})/.exec(text)||[])[1];
+ assert.notEqual(accent(dark),accent(light),'one rule, two moods: the dark accent and the light accent must not be the same colour');
+ const sheet=fs.readFileSync(path.join(ROOT,'desktop/shell.css'),'utf8');
+ assert.doesNotMatch(sheet,/--ec-accent[a-z-]*:\s*#/,'desktop/shell.css declares an accent value of its own; it reads the theme\'s');
 });
 
 test('the sign-in screen is the site\'s markup, so the site\'s classes do the painting',()=>{
@@ -149,15 +157,19 @@ test('the theme is the site\'s: its palette, its adapter and its pre-paint scrip
  const page=fs.readFileSync(path.join(ROOT,'desktop/shell.html'),'utf8');
  const head=page.split('</head>')[0];
  const at=fragment=>{const index=head.indexOf(fragment);assert.notEqual(index,-1,`desktop/shell.html's head is missing ${fragment}`);return index;};
+ const theme=at('href="vendor/launcher/theme/theme.css"');
  const account=at('href="vendor/launcher/account/account.css"');
  const palette=at('href="vendor/launcher/theme/launcher-light.css"');
  const adapter=at('href="vendor/launcher/theme/launcher-light-adapter.css"');
+ const bindings=at('href="vendor/launcher/theme/launcher-bindings.css"');
  const control=at('href="vendor/launcher/theme/account-control.css"');
  const own=at('href="shell.css"');
  at('src="vendor/launcher/theme/theme-early.js"');
- // The palette must load after every product sheet it paints, and this window's own sheet after
- // the palette - the same order site/account/index.html uses, for the same reason.
- assert.ok(account<palette&&palette<adapter&&adapter<own,`the sheets load out of order: account.css@${account}, launcher-light.css@${palette}, launcher-light-adapter.css@${adapter}, shell.css@${own}`);
+ // The household theme comes first because it is the canonical token set; the launcher's bridge
+ // comes after every sheet that still declares a legacy literal, so it wins; and this window's own
+ // sheet comes last. The same order site/account/index.html uses, for the same reason.
+ assert.ok(theme<account,`the household theme must load before the sheets that read it: theme.css@${theme}, account.css@${account}`);
+ assert.ok(account<palette&&palette<adapter&&adapter<bindings&&bindings<own,`the sheets load out of order: account.css@${account}, launcher-light.css@${palette}, launcher-light-adapter.css@${adapter}, launcher-bindings.css@${bindings}, shell.css@${own}`);
  assert.ok(control<own,'account-control.css (the wait mark) must load before this window\'s own sheet');
  // The pre-paint script is the whole theme contract: without it nothing ever sets the attribute
  // every light rule is scoped to, and the window silently paints dark for a light desktop.
