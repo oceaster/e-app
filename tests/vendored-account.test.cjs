@@ -61,13 +61,40 @@ function difference(source,copy){
  return `identical up to byte ${limit}, lengths ${source.length} (site) and ${copy.length} (copy)`;
 }
 
-test('the site checkout the copies come from is readable, so the comparison is a comparison',()=>{
- assert.ok(fs.existsSync(SITE),`cannot scan: the launcher site is not at ${SITE} - this gate compares copies against it and never passes without it`);
- for(const [source] of VENDORED)assert.ok(fs.existsSync(path.join(SITE,source)),`cannot scan: ${source} is missing from ${SITE}`);
+// THE MANIFEST IS THE CHECK THAT RUNS EVERYWHERE. The comparison against the checkout above can
+// only run on a machine that has the site beside this repository; CI does not, and a gate that
+// fails there for want of a checkout is a red build on every release, not a guard. So the copies
+// carry their own sha256s: the manifest is regenerated when a file is re-vendored, and it holds on
+// every machine, the runner included. Where the checkout IS present the bytes are compared too,
+// because a manifest records what somebody typed and the site records what is true.
+function manifest(){
+ const text=fs.readFileSync(path.join(ROOT,'desktop/vendor/launcher/VENDORED.sha256'),'utf8');
+ const rows=new Map();
+ for(const line of text.split('\n')){
+  const match=/^([a-f0-9]{64})\s+(\S+)\s+\((\S+)\)/.exec(line.trim());
+  if(match)rows.set(match[2],{sha:match[1],source:match[3]});
+ }
+ return rows;
+}
+
+test('every vendored file matches the manifest, on any machine',()=>{
+ const rows=manifest();
+ for(const [source,copy] of VENDORED){
+  const row=rows.get(copy);
+  assert.ok(row,`desktop/vendor/launcher/VENDORED.sha256 does not name ${copy} - every copy is recorded there, so CI can hold it too`);
+  assert.equal(row.source,source,`the manifest says ${copy} comes from ${row.source}, the suite says ${source}`);
+  const digest=require('node:crypto').createHash('sha256').update(read(path.join(ROOT,copy))).digest('hex');
+  assert.equal(digest,row.sha,`${copy} no longer matches the manifest (expected ${row.sha}, found ${digest}) - re-vendor it and regenerate VENDORED.sha256, never edit the copy`);
+ }
 });
 
-test('every vendored file is the site\'s, byte for byte',()=>{
+test('the copies are the site\'s own bytes wherever the site checkout is available',(t)=>{
+ if(!fs.existsSync(SITE)){
+  t.diagnostic(`no site checkout at ${SITE}: the manifest is the check on this machine (it holds on the runner too)`);
+  return;
+ }
  for(const [source,copy] of VENDORED){
+  assert.ok(fs.existsSync(path.join(SITE,source)),`cannot scan: ${source} is missing from ${SITE}`);
   const site=read(path.join(SITE,source)),vendored=read(path.join(ROOT,copy));
   assert.equal(site.equals(vendored),true,`${copy} drifted from ${source}, ${difference(site,vendored)} - re-vendor it (cp ${path.join(SITE,source)} ${copy}), never edit the copy`);
  }

@@ -1,0 +1,13 @@
+# The vendored sign-in surface: sha256 of each copy, and the source it came from.
+# This is the check that runs everywhere, including CI, where the site checkout does not exist.
+# When the checkout IS present the suite also compares bytes against it and fails on drift.
+# Regenerate after re-vendoring:  shasum -a 256 <copy>  (see desktop/vendor/launcher/README.md)
+# source revision: easter-co-smp.github.io 6328d4c
+
+1177a665ce0d90d9693407b2b817cf76434c1dd60e0104f5640fde0b18880ac2  desktop/vendor/launcher/account/account.css  (site/account/account.css)
+90cd0592d04540d3d43c83cd7514aa5f64a087251ac7d20866800025d957f02f  desktop/vendor/launcher/account/microsoft-signin.mjs  (site/account/microsoft-signin.mjs)
+7dbb00e072f9a6310d683d8a63eb470df12c36d5beb762ec3438bc31832cbecd  desktop/vendor/launcher/signin-options.mjs  (site/signin-options.mjs)
+0ca5dd952798600419db9d0bc6d1e9cb92becf75a1ec0e0c3c78340984cb9533  desktop/vendor/launcher/theme/launcher-light.css  (site/launcher-light.css)
+8011bdee7e3ab6c2739107faab5c51dc511eff015a8a9173bf9d276ccf5c3641  desktop/vendor/launcher/theme/launcher-light-adapter.css  (site/launcher-light-adapter.css)
+14d491ab4ff3d69fd80aa396e5ad02c16019d42932014d40eddbccb7c4609c5b  desktop/vendor/launcher/theme/account-control.css  (site/account-control.css)
+f14255005cda3264ec17fd8bdddd5642e6a74c4c93499fb7f59a38133f5d4969  desktop/vendor/launcher/theme/theme-early.js  (site/theme-early.js)
