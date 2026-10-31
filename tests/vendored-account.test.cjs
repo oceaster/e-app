@@ -117,17 +117,25 @@ test('the client\'s own sheet brings no second palette',()=>{
  assert.deepEqual(painted,[],`desktop/shell.css paints ${painted.join(', ')} - a colour literal here is a second palette; use the page's --account-* tokens`);
 });
 
-test('the four host tokens are the site\'s values, not this window\'s choices',()=>{
- const site=fs.readFileSync(path.join(SITE,'site/web.css'),'utf8');
- const block=/\.web-mode\{([^}]*)\}/.exec(site);
- assert.ok(block,'site/web.css no longer publishes a .web-mode token block - this gate reads its four --app-* values from there');
+//: The four values site/web.css publishes under `.web-mode`, recorded here for the same reason the
+//: manifest exists: a runner has no site checkout. The values are still the site's - the copy is
+//: compared against site/web.css wherever that checkout is present, below.
+const PUBLISHED_HOST_TOKENS={'--app-panel':'#11252d','--app-border':'#ffffff24','--app-muted':'#a8b9b4','--app-gold':'#e4c486'};
+
+test('the four host tokens are the site\'s values, not this window\'s choices',(t)=>{
+ const site=fs.existsSync(path.join(SITE,'site/web.css'))?fs.readFileSync(path.join(SITE,'site/web.css'),'utf8'):null;
+ if(!site)t.diagnostic(`no site checkout at ${SITE}: the recorded values are the check on this machine`);
+ const block=site?/\.web-mode\{([^}]*)\}/.exec(site):null;
+ if(site)assert.ok(block,'site/web.css no longer publishes a .web-mode token block - this gate reads its four --app-* values from there');
  const sheet=fs.readFileSync(path.join(ROOT,'desktop/shell.css'),'utf8');
  for(const token of HOST_TOKENS){
-  const published=new RegExp(token.replace(/-/g,'\\-')+':([^;}]+)').exec(block[1]);
-  assert.ok(published,`site/web.css no longer publishes ${token}`);
+  const published=block?new RegExp(token.replace(/-/g,'\\-')+':([^;}]+)').exec(block[1]):null;
+  if(site)assert.ok(published,`site/web.css no longer publishes ${token}`);
+  const expected=site?published[1].trim():PUBLISHED_HOST_TOKENS[token];
+  if(site)assert.equal(expected,PUBLISHED_HOST_TOKENS[token],`site/web.css publishes ${token}:${expected} where this suite records ${PUBLISHED_HOST_TOKENS[token]} - update the record with the site`);
   const supplied=new RegExp(token.replace(/-/g,'\\-')+':([^;}]+)').exec(sheet);
   assert.ok(supplied,`desktop/shell.css does not supply ${token}, which the account control's own sheet reads`);
-  assert.equal(supplied[1].trim(),published[1].trim(),`desktop/shell.css supplies ${token}:${supplied[1].trim()} where the site publishes ${published[1].trim()}`);
+  assert.equal(supplied[1].trim(),expected,`desktop/shell.css supplies ${token}:${supplied[1].trim()} where the site publishes ${expected}`);
  }
 });
 
