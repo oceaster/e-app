@@ -1,0 +1,335 @@
+/* The account page is one page with one job, so this sheet styles the shell site/account/index.html
+   already marks up (header, overline, h1, footer) and the three answers #account-root can hold:
+   the sign-in choices, the signed-in account, and a refusal above either of them.
+
+   It inherits the site's type stack and palette from ../styles.css and reuses the launcher's
+   dialog vocabulary (the gold-bordered control, the muted note, the alert line) from
+   ../desktop.css through ../web.css, which is loaded here for the same reason the store page
+   loads it: this page's account menu is the website's account menu. Nothing here invents a
+   second palette. */
+.account {
+  --account-ink: #edf1e9;
+  --account-muted: #a8b9b4;
+  --account-gold: #e4c486;
+  --account-line: #d7e5df1c;
+  --account-panel: #11252d;
+}
+.account {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: var(--account-ink);
+  background: radial-gradient(ellipse at 85% 0, #23413e50, transparent 50%), #0d2029;
+}
+.account * {
+  box-sizing: border-box;
+}
+.account-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 5;
+  padding: 12px 16px;
+  border-radius: 0 0 8px 0;
+  background: #0b202a;
+  border: 1px solid var(--account-gold);
+  color: var(--account-ink);
+  font-size: 12px;
+  text-decoration: none;
+}
+.account-skip:focus {
+  left: 0;
+}
+.account-main {
+  flex: 1 0 auto;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 34px 8px 48px;
+}
+.account-panel {
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 30px 28px 32px;
+  border: 1px solid var(--account-line);
+  border-radius: 16px;
+  background: linear-gradient(160deg, #142b3445, #0f212a80), var(--account-panel);
+  box-shadow: 0 24px 70px #0006;
+}
+.account-overline {
+  margin: 0 0 12px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--account-gold);
+}
+.account-heading {
+  margin: 0 0 22px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-shadow: none;
+}
+.account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-providers {
+  display: grid;
+  gap: 10px;
+}
+/* THE SHARED SIGN-IN PANEL (site/signin-options.mjs), as this page draws it.
+   The panel is the same node the nav's dialog draws, so this page styles its class names rather
+   than a second copy of its markup: the Microsoft button, the provider buttons, the note that says
+   what a provider is for, and the direct Company username/password form. One shape per kind of
+   control - a full-width row with a 44px floor - so every option is as easy to hit as the Microsoft
+   one and no row collapses under a thumb on a phone. */
+.company-signin {
+  display: grid;
+  gap: 10px;
+}
+.company-provider-note {
+  margin: 2px 0 4px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--account-muted);
+}
+.company-microsoft,
+.company-provider,
+.company-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 13px 16px;
+  border: 1px solid #d7ba7d55;
+  border-radius: 9px;
+  background: #ffffff05;
+  color: var(--account-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.company-microsoft {
+  border-color: #ffe5a9;
+  background: linear-gradient(120deg, #f2d99d, #d3ae66);
+  color: #192a2e;
+  font-weight: 700;
+}
+.company-microsoft:hover {
+  background: linear-gradient(120deg, #ffe6ae, #dfbb76);
+}
+.company-provider:hover {
+  border-color: var(--account-gold);
+}
+.company-microsoft:disabled,
+.company-provider:disabled,
+.company-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.company-microsoft:disabled {
+  opacity: 0.7;
+}
+.company-microsoft:focus-visible,
+.company-provider:focus-visible,
+.company-submit:focus-visible {
+  outline: 2px solid var(--account-gold);
+  outline-offset: 3px;
+}
+.company-signin form {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.company-signin label {
+  display: block;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #d1ded5;
+}
+.company-signin input:not([type=checkbox]) {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #ffffff28;
+  border-radius: 7px;
+  background: #0b1d25;
+  color: var(--account-ink);
+  font: 13px/1.5 system-ui;
+}
+.company-signin input:focus-visible {
+  outline: 2px solid var(--account-gold);
+  outline-offset: 2px;
+}
+.company-signin .company-submit {
+  margin-top: 16px;
+}
+.company-no-reset {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--account-muted);
+}
+/* The panel's own refusal slot stays empty on this page: the page hands the panel its one alert
+   region above the options (site/account/account.mjs), so a refusal is never said twice. */
+.company-signin .company-error[hidden] {
+  display: none;
+}
+/* THE BUSY STATE. While a sign-in, sign-up or link flow is in flight this page shows one decorative
+   spinner and one describing sentence and nothing else (Owen, 2026-10-26): the heading, the options
+   and any refusal are hidden, which also takes every control out of the tab order. The spinner is
+   the shared .wait-feedback mark, so it is the same one every other wait in this product paints,
+   and its reduced-motion form (a still, gold ring) is the same one too. */
+.account-panel[data-busy="true"] {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 220px;
+}
+.account-panel[data-busy="true"] .account-overline,
+.account-panel[data-busy="true"] .account-heading,
+.account-panel[data-busy="true"] .account-body {
+  display: none;
+}
+/* One spinner, one sentence, side by side and centred in the panel: the mark is the shared
+   .wait-feedback-mark, and this is the only line of text the state has. */
+.account-wait {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.account-wait[hidden] {
+  display: none;
+}
+.account-busy-line {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--account-muted);
+  text-wrap: balance;
+}
+.account-panel[data-busy="true"] .account-wait {
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+}
+/* The primary control of this page and the ones beside it share one shape: a full-width row with
+   a 44px floor, so every provider is as easy to hit as the Microsoft option and no row collapses
+   under a thumb on a phone. */
+.account-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 13px 16px;
+  border: 1px solid #d7ba7d55;
+  border-radius: 9px;
+  background: #ffffff05;
+  color: var(--account-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.account-body .account-providers .account-provider:first-child {
+  border-color: #ffe5a9;
+  background: linear-gradient(120deg, #f2d99d, #d3ae66);
+  color: #192a2e;
+  font-weight: 700;
+}
+.account-provider:hover {
+  border-color: var(--account-gold);
+}
+.account-body .account-providers .account-provider:first-child:hover {
+  background: linear-gradient(120deg, #ffe6ae, #dfbb76);
+}
+.account-provider:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.account-body .account-providers .account-provider:first-child:disabled {
+  opacity: 0.7;
+}
+.account-provider:focus-visible {
+  outline: 2px solid var(--account-gold);
+  outline-offset: 3px;
+}
+.account-error {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #f4b6a650;
+  border-radius: 9px;
+  background: #3a1d1c40;
+  color: #f4b6a6;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.account-error p {
+  margin: 0;
+}
+.account-wait {
+  margin: 0 0 14px;
+  color: var(--account-muted);
+}
+.account-noscript,
+.account-footer {
+  color: var(--account-muted);
+}
+.account-noscript {
+  width: min(520px, calc(100% - 16px));
+  margin: 0 auto 30px;
+  font-size: 12px;
+  text-align: center;
+}
+.account-footer {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  width: min(520px, calc(100% - 16px));
+  margin: 0 auto;
+  padding: 0 0 24px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.account-footer > span:last-child {
+  font-family: Georgia, serif;
+  font-style: italic;
+  letter-spacing: 0.06em;
+}
+/* The store's own rule, for the same reason: the mark and the words stay readable at 390 without a
+   horizontal scrollbar, whatever a refusal or an account name is made of. */
+@media (max-width: 600px) {
+  .account-main {
+    padding: 20px 8px 34px;
+  }
+  .account-panel {
+    padding: 24px 18px 26px;
+    border-radius: 13px;
+  }
+  .account-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

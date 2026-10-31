@@ -1,14 +1,31 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
-<title>e-server</title><link rel="stylesheet" href="shell.css"><script src="shell.mjs" type="module"></script></head>
-<body><main><img src="icon.png" width="56" height="56" alt=""><p class="eyebrow">EASTER COMPANY</p>
-<h1 id="title">Sign in to Easter Company.</h1><p id="message">Sign in or create your global account before choosing an e-server.</p>
-<section id="account-signin" aria-label="Easter Company sign-in"></section>
-<form id="account-finish" hidden><h2>Finish your account</h2><label for="username">Choose your username</label><input id="username" autocomplete="username" required pattern="[A-Za-z0-9_-]{3,20}" minlength="3" maxlength="20"><label for="new-password">Create a password</label><input id="new-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><label for="confirm-password">Confirm your password</label><input id="confirm-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><button type="submit">Save account &amp; continue</button></form>
-<div id="account-status" hidden><span id="account-name"></span><button id="signout" type="button">Sign out</button></div>
-<form id="connect" hidden><label for="server">e-server HTTPS address</label><input id="server" type="url" placeholder="https://easter-server.char-istrian.ts.net" required autocomplete="url" spellcheck="false"><button type="submit">Connect to e-server <span aria-hidden="true">↗</span></button></form>
-<progress id="progress" hidden aria-label="Update progress"></progress><p id="error" role="alert" hidden></p><p id="account-notice" class="note" hidden></p>
-<div class="actions"><button id="cancel-signin" hidden>Cancel sign-in</button><button id="retry" hidden>Try again</button><button id="installer" hidden>Download latest installer</button></div>
-<p class="note" id="note">Your global account unlocks the client. Each server verifies its own PIN and access permissions. App controls: Ctrl+, or the e-server tray menu.</p>
-<footer>e-server <span id="version"></span> · Easter LTD</footer></main></body></html>
+<title>e-server</title><link rel="stylesheet" href="vendor/launcher/account/account.css"><link rel="stylesheet" href="shell.css"><script src="shell.mjs" type="module"></script></head>
+<body class="account">
+<a class="account-skip" href="#account-root">Skip to account</a>
+<main class="account-main">
+<div class="account-panel" id="account-panel" data-busy="false">
+<p class="account-overline">EASTER COMPANY</p>
+<h1 class="account-heading" id="title">Easter Company account</h1>
+<p class="account-wait" id="account-wait" role="status" aria-live="polite" aria-atomic="true"><span class="account-busy-line" id="account-busy-line"></span></p>
+<div class="account-error" id="account-error" role="alert" hidden></div>
+<div class="account-body" id="account-root"></div>
+<div class="account-body" id="client-steps" hidden>
+<p class="client-copy" id="message"></p>
+<div class="company-signin" id="finish-block"><form id="account-finish" hidden><h2>Finish your account</h2><label for="username">Choose your username</label><input id="username" autocomplete="username" required pattern="[A-Za-z0-9_-]{3,20}" minlength="3" maxlength="20"><label for="new-password">Create a password</label><input id="new-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><label for="confirm-password">Confirm your password</label><input id="confirm-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><button type="submit" class="company-submit">Save account &amp; continue</button></form></div>
+<div class="client-status" id="account-status" hidden><span id="account-name"></span><button id="signout" type="button" class="account-provider">Sign out</button></div>
+<div class="company-signin" id="connect-block"><form id="connect" hidden><label for="server">e-server HTTPS address</label><input id="server" type="url" placeholder="https://easter-server.char-istrian.ts.net" required autocomplete="url" spellcheck="false"><button type="submit" class="company-submit">Connect to e-server <span aria-hidden="true">↗</span></button></form></div>
+<p class="client-copy" id="account-notice" hidden></p>
+</div>
+<div id="client-controls">
+<progress id="progress" hidden aria-label="Update progress"></progress>
+<button id="cancel-signin" type="button" class="account-provider" hidden>Cancel sign-in</button>
+<button id="retry" type="button" class="account-provider" hidden>Try again</button>
+<button id="installer" type="button" class="account-provider" hidden>Download latest installer</button>
+<p class="client-copy" id="note" hidden>Your global account unlocks the client. Each server verifies its own PIN and access permissions. App controls: Ctrl+, or the e-server tray menu.</p>
+</div>
+</div>
+</main>
+<footer class="account-footer"><span>© Easter LTD</span><span>e-server <span id="version"></span></span><span>Numquam Succumbe</span></footer>
+</body></html>
