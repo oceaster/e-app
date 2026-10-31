@@ -10,11 +10,13 @@ const {identifies,PAYLOAD_NAMES}=require('../desktop/updater.cjs');
 
 test('a payload is this client\'s own while the name is on either side of the rename',()=>{
  const manifest={version:'1.0.4'};
- // The old name stays first on purpose: 1.0.3 publishes it, and 1.0.5 is the earliest release
- // that may drop it.
- assert.deepEqual(PAYLOAD_NAMES,['easter-eserver-client','easter-server-client']);
+ // Every name the package has carried stays accepted, oldest first: a machine in the field runs
+ // whichever build it installed, and a build that refuses the next name cannot hand that name's
+ // payload to anyone. `e-app` is the current one (Owen, 2026-10-31).
+ assert.deepEqual(PAYLOAD_NAMES,['easter-eserver-client','easter-server-client','e-app']);
  assert.equal(identifies({name:'easter-eserver-client',version:'1.0.4'},manifest),true);
  assert.equal(identifies({name:'easter-server-client',version:'1.0.4'},manifest),true);
+ assert.equal(identifies({name:'e-app',version:'1.0.4'},manifest),true);
 });
 
 test('the widening is the NAME only: version, foreign names and missing parts still refuse',()=>{
@@ -34,8 +36,11 @@ test('both shipped guards ask the one rule, so the rename cannot land in one of 
  assert.match(main,/if\(!updater\.identifies\(pkg,manifest\)\)throw Error\('Invalid e-server client update\.'\)/);
  assert.match(bootstrap,/if\(!identifies\(pkg,manifest\)\)throw Error\('The e-server update identity is invalid\.'\)/);
  assert.match(bootstrap,/const \{selected,identifies\}=require\('\.\/updater\.cjs'\)/);
- assert.match(updater,/const PAYLOAD_NAMES=\['easter-eserver-client','easter-server-client'\]/);
+ assert.match(updater,/const PAYLOAD_NAMES=\['easter-eserver-client','easter-server-client','e-app'\]/);
  // No guard may name one package again: a literal comparison is what rejects a renamed payload.
- assert.doesNotMatch(main,/pkg\.name!=='easter-eserver-client'/);
- assert.doesNotMatch(bootstrap,/pkg\.name!=='easter-eserver-client'/);
+ // Neither may it lose the list: the current name alone would strand every install before it.
+ for (const name of ['easter-eserver-client', 'easter-server-client', 'e-app']) {
+  assert.doesNotMatch(main,new RegExp(`pkg\\.name!=='${name}'`));
+  assert.doesNotMatch(bootstrap,new RegExp(`pkg\\.name!=='${name}'`));
+ }
 });

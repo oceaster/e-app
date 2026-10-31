@@ -30,7 +30,12 @@ const BOOTSTRAP=1,MAX_BYTES=200*1024*1024;
 //
 // The unguarded alternative - accepting any name, or any version - is not available: this is the
 // check that stops a foreign asar being installed as this app.
-const PAYLOAD_NAMES=['easter-eserver-client','easter-server-client'];
+// The package name, across its two renames: `easter-eserver-client` (through 1.0.2),
+// `easter-server-client` (1.0.3-1.0.4) and `e-app` (1.0.5 on - Owen, 2026-10-31: "should be
+// e-app 1.0.4-1"). A machine in the field runs whichever build it has, so every name stays
+// accepted: a build that refuses the next name cannot hand that name's payload to anyone.
+// The oldest may be dropped once no installation anywhere still runs 1.0.2 or earlier.
+const PAYLOAD_NAMES=['easter-eserver-client','easter-server-client','e-app'];
 function identifies(pkg,manifest){return !!pkg&&!!manifest&&PAYLOAD_NAMES.includes(pkg.name)&&pkg.version===manifest.version;}
 // The one refusal for a version this e-server client cannot read. It carries a name and a code as
 // well as the sentence a player sees, because the clear policy below has to be able to say
