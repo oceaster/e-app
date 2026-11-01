@@ -5,6 +5,7 @@ const {pathToFileURL}=require('node:url');
 const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trusted,localFrame,updateLevel,relaunchOptions}=require('./security.cjs');
 const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
+const {loadServerPage}=require('./navigation.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
@@ -157,7 +158,7 @@ async function connect(){
   if(result.response===1)event.preventDefault();else{quitting=false;restartOnClosed=false;pendingServer=null;}
  });
  if(!remembered&&!fixture)current.webContents.once('did-finish-load',()=>dialog.showMessageBox(current,{message:'A secure keyring is unavailable.',detail:'Your sign-in will last for this app session only. Enable your operating system keyring to remember it.',buttons:['OK']}));
- await current.loadURL(config.server+'/');
+ await loadServerPage(current,config.server+'/');
 }
 async function openExternal(value){try{const url=externalURL(value);await shell.openExternal(url);return true;}catch{return false;}}
 async function ask(route,{method='GET',body}={}){

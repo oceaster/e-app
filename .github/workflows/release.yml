@@ -29,10 +29,14 @@ jobs:
         run: npm run dist:windows
       - name: Exercise the packaged first screen on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a node scripts/smoke.cjs ./release/linux-unpacked/e-server-client
+        run: |
+          xvfb-run -a node scripts/smoke.cjs ./release/linux-unpacked/e-server-client
+          xvfb-run -a npm run test:navigation -- ./release/linux-unpacked/resources/app.asar
       - name: Exercise the packaged first screen on Windows
         if: runner.os == 'Windows'
-        run: node scripts/smoke.cjs ./release/win-unpacked/e-server.exe
+        run: |
+          node scripts/smoke.cjs ./release/win-unpacked/e-server.exe
+          npm run test:navigation -- ./release/win-unpacked/resources/app.asar
       - if: runner.os == 'Linux'
         run: node scripts/build-update.cjs linux
       - if: runner.os == 'Windows'
