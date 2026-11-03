@@ -3,7 +3,7 @@
 Pending work for the desktop client, with what "done" means. Rules live in `README.md` and
 `docs/COMPANY_LOGIN.md`; this file is what is left, not what is true.
 
-## The e-servers list (built 2026-11-03, not released)
+## The e-servers list (2026-11-03: API deployed, client verified live, not released)
 
 Owen: after sign-in the client should stop at a list of the e-servers the Easter Company account
 holds, with remove and add, and the chosen server's PIN comes after the choice.
@@ -13,20 +13,28 @@ Landed on `main` (e-app `02e2347`, `7fb1a28`, `d381fa2`, `7edea95`, `8722292`): 
 `scripts/shell-servers.cjs` and its CI step, and a packaged first-screen smoke that now asserts
 the views ship hidden.
 
-Still out, in the order it blocks a release:
+DONE since this was written (the evidence, so nobody re-does it):
 
-1. **The accounts service must be deployed with `/v2/accounts/connections`.** The client is written
-   against it and reads it first thing after sign-in; until the route exists the list shows its own
-   honest error state with a retry and the last server. Ticket: cloud `411dfccb` (branch
-   `ticket/connections-api`), deployed by Delta with `./infra/deploy.sh EasterAccountsStack`.
-   Acceptance: a real signed-in GET answers 200 with an empty list, a POST answers 201, a second
-   POST of the same origin answers 409, and a DELETE answers 204.
-2. **Diana's design for the two views.** `desktop/connections.css` is a placeholder of shape, not
+- **The accounts service is deployed.** Cloud ticket `411dfccb` accepted and merged (`db10fed`);
+  `./infra/deploy.sh EasterAccountsStack` reached `UPDATE_COMPLETE` with `deploy: PASS`. Measured
+  live with the `easter-delta` account: GET 200 `{connections:[], count:0, limit:50}`; POST 201
+  with the derived id `c1632babbc0951da2`; the same POST again 409 `connection_exists`; an origin
+  with a path 422 `invalid_origin`; PATCH touch 200 with `last_used_at` set; PATCH an unknown id
+  404 `connection_not_found`; DELETE 204 twice; GET 200 with zero rows.
+- **The client is verified against it, not against a stub.** Driving the real app (Electron from
+  source, isolated HOME, CDP) as `easter-delta`: sign-in through the client's own form, the list
+  arrived from the live service, the add view proved `GET /healthz` on
+  `https://easter-server.char-istrian.ts.net` and wrote the row, and an independent GET with the
+  same account then read that row back (`count: 1`, label derived from the host). Screenshot in
+  `/tmp/eapp-e2e-shots/live-list.png`.
+
+Still out, in the order it blocks a release:
+1. **Diana's design for the two views.** `desktop/connections.css` is a placeholder of shape, not
    of design (its header says so). Her studio file replaces it wholesale; the markup hooks she was
    given are the ones in `desktop/shell.html`. Acceptance: her file in place, `cmp` clean against
    her studio copy, both moods screenshotted through `npm run test:servers --shots <dir>`, and no
    literal colour in it.
-3. **Release.** `package.json` is still 1.0.10 and the feature is not in a tag. A release is
+2. **Release.** `package.json` is still 1.0.10 and the feature is not in a tag. A release is
    `client-v<version>` from `main` after CI is green; the packaged artifact is a separate check
    from the suite (see 1's acceptance and the smoke step).
 
@@ -47,6 +55,16 @@ Still out, in the order it blocks a release:
   action does not belong in a web document.
 - **`e-server://connect?server=…` adds its origin to the list** (best effort) so a link cannot
   create a server this app knows about but the account's list does not.
+
+## The defect the live run found, and the gate it left behind
+
+`addServer` validated an address with `probe(origin)`, but `main.cjs` already declared the
+updater's `probe()` (it asks GitHub for the latest client version). A duplicate top-level function
+declaration is silent — the later one wins — so every add compared a server's `/healthz` body
+against `1.0.10` and answered "No e-server answered at that address." No unit test could see it:
+`main.cjs` only runs inside Electron. Found by driving the real app; `tests/main-shape.test.cjs`
+now fails on any duplicated top-level name in the client's unloadable modules, and is
+mutation-checked.
 
 ## Smaller, unrelated
 
