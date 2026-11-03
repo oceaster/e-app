@@ -15,11 +15,11 @@
 .client-servers .server-remove{min-width:44px;min-height:44px;padding:8px;border:1px solid transparent;border-radius:6px;background:var(--ec-panel);color:var(--ec-muted-panel);font-size:12px;text-decoration:underline;text-underline-offset:3px}
 .client-servers .server-connect:hover{background:var(--ec-panel-soft);border-color:var(--ec-control-line)}
 .client-servers .server-remove:hover{color:var(--ec-danger);background:var(--ec-danger-bg)}
-.client-servers :is(button,input):focus-visible{outline:2px solid var(--ec-gold);outline-offset:3px}
+.client-servers :is(button,input):focus-visible{outline:2px solid var(--ec-accent-action);outline-offset:3px}
 .client-servers .client-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
 .client-servers .company-submit,.client-servers .account-provider,.client-servers #servers-retry{min-height:44px;padding:11px 18px;border:1px solid var(--ec-control-line);border-radius:6px;font-weight:600}
-.client-servers .company-submit{background:var(--ec-gold-action);color:var(--ec-on-gold);border-color:var(--ec-gold-action)}
-.client-servers .company-submit:hover:not(:disabled){background:var(--ec-gold-hover);border-color:var(--ec-gold-hover)}
+.client-servers .company-submit{background:var(--ec-accent-action);color:var(--ec-on-accent);border-color:var(--ec-accent-action)}
+.client-servers .company-submit:hover:not(:disabled){background:var(--ec-accent-hover);border-color:var(--ec-accent-hover)}
 .client-servers .account-provider,.client-servers #servers-retry{background:var(--ec-panel);color:var(--ec-ink)}
 .client-servers :is(.account-provider,#servers-retry):hover{background:var(--ec-panel-soft)}
 .client-servers #servers-empty{padding:26px 0;border-block:1px solid var(--ec-line);color:var(--ec-muted-panel)}

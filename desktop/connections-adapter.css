@@ -1,0 +1,24 @@
+/* DELTA'S ADAPTER BETWEEN THE ACCOUNT CARD'S LIGHT SHEET AND DIANA'S CONNECTIONS SHEET.
+ *
+ * Same role as launcher-light-adapter.css, and the same reason: an owner's sheet was drawn against
+ * a surface that existed before this window did, so the differences live here, in a file of mine,
+ * rather than in her file (desktop/connections.css is her studio copy byte for byte).
+ *
+ * THE ONE RULE. launcher-light-adapter.css paints `html[data-easter-theme="light"] .company-submit`
+ * as paper with a border — right for the sign-in card, where every row is a quiet choice. Diana's
+ * sheet makes "Add an e-server" the single filled action of these views, in the corporate violet,
+ * and that rule is (0,2,1) against her (0,2,0), so it won and her primary action came out outlined
+ * (measured in the real window, 2026-11-03). An id outranks it, so these two rules restore HER
+ * design in the views she owns and leave the sign-in card exactly as it is.
+ *
+ * Every value is a household token: this file adds no colour of its own.
+ */
+#client-servers .company-submit {
+ background: var(--ec-accent-action);
+ border-color: var(--ec-accent-action);
+ color: var(--ec-on-accent);
+}
+#client-servers .company-submit:hover:not(:disabled) {
+ background: var(--ec-accent-hover);
+ border-color: var(--ec-accent-hover);
+}
