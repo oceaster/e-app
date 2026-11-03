@@ -5,7 +5,7 @@
 # source revision: easter-co-smp.github.io 9c0cc23
 
 1177a665ce0d90d9693407b2b817cf76434c1dd60e0104f5640fde0b18880ac2  desktop/vendor/launcher/account/account.css  (site/account/account.css)
-90cd0592d04540d3d43c83cd7514aa5f64a087251ac7d20866800025d957f02f  desktop/vendor/launcher/account/microsoft-signin.mjs  (site/account/microsoft-signin.mjs)
+4f8148c0ce522150c9d1fd4e2437b8c2d7dfbe85cc9e04ee39da74a82d5c8a25  desktop/vendor/launcher/account/microsoft-signin.mjs  (site/account/microsoft-signin.mjs)
 7dbb00e072f9a6310d683d8a63eb470df12c36d5beb762ec3438bc31832cbecd  desktop/vendor/launcher/signin-options.mjs  (site/signin-options.mjs)
 84a0a5d67f41034e03c6445ec8927f3f54503ee040667bbf466633eb25167f79  desktop/vendor/launcher/theme/theme.css  (site/theme.css)
 4ad9d0939faf0645e3053b18da9127895b067c346b4d245a065e090c747bda03  desktop/vendor/launcher/theme/launcher-bindings.css  (site/launcher-bindings.css)

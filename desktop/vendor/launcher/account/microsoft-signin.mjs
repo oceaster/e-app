@@ -122,11 +122,15 @@ export function readCallback(search){
 // passes nothing gets REDIRECT_URI and the behaviour every existing page already has.
 export function createMicrosoftSignIn({request=(...args)=>fetch(...args),baseUrl=API_ORIGIN,timeout=30000,waitFor=ms=>new Promise(done=>setTimeout(done,ms)),now=Date.now,redirectUri=REDIRECT_URI}={}){
  // One POST, with the browser transport rules the rest of this site already uses: no ambient
- // cookies, no cache, no redirect followed, no referrer.
- const once=async (pathname,body,ceiling)=>{
+ // cookies, no cache, no redirect followed, no referrer. `token`, when a caller has one, is the
+ // Company session this request speaks for, and it is the only thing that ever rides in a header
+ // here: an account session, never a Microsoft token of any kind.
+ const once=async (pathname,body,ceiling,token)=>{
   let response;
+  const headers={Accept:'application/json','Content-Type':'application/json'};
+  if(typeof token==='string'&&token)headers.Authorization='Bearer '+token;
   try{
-   response=await request(baseUrl+pathname,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body),credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(ceiling)});
+   response=await request(baseUrl+pathname,{method:'POST',headers,body:JSON.stringify(body),credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(ceiling)});
   }catch{throw new AccountError('unreachable',UNREACHABLE);}
   let data=null;
   try{data=await response.json();}catch{}
@@ -138,13 +142,13 @@ export function createMicrosoftSignIn({request=(...args)=>fetch(...args),baseUrl
  // carried nothing out. Nothing else is asked twice: a start that lost its answer has written a
  // row that expires on its own, and an exchange is single use by construction, so a second
  // attempt would spend the player's code on a question the service has already answered.
- const send=async (pathname,body)=>{
+ const send=async (pathname,body,token)=>{
   const deadline=now()+WAKING_BUDGET_MS;
   let lastError=null;
   for(let attempt=1;;attempt++){
    const remaining=deadline-now();
    if(remaining<=0)throw lastError||new AccountError('unreachable',UNREACHABLE);
-   try{return await once(pathname,body,Math.max(1,Math.min(timeout,remaining)));}
+   try{return await once(pathname,body,Math.max(1,Math.min(timeout,remaining)),token);}
    catch(error){
     if(error?.code!=='database_unavailable'||attempt>=WAKING_ATTEMPTS)throw error;
     lastError=error;
@@ -175,10 +179,19 @@ export function createMicrosoftSignIn({request=(...args)=>fetch(...args),baseUrl
   // Finish a callback this page received. `code` and `state` are the two values the URL
   // actually carried, and the state is posted exactly as received: it is the handle on the
   // verifier the service kept, and a flow can only be redeemed with the state that started it.
-  async exchange(code,state){
+  //
+  // THE SESSION TRAVELS WITH THE CALLBACK WHEN THE TAB HAS ONE. A player who is already signed
+  // in and presses Connect on the Microsoft row is not signing in to a second account: they are
+  // proving Microsoft for the account they hold. The service applies a proof to an account only
+  // when the proof OWNS it, and "a live session for that same account" is exactly that case
+  // (api/identity_store.login_microsoft, "what decides between refusing a proof and repairing a
+  // link"); a proof that resolves to a DIFFERENT Company account is still refused. So `token` is
+  // how this page says which account it means - it is the seam's own session token, sent in the
+  // Authorization header and nowhere else, never stored by this module and never logged.
+  async exchange(code,state,token){
    if(!code)throw new AccountError('invalid_request',NO_CODE);
    if(!state)throw new AccountError('oauth_state_invalid',START_AGAIN);
-   return send('/v2/oauth/microsoft/exchange',{code,state,client:'website/1'});
+   return send('/v2/oauth/microsoft/exchange',{code,state,client:'website/1'},token);
   }
  };
 }

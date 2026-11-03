@@ -23,7 +23,11 @@ without the site checkout still fails on a changed copy.
                           carries site/account/index.html's markup for it, including
                           `body class="account"`, which is load-bearing: the sheet is
                           scoped under `.account`.
-- microsoft-signin.mjs <- site/account/microsoft-signin.mjs. The page's half of the
+- microsoft-signin.mjs <- site/account/microsoft-signin.mjs, re-vendored at 1ea646c ("Microsoft
+                          linking is the same flow, with the session carried") after that upstream
+                          change left this copy one byte behind. Nothing here imports it - see the
+                          end of this entry - so the copy is the page's bytes and nothing else.
+                          The page's half of the
                           Microsoft flow (the registered redirect literal, the callback
                           reader, the not-configured sentence). The client's Microsoft
                           sign-in runs in the main process (desktop/company-microsoft.cjs)
