@@ -33,8 +33,15 @@ DONE since this was written (the evidence, so nobody re-does it):
   same account then read that row back (`count: 1`, label derived from the host). Screenshot in
   `/tmp/eapp-e2e-shots/live-list.png`.
 
+**Diana's deliverable has landed** (2026-11-03 00:34, while her turn 2 was still running):
+`/home/diana/Desktop/e-app-connections/` holds `connections.css`, `connections.html`, per-state
+fixtures (`list-dark.html`, `list-light.html`, `add-dark.html`, `empty-light.html`,
+`loading-dark.html`, `error-dark.html`, `narrow-light.html`) and `shots/` with a PNG **and an SVG**
+per state. Her route was dead until e-server `9b7fe92690` (the codex app-server refused the
+harness's MCP tool names); turn 2 is the first that ever ran.
+
 Still out, in the order it blocks a release:
-1. **Diana's design for the two views.** `desktop/connections.css` is a placeholder of shape, not
+1. **Integrate Diana's design for the two views** (her files are in her studio, listed above). `desktop/connections.css` is a placeholder of shape, not
    of design (its header says so). Her studio file replaces it wholesale; the markup hooks she was
    given are the ones in `desktop/shell.html`. Acceptance: her file in place, `cmp` clean against
    her studio copy, both moods screenshotted through `npm run test:servers --shots <dir>`, and no
