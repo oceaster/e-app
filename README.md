@@ -48,3 +48,8 @@ and the download buttons resolve to the same version.
 
 Company-first sign-in, account isolation, tray controls and the HTTPS address correction
 are described in [docs/COMPANY_LOGIN.md](docs/COMPANY_LOGIN.md).
+
+After 30 minutes without interaction in the connected e-server window, the client
+returns to that server's PIN screen. If the PIN is not accepted within ten minutes,
+the client silently closes the server connection and returns to the e-server list;
+the Easter Company account remains signed in.

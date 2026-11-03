@@ -7,6 +7,7 @@ const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {loadServerPage}=require('./navigation.cjs');
+const {IdleLock}=require('./idle-lock.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
@@ -31,6 +32,7 @@ let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers
 // author of the API address - the vendored account client - and is read at initializeCompany.
 let accountsOrigin='';
 let activeSession=null;
+let idleLock=null,idleTimer=null,idleCookieListener=null;
 let company=null,windowAccount=null,pendingLink=null;
 const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!updater.identifies(pkg,manifest))throw Error('Invalid e-server client update.');};
 if(!app.requestSingleInstanceLock()){app.quit();}else{
@@ -127,6 +129,39 @@ async function openServers(){
  if(!company?.authorized()){accountChanged();return;}
  publish({phase:'setup',view:'servers',title:'Your e-servers.',message:'Choose an e-server to connect to. It will ask for its own PIN.',error:''});
  setupWindow();await refreshServers();
+}
+function stopIdleLock(){
+ if(idleTimer)clearInterval(idleTimer);idleTimer=null;
+ if(idleCookieListener&&activeSession)activeSession.cookies.removeListener('changed',idleCookieListener);
+ idleCookieListener=null;idleLock=null;
+}
+function startIdleLock(current,ses,origin){
+ stopIdleLock();
+ const controller=new IdleLock({
+  lock:async()=>{
+   if(win!==current||current.isDestroyed())return;
+   // Destroy the old document and its connections before dropping its PIN cookie.
+   current.webContents.stop();
+   await current.loadURL('about:blank');
+   await ses.cookies.remove(origin,'sec_session');
+   if(win!==current||current.isDestroyed()||idleLock!==controller)return;
+   idleCookieListener=(_event,cookie,_cause,removed)=>{
+    if(!removed&&cookie.name==='sec_session'&&cookie.value&&idleLock===controller){
+     ses.cookies.removeListener('changed',idleCookieListener);idleCookieListener=null;controller.authenticated();
+    }
+   };
+   ses.cookies.on('changed',idleCookieListener);
+   await loadServerPage(current,origin+'/');
+  },
+  disconnect:async()=>{
+   if(win!==current)return;
+   stopIdleLock();win=null;windowAccount=null;activeSession=null;
+   current.destroy();
+   if(company?.authorized())await openServers();
+  }
+ });
+ idleLock=controller;idleTimer=setInterval(()=>void controller.tick(),1000);
+ current.once('closed',()=>{if(idleLock===controller)stopIdleLock();});
 }
 /**
  * Is there an e-server at this address? The service's own liveness answer (`/healthz`, the path
@@ -257,6 +292,7 @@ async function connect(){
  win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
+ startIdleLock(current,activeSession,config.server);
  current.webContents.setWindowOpenHandler(({url})=>{void openExternal(url);return {action:'deny'};});
  current.webContents.on('will-attach-webview',event=>event.preventDefault());
  current.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===config.server)return;}catch{}event.preventDefault();void openExternal(url);});
@@ -385,7 +421,7 @@ async function start(){
  // nothing here can be reached from the setup window or from a frame the app did not load.
  ipcMain.handle('client:handoff',(event,next)=>{remote(event);return bindCompanySession(next);});
  ipcMain.handle('client:signout',event=>{remote(event);return endCompanySession();});
- ipcMain.on('client:activity',event=>{try{remote(event);activity=Date.now();}catch{}});
+ ipcMain.on('client:activity',event=>{try{remote(event);activity=Date.now();idleLock?.activity();}catch{}});
  ipcMain.on('client:signin-finished',event=>{try{remote(event);externalAuth=false;}catch{}});
  const accounts=await initializeCompany();
  ipcMain.handle('company:login',async(event,identifier,password)=>{local(event);await company.login(identifier,password);await afterCompany();return company.view();});
