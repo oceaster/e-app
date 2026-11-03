@@ -171,6 +171,7 @@ async function removeServer(id,label){
 async function connectTo(value){
  const origin=serverOrigin(value,{development});
  const row=(state.servers.rows||[]).find(item=>item.origin===origin);
+ if(win&&origin===config.server){if(setup&&!setup.isDestroyed())setup.close();win.show();win.focus();return {ok:true,same:true};}
  if(win){
   const choice=await dialog.showMessageBox(win,{buttons:['Cancel','Switch server'],defaultId:0,cancelId:0,message:'Switch your e-server connection?',detail:'Finish transfers and save your work first.'});
   if(choice.response!==1)return {ok:false,cancelled:true};
@@ -259,7 +260,10 @@ async function connect(){
  current.once('ready-to-show',()=>{if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});
  current.webContents.on('before-input-event',(event,input)=>{if(input.type==='keyDown'&&(input.control||input.meta)&&input.key===','){event.preventDefault();changeServer();}});
  current.on('close',event=>{if(!quitting&&tray){event.preventDefault();current.hide();}});
- current.on('closed',()=>{if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){config.server=pendingServer;await save();}restart();})().catch(error=>dialog.showErrorBox('Could not restart e-server',error.message));}});
+ current.on('closed',()=>{if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
+  config.server=pendingServer;
+  // The person chose a server, so the relaunch opens THAT server rather than the list again.
+  config.openOnStart=pendingServer;}await save();restart();})().catch(error=>dialog.showErrorBox('Could not restart e-server',error.message));}});
  current.on('resize',()=>{if(!current.isMaximized()&&!current.isMinimized()){config.bounds=current.getBounds();void save();}});
  current.webContents.on('will-prevent-unload',async event=>{
   const result=await dialog.showMessageBox(current,{type:'warning',buttons:['Stay','Leave'],defaultId:0,cancelId:0,message:'This page has unsaved work or an active transfer. Leave anyway?'});
@@ -388,7 +392,10 @@ async function start(){
  ready=true;const link=process.argv.find(v=>v.startsWith('e-server:'));
  if(link){await receiveLink(link);if(!config.server)return;}
  if(await checkUpdate(true))return;
- if(company?.authorized())await afterCompany();else await connect();
+ // A relaunch that a server choice caused opens that server; every other start opens the list.
+ const open=config.openOnStart;
+ if(open&&open===config.server){delete config.openOnStart;await save();await connect();}
+ else if(company?.authorized())await afterCompany();else await connect();
  schedule();
 }
 app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();});
