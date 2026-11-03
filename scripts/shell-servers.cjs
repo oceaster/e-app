@@ -104,6 +104,14 @@ app.whenReady().then(async()=>{
  assert.equal(await read(`document.querySelector('#message').textContent`),'','the list says its sentence once, in the view itself');
  await shot('01-list-dark');
 
+ // A row whose name the service derived from its host prints the address ONCE: two identical
+ // lines read like a mistake (measured on a row the live service labelled from its origin).
+ state={...state,servers:{...state.servers,rows:[...ROWS,{id:'chost',origin:'https://only.example.test',label:'only.example.test',addedAt:null,lastUsedAt:null}]}};publish();
+ await until('the third row',`document.querySelectorAll('.server-row').length===3`);
+ assert.equal(await read(`document.querySelectorAll('.server-row')[2].querySelectorAll('.server-origin').length`),0);
+ state={...state,servers:{...state.servers,rows:ROWS}};publish();
+ await until('two rows again',`document.querySelectorAll('.server-row').length===2`);
+
  // ── 2. a row connects, with the origin the row holds ────────────────────────────────────
  await read(`document.querySelectorAll('.server-connect')[1].click()`);
  await until('the connect call',`true`);

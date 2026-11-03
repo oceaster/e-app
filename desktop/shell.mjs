@@ -30,7 +30,11 @@ let providersLoaded=false,shownError=null;
 // and that wrapper is Electron's plumbing, not a sentence for a player. The main process already
 // names what happened ("Sign-in cancelled."), so the wrapper is unwrapped and nothing else is
 // rewritten: the client shows the meaning it was given, never the transport.
-const sentence=value=>String(value??'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
+// Electron's wrapper has two shapes and both are plumbing, not sentences: "Error invoking remote
+// method 'x': Error: ..." and, when the rejection is itself an Error, a leading "Error: " in front
+// of that. Strip a leading "Error: " first, then the wrapper, so the person reads the meaning the
+// main process gave them and never "Error invoking remote method".
+const sentence=value=>String(value??'').replace(/^Error:\s*/,'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
 // One alert region, the page's (#account-error, above the options): one <p> per line, blank lines
 // dropped, exactly as site/account/account.mjs draws it.
 function problem(value){
@@ -114,8 +118,11 @@ function rowNode(row){
  const item=document.createElement('li');item.className='server-row';item.dataset.origin=row.origin;
  const choose=document.createElement('button');choose.type='button';choose.className='server-connect';
  const name=document.createElement('span');name.className='server-name';name.textContent=row.label||hostOf(row.origin);
- const where=document.createElement('span');where.className='server-origin';where.textContent=hostOf(row.origin);
- choose.append(name,where);
+ // The address is the quiet second line - unless it is already the row's name, in which case
+ // printing it twice says nothing and looks like a mistake (measured on a row whose label the
+ // service derived from its host).
+ choose.append(name);
+ if(name.textContent!==hostOf(row.origin)){const where=document.createElement('span');where.className='server-origin';where.textContent=hostOf(row.origin);choose.append(where);}
  choose.onclick=()=>action(()=>bridge.connect(row.origin));
  const remove=document.createElement('button');remove.type='button';remove.className='server-remove';
  remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+(row.label||hostOf(row.origin)));

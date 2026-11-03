@@ -132,8 +132,13 @@ async function openServers(){
  * Is there an e-server at this address? The service's own liveness answer (`/healthz`, the path
  * scripts/deploy.sh polls) is the check, bounded, and it names nothing about the person: a wrong
  * address gets one sentence rather than a spinner. `/healthz` answers `ok`.
+ *
+ * NOT `probe`: that name is already the UPDATER's (it asks GitHub for the latest client version),
+ * and a second declaration of one name in this module silently replaced the first - which is how
+ * `addServer` came to compare a server's health against "1.0.10". tests/main-shape.test.cjs now
+ * fails on any duplicated top-level name.
  */
-function probe(origin){
+function probeServer(origin){
  return new Promise(resolve=>{
   let url;try{url=new URL('/healthz',origin);}catch{return resolve(null);}
   const lib=url.protocol==='http:'?http:https;
@@ -148,7 +153,7 @@ function probe(origin){
 }
 async function addServer({origin,label}={}){
  const normalized=serverOrigin(origin,{development});
- const answer=await probe(normalized);
+ const answer=await probeServer(normalized);
  if(!answer||answer.status!==200||!/^ok/i.test(answer.body))throw Error('No e-server answered at that address.');
  const row=await connectionsClient().add({origin:normalized,label});
  await refreshServers();
@@ -353,21 +358,22 @@ async function start(){
   local(event);if(!['servers','add'].includes(value))throw Error('Unknown view.');
   // The heading is the view's, and it is published from here so a second renderer (or a resume)
   // cannot show one view's title over another view's content.
-  publish({view:value,title:value==='add'?'Add an e-server.':'Your e-servers.',message:value==='add'?'Type the HTTPS address of an e-server you can reach.':state.message});
+  // Both sentences are here, so returning to the list never leaves the add view's instruction
+  // standing over the rows (measured: it did, in the same window).
+  publish({view:value,
+   title:value==='add'?'Add an e-server.':'Your e-servers.',
+   message:value==='add'?'Type the HTTPS address of an e-server you can reach.':'Choose an e-server to connect to. It will ask for its own PIN.'});
   return state;
  });
- ipcMain.handle('client:servers-refresh',(event)=>{local(event);company.require();return refreshServers();});
- ipcMain.handle('client:servers-add',async(event,payload)=>{
-  local(event);company.require();
-  try{return await addServer(payload||{});}
-  catch(error){return {ok:false,error:sentence(error)};}
- });
- ipcMain.handle('client:servers-remove',async(event,id,label)=>{
-  local(event);company.require();
-  try{return await removeServer(String(id||''),String(label||''));}
-  catch(error){return {ok:false,error:sentence(error)};}
- });
- ipcMain.handle('client:servers-use',async(event,id)=>{local(event);company.require();await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};});
+ // The list's four calls answer, they never reject into the page. `local(event)` still throws for
+ // any other renderer - that is the door, not a sentence - but everything AFTER the door is a
+ // refusal the view can print: "sign in again" is a sentence, and an IPC rejection arrives wrapped
+ // in Electron's plumbing ("Error invoking remote method ..."), which is not.
+ const answered=work=>async(event,...args)=>{local(event);try{company.require();return await work(...args);}catch(error){return {ok:false,error:sentence(error)};}};
+ ipcMain.handle('client:servers-refresh',answered(()=>refreshServers()));
+ ipcMain.handle('client:servers-add',answered(payload=>addServer(payload||{})));
+ ipcMain.handle('client:servers-remove',answered((id,label)=>removeServer(String(id||''),String(label||''))));
+ ipcMain.handle('client:servers-use',answered(async id=>{await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};}));
  ipcMain.handle('client:retry',async event=>{local(event);company.require();if(state.phase==='update-error')await checkUpdate(true);else if(win){win.reload();setup.close();win.show();}else await connect();});
  ipcMain.handle('client:installer',event=>{local(event);return shell.openExternal(installer);});
  ipcMain.handle('client:external',(event,value)=>{remote(event);return openExternal(value);});
