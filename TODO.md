@@ -46,7 +46,11 @@ Still out, in the order it blocks a release:
    360 px, browser zoom, and the no-flash check in the real window — all runnable now with
    `npm run test:servers -- --shots <dir>` plus a manual pass. Her own two caveats are recorded at
    the end of her NOTES.md: her theme snapshot was stale, and her sandbox cannot launch Chromium
-   (`setsockopt: Operation not permitted`), so her plates are design plates, not screenshots. `desktop/connections.css` is a placeholder of shape, not
+   (`setsockopt: Operation not permitted`), so her plates are design plates, not screenshots.
+   The token divergence is INTENTIONAL AND RECORDED (Diana, 2026-11-03): her studio sheet keeps
+   --ec-gold* and will use canonical names only if she revises it, so `shell.css` carries the
+   four-name alias as the integration contract. Do not "tidy" her file; if she revises, re-copy,
+   cmp, and delete the alias block. `desktop/connections.css` is a placeholder of shape, not
    of design (its header says so). Her studio file replaces it wholesale; the markup hooks she was
    given are the ones in `desktop/shell.html`. Acceptance: her file in place, `cmp` clean against
    her studio copy, both moods screenshotted through `npm run test:servers --shots <dir>`, and no
