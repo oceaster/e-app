@@ -14,7 +14,8 @@
     "test:navigation": "electron --no-sandbox scripts/navigation-smoke.cjs",
     "pack": "electron-builder --dir",
     "dist:linux": "electron-builder --linux AppImage deb pacman --x64 --publish never",
-    "dist:windows": "electron-builder --win nsis --x64 --publish never"
+    "dist:windows": "electron-builder --win nsis --x64 --publish never",
+    "test:servers": "electron --no-sandbox scripts/shell-servers.cjs"
   },
   "devDependencies": {
     "electron": "44.7.2",
@@ -23,7 +24,7 @@
   "build": {
     "appId": "ltd.easter.eserver",
     "productName": "e-server",
-    "copyright": "Copyright © 2026 Easter LTD. All rights reserved.",
+    "copyright": "Copyright \u00a9 2026 Easter LTD. All rights reserved.",
     "asar": true,
     "directories": {
       "output": "release"
