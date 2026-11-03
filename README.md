@@ -2,9 +2,11 @@
 
 The desktop frontend for an e-server you own or have permission to access. Windows
 10+ (x64), Ubuntu, Arch Linux and Linux AppImage (x86_64). macOS and mobile are not
-offered. Sign in to your global Easter Company account first, then choose your server's HTTPS origin; private network/VPN
-access, its PIN and your Easter Company account are still required. No server
-address, PIN, Company token or backend source is bundled into releases.
+offered. Sign in to your global Easter Company account first, then choose from the
+e-servers saved to that account - add one by its HTTPS origin, remove one you no longer
+use - and the server you pick asks for its PIN. Private network/VPN access, the PIN and
+your Easter Company account are still required. No server address, PIN, Company token or
+backend source is bundled into releases.
 
 `npm ci`, `npm test`, `npm start`. `npm run dist:linux` builds AppImage, DEB and
 pacman; `npm run dist:windows` builds an NSIS installer on Windows. The release

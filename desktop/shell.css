@@ -62,3 +62,14 @@ progress{width:100%;height:6px;border:0;accent-color:var(--ec-accent-action)}
 /* The heading of a client step (finish an account, connect) is the page's heading family, one
    step down: the panel already owns the h1, and a step inside it is not a second page title. */
 #account-finish h2{margin:0 0 4px;font-family:Georgia,"Times New Roman",serif;font-size:20px;font-weight:400;letter-spacing:-.02em}
+
+/* THE ACCOUNT ROW, IN THE WINDOW THAT HAS ONE.
+ *
+ * #account-status is this window's own row (site/account/index.html has no such id): the account
+ * name and the sign-out action the setup view has always carried. It is placed here, not painted:
+ * the sign-out keeps .account-provider and the page's sheet still owns how that control looks.
+ * A list of e-servers is what this window now shows, so the row sits above it on one line rather
+ * than as two stacked full-width elements that read like a settings page.
+ */
+#account-status { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-block: 2px 16px; }
+#account-status .account-provider { width: auto; padding: 6px 14px; }

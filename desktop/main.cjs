@@ -5,6 +5,7 @@ const {pathToFileURL}=require('node:url');
 const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trusted,localFrame,updateLevel,relaunchOptions}=require('./security.cjs');
 const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
+const {Connections}=require('./connections.cjs');
 const {loadServerPage}=require('./navigation.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
@@ -25,7 +26,10 @@ const ground=()=>nativeTheme.shouldUseDarkColors?'#0d2029':'#eef2f9';
 const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
-let state={phase:'auth',version:VERSION,server:'',accountBusy:true};
+let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers',servers:{state:'idle',rows:[],error:'',limit:0,fallback:''}};
+// The account-scoped list of e-servers (desktop/connections.cjs). `accountsOrigin` is the one
+// author of the API address - the vendored account client - and is read at initializeCompany.
+let accountsOrigin='';
 let activeSession=null;
 let company=null,windowAccount=null,pendingLink=null;
 const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!updater.identifies(pkg,manifest))throw Error('Invalid e-server client update.');};
@@ -37,7 +41,7 @@ if(!app.requestSingleInstanceLock()){app.quit();}else{
 function show(){if(!company?.authorized()){setupWindow();return;}const target=win||setup;if(target){target.show();target.focus();}}
 function publish(next){state={...state,...next,...company?.view(),version:VERSION,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);}
 function accountChanged(){if(!company?.authorized()){win?.hide();publish({phase:'auth',title:'Sign in to Easter Company.',error:''});setupWindow();}else publish({});}
-function changeServer(){if(!company?.authorized()){setupWindow();return;}publish({phase:'setup',title:'Connect to an e-server',error:''});setupWindow();}
+function changeServer(){if(!company?.authorized()){setupWindow();return;}void openServers();}
 // ONE SIGN-OUT, BOTH SCOPES (docs/COMPANY_LOGIN.md). The client's OWN half ends FIRST - the
 // memory token cleared, the keyring entry removed and the app back at its own sign-in screen,
 // exactly as this flow always did - and only then does the main process report it to the
@@ -62,15 +66,23 @@ async function signOutCompany(){
 // the Authorization header of that one POST - never into a renderer, a URL, a redirect, a log
 // line or an update payload. Answers {ok:true,next} or {ok:false,error}; it never rejects into
 // the page, because the page's fallback is its catch and a named code is the honest refusal.
+// THE ONE DOOR to the Company session in this process (the rule desktop/company.cjs states):
+// the handoff to a server and the account-scoped e-server list both prove the session, and both
+// ask this function rather than reaching into the session themselves - so "what can read the
+// session" is one name to audit instead of a grep across call sites.
+function companyToken(){return company.credential();}
 function bindCompanySession(next){
  let token='';
- try{token=company.credential();}catch{return Promise.resolve({ok:false,error:'company_sign_in_required',status:0,detail:''});}
+ try{token=companyToken();}catch{return Promise.resolve({ok:false,error:'company_sign_in_required',status:0,detail:''});}
  const connected=activeSession;
  return bridge.bindSession({origin:config.server,token,next,send:(url,init)=>connected?connected.fetch(url,init):Promise.reject(Error('Connect to your e-server first.'))});
 }
 async function initializeCompany(){
- const {AccountClient,companySession,publicAccount}=await import('./vendor/launcher/account-client.mjs');
+ const {AccountClient,companySession,publicAccount,API_ORIGIN}=await import('./vendor/launcher/account-client.mjs');
  const testAPI=development?process.env.E_SERVER_ACCOUNTS_TEST_ORIGIN:null;
+ // The e-server list lives on the same accounts service, so it speaks to the same origin the
+ // sign-in does - including a development fixture's loopback origin.
+ accountsOrigin=testAPI||API_ORIGIN;
  if(testAPI){const address=new URL(testAPI);if(address.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(address.hostname))throw Error('The test account service must be loopback HTTP.');}
  const accounts=new AccountClient({client:'e-server/'+VERSION,...(testAPI?{baseUrl:testAPI}:{} )});
  const microsoftAccount=new CompanyMicrosoft({accounts,openExternal:url=>shell.openExternal(externalURL(url)),log:{append(){}}});
@@ -80,8 +92,104 @@ async function initializeCompany(){
   microsoft:signal=>microsoftAccount.signIn(()=>{},signal),provider:(provider,signal)=>providerSignIn(accounts,provider,{signal,openExternal:url=>shell.openExternal(externalURL(url))}),changed:accountChanged});
  return accounts;
 }
-async function afterCompany(){if(!company.authorized())return;publish({phase:'setup',title:'Your e-server.',message:'Connect to your private network, then enter your server HTTPS address.',error:''});if(pendingLink){const target=pendingLink;pendingLink=null;await receiveLink(target,true);}else await connect();}
+// ── the account-scoped list of e-servers (Owen, 2026-11-03) ──────────────────────────────
+// "when you login, before you connect to any e-server, there should be an intermediary view
+// where users can select which e-server instance they want to connect to." So afterCompany no
+// longer connects to the last server: it opens the list. `config.server` survives as THIS
+// machine's memory of the last server, and that is all it is now - the list is the account's.
+// It is still offered, quietly, in the list's error state: the client's job is to reach your
+// server, and a read of the accounts service failing must not be a locked door.
+function connectionsClient(){
+ if(!accountsOrigin)throw Error('The Easter Company account service is not ready yet.');
+ return new Connections({origin:accountsOrigin,development,credential:companyToken});
+}
+function serve(next){state={...state,servers:{...state.servers,...next}};publish({});}
+async function refreshServers(){
+ const fallback=config.server||'';
+ serve({state:'loading',error:'',fallback});
+ try{
+  let answer=await connectionsClient().list();
+  // ONE migration, once, for a client that already knew a server: without it an upgrade would
+  // land an existing person on an empty list and lose the only address they had.
+  if(!answer.connections.length&&fallback&&!config.connectionMigrated){
+   config.connectionMigrated=true;
+   try{await connectionsClient().add({origin:fallback});answer=await connectionsClient().list();}catch{}
+   await save();
+  }
+  serve({state:answer.connections.length?'ready':'empty',rows:answer.connections,limit:answer.limit||0,error:'',fallback});
+  return {ok:true};
+ }catch(error){
+  serve({state:'error',rows:[],error:error.message||'Your e-servers could not be loaded.',fallback});
+  return {ok:false,error:error.message||'unreachable'};
+ }
+}
+async function openServers(){
+ if(!company?.authorized()){accountChanged();return;}
+ publish({phase:'setup',view:'servers',title:'Your e-servers.',message:'Choose an e-server to connect to. It will ask for its own PIN.',error:''});
+ setupWindow();await refreshServers();
+}
+/**
+ * Is there an e-server at this address? The service's own liveness answer (`/healthz`, the path
+ * scripts/deploy.sh polls) is the check, bounded, and it names nothing about the person: a wrong
+ * address gets one sentence rather than a spinner. `/healthz` answers `ok`.
+ */
+function probe(origin){
+ return new Promise(resolve=>{
+  let url;try{url=new URL('/healthz',origin);}catch{return resolve(null);}
+  const lib=url.protocol==='http:'?http:https;
+  const request=lib.get(url,{timeout:8000,headers:{[HEADER]:CLIENT}},response=>{
+   let body='';response.setEncoding('utf8');
+   response.on('data',chunk=>{if(body.length<64)body+=chunk;});
+   response.on('end',()=>resolve({status:response.statusCode,body:body.trim()}));
+  });
+  request.on('error',()=>resolve(null));
+  request.on('timeout',()=>{request.destroy();resolve(null);});
+ });
+}
+async function addServer({origin,label}={}){
+ const normalized=serverOrigin(origin,{development});
+ const answer=await probe(normalized);
+ if(!answer||answer.status!==200||!/^ok/i.test(answer.body))throw Error('No e-server answered at that address.');
+ const row=await connectionsClient().add({origin:normalized,label});
+ await refreshServers();
+ return {ok:true,row};
+}
+async function removeServer(id,label){
+ const name=label||'this e-server';
+ const choice=await dialog.showMessageBox(setup||win||undefined,{type:'warning',buttons:['Cancel','Remove'],defaultId:0,cancelId:0,message:'Remove '+name+' from your list?',detail:'The server itself is not changed. You can add it again with its address.'});
+ if(choice.response!==1)return {ok:false,cancelled:true};
+ try{await connectionsClient().remove(id);}catch(error){serve({state:'ready',error:error.message});return {ok:false,error:error.message};}
+ await refreshServers();
+ return {ok:true};
+}
+/**
+ * Connect to one e-server origin. The list's rows, a connection link and the tray all arrive
+ * here, so the confirmation, the restart-on-switch and the record of "this was the server you
+ * used" live in one place. The PIN is the SERVER's question, asked by the server's own gate the
+ * moment this window loads it - the app never holds, asks for or forwards a PIN.
+ */
+async function connectTo(value){
+ const origin=serverOrigin(value,{development});
+ const row=(state.servers.rows||[]).find(item=>item.origin===origin);
+ if(win){
+  const choice=await dialog.showMessageBox(win,{buttons:['Cancel','Switch server'],defaultId:0,cancelId:0,message:'Switch your e-server connection?',detail:'Finish transfers and save your work first.'});
+  if(choice.response!==1)return {ok:false,cancelled:true};
+  pendingServer=origin;quitting=true;restartOnClosed=true;win.close();
+ }else{
+  config.server=origin;await save();
+  if(row)void connectionsClient().touch(row.id).catch(()=>{});
+  await connect();
+ }
+ return {ok:true};
+}
+async function afterCompany(){
+ if(!company.authorized())return;
+ if(pendingLink){const target=pendingLink;pendingLink=null;publish({phase:'setup',view:'servers',title:'Your e-servers.',error:''});setupWindow();await receiveLink(target,true);return;}
+ await openServers();
+}
 async function save(){await fs.mkdir(HOME,{recursive:true,mode:0o700});const tmp=path.join(HOME,'settings-'+crypto.randomUUID()+'.tmp');await fs.writeFile(tmp,JSON.stringify(config),{mode:0o600});await fs.rename(tmp,path.join(HOME,'settings.json'));}
+/** The meaning of a thrown thing, without Electron's "Error invoking remote method" wrapper. */
+const sentence=value=>String(value&&value.message!==undefined?value.message:value??'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
 function local(event){if(!localFrame(event)||event.senderFrame.url!==pathToFileURL(shellFile).href)throw Error('This action is only available in e-server setup.');}
 function remote(event){company?.require();if(!config.server||!win||event.sender!==win.webContents||!trusted(event,config.server))throw Error('This request did not come from your e-server.');}
 const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
@@ -229,7 +337,28 @@ async function start(){
  Menu.setApplicationMenu(null);
  try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open e-server',click:show},{label:'Change server…',click:changeServer},{label:'Sign out of Easter Company',click:()=>void signOutCompany()},{type:'separator'},{label:'Cancel sign-in',click:()=>{company?.cancel();void cancelSignIn();}},{label:'Check for updates',click:()=>void checkUpdate(false,true)},{label:'Restart to apply update',click:()=>void applyStaged(true)},{type:'separator'},{label:'Quit',click:()=>{quitting=true;app.quit();}}]));tray.on('click',show);}catch{}
  ipcMain.handle('client:state',event=>{local(event);return state;});
- ipcMain.handle('client:connect',async(event,value)=>{local(event);company.require();const origin=serverOrigin(value,{development});if(win){const choice=await dialog.showMessageBox(win,{buttons:['Cancel','Switch server'],defaultId:0,cancelId:0,message:'Switch your e-server connection?',detail:'Finish transfers and save your work first.'});if(choice.response!==1)return;pendingServer=origin;quitting=true;restartOnClosed=true;win.close();}else{config.server=origin;await save();await connect();}});
+ // Choosing an e-server, from the list or from anywhere else. One path, so the switch
+ // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
+ ipcMain.handle('client:connect',(event,value)=>{local(event);company.require();return connectTo(value);});
+ ipcMain.handle('client:view',(event,value)=>{
+  local(event);if(!['servers','add'].includes(value))throw Error('Unknown view.');
+  // The heading is the view's, and it is published from here so a second renderer (or a resume)
+  // cannot show one view's title over another view's content.
+  publish({view:value,title:value==='add'?'Add an e-server.':'Your e-servers.',message:value==='add'?'Type the HTTPS address of an e-server you can reach.':state.message});
+  return state;
+ });
+ ipcMain.handle('client:servers-refresh',(event)=>{local(event);company.require();return refreshServers();});
+ ipcMain.handle('client:servers-add',async(event,payload)=>{
+  local(event);company.require();
+  try{return await addServer(payload||{});}
+  catch(error){return {ok:false,error:sentence(error)};}
+ });
+ ipcMain.handle('client:servers-remove',async(event,id,label)=>{
+  local(event);company.require();
+  try{return await removeServer(String(id||''),String(label||''));}
+  catch(error){return {ok:false,error:sentence(error)};}
+ });
+ ipcMain.handle('client:servers-use',async(event,id)=>{local(event);company.require();await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};});
  ipcMain.handle('client:retry',async event=>{local(event);company.require();if(state.phase==='update-error')await checkUpdate(true);else if(win){win.reload();setup.close();win.show();}else await connect();});
  ipcMain.handle('client:installer',event=>{local(event);return shell.openExternal(installer);});
  ipcMain.handle('client:external',(event,value)=>{remote(event);return openExternal(value);});
@@ -254,7 +383,8 @@ async function start(){
  ready=true;const link=process.argv.find(v=>v.startsWith('e-server:'));
  if(link){await receiveLink(link);if(!config.server)return;}
  if(await checkUpdate(true))return;
- await connect();schedule();
+ if(company?.authorized())await afterCompany();else await connect();
+ schedule();
 }
 app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();});
 app.on('window-all-closed',()=>{if(!restartOnClosed&&(!tray||quitting))app.quit();});

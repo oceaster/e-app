@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
-<title>e-server</title><link rel="stylesheet" href="vendor/launcher/theme/theme.css"><link rel="stylesheet" href="vendor/launcher/account/account.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css"><link rel="stylesheet" href="vendor/launcher/theme/account-control.css"><link rel="stylesheet" href="shell.css"><script src="vendor/launcher/theme/theme-early.js"></script><script src="shell.mjs" type="module"></script></head>
+<title>e-server</title><link rel="stylesheet" href="vendor/launcher/theme/theme.css"><link rel="stylesheet" href="vendor/launcher/account/account.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css"><link rel="stylesheet" href="vendor/launcher/theme/account-control.css"><link rel="stylesheet" href="connections.css"><link rel="stylesheet" href="shell.css"><script src="vendor/launcher/theme/theme-early.js"></script><script src="shell.mjs" type="module"></script></head>
 <body class="account">
 <a class="account-skip" href="#account-root">Skip to account</a>
 <main class="account-main">
@@ -15,7 +15,28 @@
 <p class="client-copy" id="message"></p>
 <div class="company-signin" id="finish-block"><form id="account-finish" hidden><h2>Finish your account</h2><label for="username">Choose your username</label><input id="username" autocomplete="username" required pattern="[A-Za-z0-9_-]{3,20}" minlength="3" maxlength="20"><label for="new-password">Create a password</label><input id="new-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><label for="confirm-password">Confirm your password</label><input id="confirm-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><button type="submit" class="company-submit">Save account &amp; continue</button></form></div>
 <div class="client-status" id="account-status" hidden><span id="account-name"></span><button id="signout" type="button" class="account-provider">Sign out</button></div>
-<div class="company-signin" id="connect-block"><form id="connect" hidden><label for="server">e-server HTTPS address</label><input id="server" type="url" placeholder="https://easter-server.char-istrian.ts.net" required autocomplete="url" spellcheck="false"><button type="submit" class="company-submit">Connect to e-server <span aria-hidden="true">↗</span></button></form></div>
+<section class="client-servers" id="client-servers" data-state="idle" hidden>
+<section id="servers">
+<p class="client-copy" id="servers-copy">Choose an e-server to connect to. It will ask for its own PIN.</p>
+<ul class="server-list" id="server-list"></ul>
+<p class="client-copy" id="servers-empty" hidden></p>
+<div class="server-problem" id="servers-error" hidden><p id="servers-error-text"></p><div class="client-actions"><button id="servers-retry" type="button" class="account-provider">Try again</button><button id="servers-fallback" type="button" class="account-provider" hidden></button></div></div>
+<div class="client-actions"><button id="server-add" type="button" class="company-submit">Add an e-server</button></div>
+</section>
+<section id="add-server-view" hidden>
+<div class="company-signin">
+<form id="add-server" data-busy="false" novalidate>
+<label for="add-origin">e-server HTTPS address</label>
+<input id="add-origin" type="url" placeholder="https://easter-server.char-istrian.ts.net" required autocomplete="url" spellcheck="false">
+<label for="add-name">Name <span class="client-hint">optional</span></label>
+<input id="add-name" type="text" maxlength="60" autocomplete="off" spellcheck="false">
+<button type="submit" class="company-submit">Add e-server</button>
+<button id="add-cancel" type="button" class="account-provider">Back</button>
+<p class="client-problem" id="add-problem" role="alert"></p>
+</form>
+</div>
+</section>
+</section>
 <p class="client-copy" id="account-notice" hidden></p>
 </div>
 <div id="client-controls">

@@ -3,6 +3,10 @@ const {contextBridge,ipcRenderer}=require('electron');
 if(location.protocol==='file:'){
  contextBridge.exposeInMainWorld('eServerSetup',{
   connect:origin=>ipcRenderer.invoke('client:connect',origin),state:()=>ipcRenderer.invoke('client:state'),
+  // The account-scoped list of e-servers. The renderer never sees the Company session or the
+  // accounts origin: it names an address, a row or a view, and the main process owns the rest.
+  view:value=>ipcRenderer.invoke('client:view',value),refresh:()=>ipcRenderer.invoke('client:servers-refresh'),
+  addServer:payload=>ipcRenderer.invoke('client:servers-add',payload),removeServer:(id,label)=>ipcRenderer.invoke('client:servers-remove',id,label),
   retry:()=>ipcRenderer.invoke('client:retry'),download:()=>ipcRenderer.invoke('client:installer'),
   login:(identifier,password)=>ipcRenderer.invoke('company:login',identifier,password),
   provider:provider=>ipcRenderer.invoke('company:provider',provider),providers:()=>ipcRenderer.invoke('company:providers'),

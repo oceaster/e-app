@@ -68,3 +68,42 @@ Version 1.0.1 is prepared for Delta to review, merge and release. No tag or rele
 by this work. Native keyless integration covers login-before-server, IPC refusal, the removed
 menu, server PIN/Microsoft flow and renderer isolation. Real provider accounts and fresh-OS
 installer execution remain manual release checks.
+
+## The list between sign-in and connection (2026-11-03)
+
+Owen: "when you login, before you connect to any e-server, there should be an intermediary view
+where users can select which e-server instance they want to connect to ... there should be an
+option to remove an existing instance ... and a button to go to a 2nd new view, which allows the
+user to add a new e-server instance ... Once you select an instance to connect to that's when you
+will be prompted for the instances pin if it has one."
+
+So a signed-in client no longer reconnects to the last server. It opens the list of e-servers the
+Easter Company ACCOUNT holds (`GET /v2/accounts/connections`), and `settings.json`'s `server`
+field drops to what it should always have been: this machine's memory of the last server, used to
+offer one quiet way through when the list cannot be read. The list itself is not the disk's - sign
+in on a second machine and the same rows are there.
+
+The three moving parts, and where each lives:
+
+* `desktop/connections.cjs` is the client's half of that API: the five calls, the origin
+  normalization (one address, one row), the retry policy (a read and a delete may be repeated, a
+  write may not) and every refusal code the service names. It is deliberately NOT in the vendored
+  `api/accounts.mjs`, whose OPERATIONS table is the launcher's policy for the routes the launcher
+  calls; the accounts API origin is read from that vendored module rather than written down twice.
+* `desktop/main.cjs` owns the list's state and the three actions: `refreshServers()`,
+  `addServer()` (which normalizes the address, proves an e-server answers at `GET /healthz` and
+  only then stores the row) and `removeServer()` (a native confirmation first, because a menu-style
+  destructive action does not belong in a page). `client:view` is the one place a heading changes
+  with a view.
+* `desktop/shell.html` + `desktop/connections.css` are the two views. Every row is a real button
+  and the remove control names the server it removes, so the list is usable by keyboard and by a
+  screen reader. An empty list still offers the only thing to do; a list that cannot be read says
+  so, offers a retry, and offers the last server by name.
+
+THE PIN IS STILL THE SERVER'S. Choosing a row loads that origin in the server window, and the
+instance's own gate asks for the PIN - the app never holds one, asks for one, or forwards one.
+Nothing about the PIN contract in the sections above changed.
+
+ONE MIGRATION, ONCE: a client that already had a configured server adds it to the account's list
+the first time the list comes back empty (`config.connectionMigrated`), so an upgrade cannot lose
+the only address a person had.

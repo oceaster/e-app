@@ -1,0 +1,71 @@
+/* THE E-SERVER LIST AND THE ADD VIEW — the client's two new surfaces.
+ *
+ * PLACEHOLDER OF SHAPE, NOT OF DESIGN. Diana is drawing these two views in her studio and her
+ * file replaces this one wholesale when it lands; this sheet exists so the markup she was given
+ * is never a bare pile of buttons between the account card's heading and the footer, and so the
+ * wiring can be exercised (scripts/shell-servers.cjs) before her paint arrives. Nothing here
+ * invents a colour: every value is a household token from site/theme.css, so both moods work by
+ * construction (launcher-light.css declares the light palette and launcher-bindings.css maps the
+ * --ec-* names onto it). The one literal is a corner radius, which the theme does not name.
+ *
+ * The root scope is `.client-servers`, which is what the markup carries (desktop/shell.html).
+ */
+.client-servers { margin-block-start: 4px; }
+
+/* ── the list ─────────────────────────────────────────────────────────────────────────── */
+.server-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.server-row {
+ display: grid;
+ grid-template-columns: minmax(0, 1fr) auto;
+ align-items: stretch;
+ border: 1px solid var(--ec-line);
+ border-radius: 10px;
+ background: var(--ec-panel-soft);
+ overflow: hidden;
+}
+.server-row:hover { border-color: var(--ec-line-strong); }
+.server-connect {
+ display: grid;
+ gap: 2px;
+ justify-items: start;
+ padding: 11px 14px;
+ background: none;
+ border: 0;
+ color: var(--ec-ink);
+ font: inherit;
+ text-align: start;
+ cursor: pointer;
+ min-width: 0;
+}
+.server-connect:focus-visible, .server-remove:focus-visible {
+ outline: 2px solid var(--ec-accent-action);
+ outline-offset: -2px;
+}
+.server-name { font-weight: 600; overflow-wrap: anywhere; }
+.server-origin { color: var(--ec-muted); font-size: 13px; overflow-wrap: anywhere; }
+.server-remove {
+ background: none;
+ border: 0;
+ border-inline-start: 1px solid var(--ec-line);
+ color: var(--ec-muted);
+ font: inherit;
+ font-size: 13px;
+ padding: 0 12px;
+ cursor: pointer;
+}
+.server-remove:hover { color: var(--ec-danger); }
+
+/* ── one region for a problem, one for the actions ────────────────────────────────────── */
+.server-problem { display: grid; gap: 10px; margin: 0 0 14px; }
+.server-problem p { margin: 0; }
+.client-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.client-hint { color: var(--ec-muted); font-weight: 400; }
+.client-problem { margin: 10px 0 0; color: var(--ec-danger); }
+.client-problem:empty { margin: 0; }
+
+/* The add form's own busy state: the button says what is happening, the fields stay readable. */
+#add-server[data-busy="true"] { cursor: progress; }
+#add-server[data-busy="true"] .company-submit { opacity: .6; pointer-events: none; }
+
+/* Loading is one quiet line where the rows will be; it is never a spinner over a blank card. */
+.client-servers[data-state="loading"] #servers-copy::after { content: " Looking…"; }
