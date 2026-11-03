@@ -327,7 +327,12 @@ async function checkUpdate(startup=false,manual=false){
  return false;
 }
 function schedule(){clearTimeout(pollTimer);pollTimer=setTimeout(async()=>{await checkUpdate();await applyStaged(false);schedule();},Math.min(60,15*2**failures)*60000+Math.random()*90000);pollTimer.unref();}
-async function receiveLink(value,originOnly=false){try{const origin=originOnly?serverOrigin(value,{development}):connectionLink(value);await app.whenReady();if(!company?.authorized()){pendingLink=origin;setupWindow();return;}if(origin===config.server){await connect();return;}if(config.server){const choice=await dialog.showMessageBox(win||undefined,{buttons:['Cancel','Connect'],defaultId:0,cancelId:0,message:'Connect e-server to this server?',detail:origin});if(choice.response!==1)return;}if(win){pendingServer=origin;quitting=true;restartOnClosed=true;win.close();}else{config.server=origin;await save();if(ready)await connect();}}catch(error){dialog.showErrorBox('Invalid e-server connection',error.message);}}
+async function receiveLink(value,originOnly=false){try{const origin=originOnly?serverOrigin(value,{development}):connectionLink(value);await app.whenReady();if(!company?.authorized()){pendingLink=origin;setupWindow();return;}
+ // A link is a server someone chose, so it becomes a row: the account's list stays the one place
+ // this app knows e-servers from, and a link-only server would otherwise be invisible in it.
+ // Best effort and bounded - the link's own job is to connect, not to write a list.
+ if(!(state.servers.rows||[]).some(row=>row.origin===origin)){await connectionsClient().add({origin}).catch(()=>{});}
+ if(origin===config.server){await connect();return;}if(config.server){const choice=await dialog.showMessageBox(win||undefined,{buttons:['Cancel','Connect'],defaultId:0,cancelId:0,message:'Connect e-server to this server?',detail:origin});if(choice.response!==1)return;}if(win){pendingServer=origin;quitting=true;restartOnClosed=true;win.close();}else{config.server=origin;await save();if(ready)await connect();}}catch(error){dialog.showErrorBox('Invalid e-server connection',error.message);}}
 async function start(){
  await fs.mkdir(HOME,{recursive:true,mode:0o700});
  if(process.platform!=='win32')await fs.chmod(HOME,0o700);

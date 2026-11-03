@@ -70,7 +70,13 @@ app.whenReady().then(async()=>{
  ipcMain.handle('client:state',()=>state);
  ipcMain.handle('client:view',(event,value)=>{calls.push(['view',value]);state={...state,view:value};publish();return state;});
  ipcMain.handle('client:servers-refresh',()=>{calls.push(['refresh']);return {ok:true};});
- ipcMain.handle('client:servers-add',(event,payload)=>{calls.push(['add',payload]);return addAnswer;});
+ ipcMain.handle('client:servers-add',async(event,payload)=>{
+  calls.push(['add',payload]);
+  // `slow` holds the answer long enough to see the form's checking state, which is what a real
+  // probe of an address that does not answer looks like from the person's side.
+  if(addAnswer&&addAnswer.slow){await wait(addAnswer.slow);return addAnswer.then;}
+  return addAnswer;
+ });
  ipcMain.handle('client:servers-remove',(event,id,label)=>{calls.push(['remove',id,label]);return {ok:true};});
  ipcMain.handle('client:connect',(event,origin)=>{calls.push(['connect',origin]);return {ok:true};});
  ipcMain.handle('client:retry',()=>({ok:true}));
@@ -109,6 +115,7 @@ app.whenReady().then(async()=>{
  await read(`document.querySelectorAll('.server-remove')[0].click()`);
  await wait(80);
  assert.deepEqual(calls.find(call=>call[0]==='remove'),['remove','c0123456789abcdef','Home']);
+ await until('the removal to be announced',`document.querySelector('#servers-status').textContent==='Removed Home from your e-servers.'`);
 
  // ── 4. the add view opens from its button, and the first field takes focus ──────────────
  calls=[];
@@ -127,12 +134,17 @@ app.whenReady().then(async()=>{
  await wait(120);
  assert.deepEqual(calls.find(call=>call[0]==='add'),['add',{origin:'https://new.example.test',label:'New one'}]);
  assert.equal(await read(`document.querySelector('#add-origin').value`),'','a successful add clears the form it used');
+ assert.equal(await read(`document.querySelector('#add-submit').textContent`),'Add e-server','the button stops saying it is checking');
+ await until('the add to be announced',`document.querySelector('#servers-status').textContent.startsWith('Added ')`);
 
  // ── 6. a refusal is shown in the add view and the form stays usable ────────────────────
- addAnswer={ok:false,error:'No e-server answered at that address.'};
+ addAnswer={slow:900,then:{ok:false,error:'No e-server answered at that address.'}};
  state={...state,view:'add'};publish();
  await until('the add view again',`document.querySelector('#add-server-view').hidden===false`);
  await read(`(()=>{document.querySelector('#add-origin').value='https://nobody.example.test';document.querySelector('#add-server').requestSubmit();return true})()`);
+ // While the address is being proved the button says so, which is the difference between a
+ // spinner and a person wondering whether the press registered.
+ await until('the checking label',`document.querySelector('#add-submit').textContent==='Checking…'`);
  await until('the refusal',`document.querySelector('#add-problem').textContent==='No e-server answered at that address.'`);
  assert.equal(await read(`document.querySelector('#add-server').dataset.busy`),'false','a refusal must not leave the form spinning');
  await shot('03-add-refused-dark');

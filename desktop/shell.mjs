@@ -107,6 +107,9 @@ $('account-finish').onsubmit=event=>{
 // object. `data-origin` on the row is how focus follows an add back to the row it made.
 let drawn=null;
 function hostOf(origin){try{return new URL(origin).host}catch{return String(origin||'')}}
+// What changed, said once, politely: the rows are rebuilt on a list change and a screen reader
+// has no way to notice that on its own.
+function say(sentence){$('servers-status').textContent=sentence||'';}
 function rowNode(row){
  const item=document.createElement('li');item.className='server-row';item.dataset.origin=row.origin;
  const choose=document.createElement('button');choose.type='button';choose.className='server-connect';
@@ -116,7 +119,7 @@ function rowNode(row){
  choose.onclick=()=>action(()=>bridge.connect(row.origin));
  const remove=document.createElement('button');remove.type='button';remove.className='server-remove';
  remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+(row.label||hostOf(row.origin)));
- remove.onclick=()=>action(async()=>{await bridge.removeServer(row.id,row.label);});
+ remove.onclick=()=>action(async()=>{await bridge.removeServer(row.id,row.label);say('Removed '+(row.label||hostOf(row.origin))+' from your e-servers.');});
  item.append(choose,remove);return item;
 }
 function drawServers(state,shown){
@@ -161,12 +164,16 @@ $('add-server').onsubmit=event=>{
  $('add-problem').textContent='';
  if(!origin){$('add-problem').textContent='Enter your e-server HTTPS address.';$('add-origin').focus();return;}
  $('add-server').dataset.busy='true';
- const settle=()=>{$('add-server').dataset.busy='false';};
+ // A probe of a name that may not answer takes seconds: the button says what is happening rather
+ // than dimming and leaving the person to guess.
+ const submit=$('add-submit');if(submit)submit.textContent='Checking…';
+ const settle=()=>{$('add-server').dataset.busy='false';if(submit)submit.textContent='Add e-server';};
  bridge.addServer({origin,label}).then(answer=>{
   settle();
   if(answer&&answer.ok){
    $('add-origin').value='';$('add-name').value='';
    void bridge.view('servers');
+   say('Added '+(answer.row&&answer.row.label?answer.row.label:origin)+' to your e-servers.');
    // The new row is the one to land on: the person just made it, and the list is where it lives.
    void bridge.state().then(next=>{current=next;drawServers(next,true);focusRow(answer.row&&answer.row.origin);});
    return;

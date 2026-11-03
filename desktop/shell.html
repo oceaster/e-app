@@ -18,6 +18,7 @@
 <section class="client-servers" id="client-servers" data-state="idle" hidden>
 <section id="servers">
 <p class="client-copy" id="servers-copy">Choose an e-server to connect to. It will ask for its own PIN.</p>
+<p class="client-copy" id="servers-status" role="status" aria-live="polite"></p>
 <ul class="server-list" id="server-list"></ul>
 <p class="client-copy" id="servers-empty" hidden></p>
 <div class="server-problem" id="servers-error" hidden><p id="servers-error-text"></p><div class="client-actions"><button id="servers-retry" type="button" class="account-provider">Try again</button><button id="servers-fallback" type="button" class="account-provider" hidden></button></div></div>
@@ -30,7 +31,7 @@
 <input id="add-origin" type="url" placeholder="https://easter-server.char-istrian.ts.net" required autocomplete="url" spellcheck="false">
 <label for="add-name">Name <span class="client-hint">optional</span></label>
 <input id="add-name" type="text" maxlength="60" autocomplete="off" spellcheck="false">
-<button type="submit" class="company-submit">Add e-server</button>
+<button type="submit" class="company-submit" id="add-submit">Add e-server</button>
 <button id="add-cancel" type="button" class="account-provider">Back</button>
 <p class="client-problem" id="add-problem" role="alert"></p>
 </form>
