@@ -1,71 +1,60 @@
-/* THE E-SERVER LIST AND THE ADD VIEW — the client's two new surfaces.
- *
- * PLACEHOLDER OF SHAPE, NOT OF DESIGN. Diana is drawing these two views in her studio and her
- * file replaces this one wholesale when it lands; this sheet exists so the markup she was given
- * is never a bare pile of buttons between the account card's heading and the footer, and so the
- * wiring can be exercised (scripts/shell-servers.cjs) before her paint arrives. Nothing here
- * invents a colour: every value is a household token from site/theme.css, so both moods work by
- * construction (launcher-light.css declares the light palette and launcher-bindings.css maps the
- * --ec-* names onto it). The one literal is a corner radius, which the theme does not name.
- *
- * The root scope is `.client-servers`, which is what the markup carries (desktop/shell.html).
- */
-.client-servers { margin-block-start: 4px; }
-
-/* ── the list ─────────────────────────────────────────────────────────────────────────── */
-.server-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
-.server-row {
- display: grid;
- grid-template-columns: minmax(0, 1fr) auto;
- align-items: stretch;
- border: 1px solid var(--ec-line);
- border-radius: 10px;
- background: var(--ec-panel-soft);
- overflow: hidden;
+/* Client-owned views. Load after the account and client adapters.
+   Palette is entirely the host's --ec-* contract. No theme detection or animation. */
+.client-servers{color:var(--ec-ink);font-family:var(--ec-font-body);font-size:14px;line-height:1.5;min-width:0}
+.client-servers *{box-sizing:border-box}
+.client-servers [hidden]{display:none!important}
+.client-servers p{margin:0}
+.client-servers #servers-copy{color:var(--ec-muted-panel);margin-bottom:22px}
+.client-servers #server-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--ec-line)}
+.client-servers .server-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border-bottom:1px solid var(--ec-line);padding:8px 0}
+.client-servers button{font:inherit;cursor:pointer;letter-spacing:normal;text-transform:none;box-shadow:none}
+.client-servers .server-connect{display:flex;flex-direction:column;align-items:flex-start;text-align:left;width:100%;min-width:0;min-height:76px;padding:12px;border:1px solid transparent;border-radius:6px;background:var(--ec-panel);color:var(--ec-ink)}
+.client-servers .server-name{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.client-servers .server-origin{font-size:12px;color:var(--ec-muted-panel);overflow-wrap:anywhere;word-break:normal}
+.client-servers .server-recent{font-size:11px;font-weight:400;color:var(--ec-muted-panel);margin-top:5px}
+.client-servers .server-remove{min-width:44px;min-height:44px;padding:8px;border:1px solid transparent;border-radius:6px;background:var(--ec-panel);color:var(--ec-muted-panel);font-size:12px;text-decoration:underline;text-underline-offset:3px}
+.client-servers .server-connect:hover{background:var(--ec-panel-soft);border-color:var(--ec-control-line)}
+.client-servers .server-remove:hover{color:var(--ec-danger);background:var(--ec-danger-bg)}
+.client-servers :is(button,input):focus-visible{outline:2px solid var(--ec-gold);outline-offset:3px}
+.client-servers .client-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.client-servers .company-submit,.client-servers .account-provider,.client-servers #servers-retry{min-height:44px;padding:11px 18px;border:1px solid var(--ec-control-line);border-radius:6px;font-weight:600}
+.client-servers .company-submit{background:var(--ec-gold-action);color:var(--ec-on-gold);border-color:var(--ec-gold-action)}
+.client-servers .company-submit:hover:not(:disabled){background:var(--ec-gold-hover);border-color:var(--ec-gold-hover)}
+.client-servers .account-provider,.client-servers #servers-retry{background:var(--ec-panel);color:var(--ec-ink)}
+.client-servers :is(.account-provider,#servers-retry):hover{background:var(--ec-panel-soft)}
+.client-servers #servers-empty{padding:26px 0;border-block:1px solid var(--ec-line);color:var(--ec-muted-panel)}
+.client-servers #servers-empty strong{display:block;color:var(--ec-ink);font-size:16px;font-weight:600;margin-bottom:6px}
+.client-servers .servers-loading{padding:26px 0;border-block:1px solid var(--ec-line);color:var(--ec-muted-panel)}
+.client-servers #servers-error{padding:16px;background:var(--ec-danger-bg);color:var(--ec-danger);border-left:2px solid var(--ec-danger);border-radius:2px;margin-bottom:16px}
+.client-servers #servers-fallback{display:block;background:var(--ec-panel);color:var(--ec-muted-panel);border:0;min-height:44px;margin-top:12px;padding:8px 0;text-align:left;text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere;max-width:100%}
+.client-servers #servers-fallback:hover{color:var(--ec-ink)}
+.client-servers:not([data-state="ready"]) #server-list,
+.client-servers:not([data-state="empty"]) #servers-empty,
+.client-servers:not([data-state="loading"]) .servers-loading,
+.client-servers:not([data-state="error"]) .servers-recovery{display:none}
+.client-servers[data-state="loading"] #servers .client-actions{display:none}
+.client-servers #add-server{margin:0;display:grid;gap:20px}
+.client-servers .client-field{display:grid;gap:7px;min-width:0}
+.client-servers label{font-size:13px;font-weight:600;color:var(--ec-ink)}
+.client-servers label span{font-weight:400;color:var(--ec-muted-panel)}
+.client-servers input{width:100%;min-width:0;min-height:46px;border:1px solid var(--ec-control-line);border-radius:6px;padding:11px 12px;background:var(--ec-panel-soft);color:var(--ec-ink);font:inherit}
+.client-servers input::placeholder{color:var(--ec-muted-panel);opacity:1}
+.client-servers .client-hint{font-size:12px;color:var(--ec-muted-panel)}
+.client-servers input[aria-invalid="true"]{border-color:var(--ec-danger)}
+.client-servers #add-problem{color:var(--ec-danger);font-size:13px}
+.client-servers #add-problem:empty{display:none}
+.client-servers #add-server .client-actions{margin-top:4px}
+.client-servers .checking-copy{display:none}
+.client-servers #add-server[data-busy="true"] .checking-copy{display:inline}
+.client-servers #add-server[data-busy="true"] .submit-copy{display:none}
+.client-servers button:disabled{cursor:default;background:var(--ec-disabled-bg);color:var(--ec-disabled-ink);border-color:var(--ec-control-line)}
+@media(max-width:420px){
+ .client-servers .server-connect{padding:10px 6px}
+ .client-servers .server-row{gap:4px}
+ .client-servers .client-actions{flex-direction:column}
+ .client-servers .client-actions>button{width:100%}
 }
-.server-row:hover { border-color: var(--ec-line-strong); }
-.server-connect {
- display: grid;
- gap: 2px;
- justify-items: start;
- padding: 11px 14px;
- background: none;
- border: 0;
- color: var(--ec-ink);
- font: inherit;
- text-align: start;
- cursor: pointer;
- min-width: 0;
+@media(forced-colors:active){
+ .client-servers :is(button,input){border:1px solid ButtonText}
+ .client-servers :is(button,input):focus-visible{outline:2px solid Highlight}
 }
-.server-connect:focus-visible, .server-remove:focus-visible {
- outline: 2px solid var(--ec-accent-action);
- outline-offset: -2px;
-}
-.server-name { font-weight: 600; overflow-wrap: anywhere; }
-.server-origin { color: var(--ec-muted); font-size: 13px; overflow-wrap: anywhere; }
-.server-remove {
- background: none;
- border: 0;
- border-inline-start: 1px solid var(--ec-line);
- color: var(--ec-muted);
- font: inherit;
- font-size: 13px;
- padding: 0 12px;
- cursor: pointer;
-}
-.server-remove:hover { color: var(--ec-danger); }
-
-/* ── one region for a problem, one for the actions ────────────────────────────────────── */
-.server-problem { display: grid; gap: 10px; margin: 0 0 14px; }
-.server-problem p { margin: 0; }
-.client-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.client-hint { color: var(--ec-muted); font-weight: 400; }
-.client-problem { margin: 10px 0 0; color: var(--ec-danger); }
-.client-problem:empty { margin: 0; }
-
-/* The add form's own busy state: the button says what is happening, the fields stay readable. */
-#add-server[data-busy="true"] { cursor: progress; }
-#add-server[data-busy="true"] .company-submit { opacity: .6; pointer-events: none; }
-
-/* Loading is one quiet line where the rows will be; it is never a spinner over a blank card. */
-.client-servers[data-state="loading"] #servers-copy::after { content: " Looking…"; }

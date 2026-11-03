@@ -73,3 +73,40 @@ progress{width:100%;height:6px;border:0;accent-color:var(--ec-accent-action)}
  */
 #account-status { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-block: 2px 16px; }
 #account-status .account-provider { width: auto; padding: 6px 14px; }
+
+/* DIANA'S SHEET NAMES FOUR TOKENS THE THEME DOES NOT HAVE — an adapter, not an edit to her file.
+ *
+ * desktop/connections.css is her studio file byte for byte (2026-11-03). It was written against a
+ * theme.css snapshot whose light accent was still the launcher's older `--ec-gold-action` family;
+ * the current theme names that family --ec-accent-action / --ec-accent-hover / --ec-on-accent, so
+ * as shipped her primary button would have resolved to no background at all. The household rule is
+ * "copy the file, cmp it, put every difference in an adapter of your own", so the four names are
+ * aliased here, onto the one palette, and her sheet paints exactly what she designed.
+ *
+ * Every value here is a var(--ec-*) reference: this block adds no colour.
+ */
+.client-servers {
+ --ec-gold: var(--ec-accent-action);
+ --ec-gold-action: var(--ec-accent-action);
+ --ec-gold-hover: var(--ec-accent-hover);
+ --ec-on-gold: var(--ec-on-accent);
+}
+
+/* THE CARD'S LIGHT SUBMIT DOES NOT BECOME THE LIST'S PRIMARY ACTION.
+ *
+ * launcher-light-adapter.css paints `html[data-easter-theme="light"] .company-submit` as paper with
+ * a border — right for the sign-in card, where every row is a quiet choice. Diana's sheet makes
+ * "Add an e-server" the one filled action of these views, in the corporate violet she asked for,
+ * and that rule is (0,2,1) against her (0,2,0), so it won and her primary action came out outlined.
+ * An id outranks it: this restores HER design in the two views she owns and leaves the sign-in card
+ * exactly as it is.
+ */
+#client-servers .company-submit {
+ background: var(--ec-accent-action);
+ border-color: var(--ec-accent-action);
+ color: var(--ec-on-accent);
+}
+#client-servers .company-submit:hover:not(:disabled) {
+ background: var(--ec-accent-hover);
+ border-color: var(--ec-accent-hover);
+}
