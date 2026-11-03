@@ -21,6 +21,11 @@ DONE since this was written (the evidence, so nobody re-does it):
   with the derived id `c1632babbc0951da2`; the same POST again 409 `connection_exists`; an origin
   with a path 422 `invalid_origin`; PATCH touch 200 with `last_used_at` set; PATCH an unknown id
   404 `connection_not_found`; DELETE 204 twice; GET 200 with zero rows.
+- **`scripts/live-connections.cjs` is the repeatable proof** (not in `npm test`: it needs a real
+  account and a deployed API). Run it against an account you hold with
+  `xvfb-run -a node scripts/live-connections.cjs --account <json> --origin <origin>`; it signs in,
+  reads the list, adds the origin, chooses it, and asserts that what appears is the INSTANCE's own
+  PIN gate. Its last run: `the server window: "Unlock your e-server" asking for its PIN: true`.
 - **The client is verified against it, not against a stub.** Driving the real app (Electron from
   source, isolated HOME, CDP) as `easter-delta`: sign-in through the client's own form, the list
   arrived from the live service, the add view proved `GET /healthz` on
