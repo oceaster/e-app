@@ -199,7 +199,9 @@ app.whenReady().then(async()=>{
  await until('the loading state to paint',`document.querySelector('#client-servers').dataset.state==='loading'`);
  assert.equal(await read(`document.querySelector('#server-list').children.length`),0,'a loading list has no rows');
  assert.equal(await read(`document.querySelector('#server-add').hidden`),true,'and no add control: that is the bare view Owen saw');
- await until('the loading state to become an honest failure',`document.querySelector('#servers-error').hidden===false`,{tries:400});
+ // The bound sits ABOVE the main process's own 15 s watchdog, so a slow but real answer always
+ // wins and only a state that was never published reaches this failure. The gate waits past it.
+ await until('the loading state to become an honest failure',`document.querySelector('#servers-error').hidden===false`,{tries:700});
  assert.equal(await read(`document.querySelector('#servers-error-text').textContent`),'Your e-servers did not load. Try again.');
  assert.equal(await read(`document.querySelector('#servers-retry').hidden`),false,'the failure must offer the way through');
  // The error state's own way through is Retry (and the last server, when there is one) — the add

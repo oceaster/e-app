@@ -116,10 +116,15 @@ let drawn=null;
 // nothing that ever repairs it — because the list's only state was `loading`: `drawServers` hides
 // both the rows and the Add control in that state, and `#servers-error` is shown only for `error`.
 // A single publish is all this view is ever promised, so one lost or one stuck read is a
-// permanently blank screen. `loading` is therefore BOUNDED here: after LOADING_PATIENCE_MS it is
-// drawn as the honest failure, with the Retry control that asks the main process again, so a wait
-// always ends in a named state — rows, "none yet", or a sentence and a way through.
-const LOADING_PATIENCE_MS=8000;
+// permanently blank screen. `loading` is therefore BOUNDED here — but THE BOUND IS A LAST RESORT,
+// NOT A STOPWATCH ON A SLOW READ. Measured on Owen's own window (1.0.15, 2026-11-04): the list sat
+// bare for 10-15 s and then showed "Try again" for ONE FRAME before the rows arrived, because an
+// 8 s bound fired a moment before the real answer — worse than either outcome alone. The main
+// process bounds the read itself (SERVER_LIST_WATCHDOG_MS, 15 s) and publishes a real error when it
+// gives up, so this reader-side bound only has to catch a state that was never published at all:
+// it sits ABOVE that watchdog, so a slow but real answer always wins and a lost one still ends in a
+// sentence with a way through.
+const LOADING_PATIENCE_MS=20000;
 const LOADING_FAILED='Your e-servers did not load. Try again.';
 let loadingAt=0, loadingTimer=null;
 function boundedList(raw){
