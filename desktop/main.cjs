@@ -134,11 +134,30 @@ function connectionsClient(){
  return new Connections({origin:accountsOrigin,development,credential:companyToken});
 }
 function serve(next){state={...state,servers:{...state.servers,...next}};publish({});}
+// A READ THAT NEVER ANSWERS MUST NOT HOLD THE SCREEN IN `loading`.
+// Owen, 2026-11-04: the e-server list is bare 60-70% of the time after signing out and back in —
+// no rows, no Add control, no sentence. The client's request carries its own timeout, but this
+// function awaits more than a fetch: a session read, one retry and whatever the transport does all
+// end here, and any of them failing to settle leaves the published state at `loading` for ever.
+// So the wait is bounded once more and answered in the service's own vocabulary — a timeout the
+// view draws as an error with Retry, never silence and never a success.
+const SERVER_LIST_WATCHDOG_MS=15000;
+function bounded(promise,ms,what){
+ let timer=null;
+ return Promise.race([
+  promise.then(value=>({value})),
+  new Promise(resolve=>{timer=setTimeout(()=>resolve({timedOut:true}),ms);}),
+ ]).then(result=>{
+  if(timer!==null)clearTimeout(timer);
+  if(result.timedOut)throw Object.assign(Error(what+' did not answer in time.'),{code:'timeout'});
+  return result.value;
+ });
+}
 async function refreshServers(){
  const fallback=config.server||'';
  serve({state:'loading',error:'',fallback});
  try{
-  let answer=await connectionsClient().list();
+  let answer=await bounded(connectionsClient().list(),SERVER_LIST_WATCHDOG_MS,'The e-servers list');
   // ONE migration, once, for a client that already knew a server: without it an upgrade would
   // land an existing person on an empty list and lose the only address they had.
   if(!answer.connections.length&&fallback&&!config.connectionMigrated){

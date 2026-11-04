@@ -186,6 +186,30 @@ app.whenReady().then(async()=>{
  assert.deepEqual(calls.find(call=>call[0]==='connect'),['connect','https://home.example.test']);
  await shot('05-error-dark');
 
+ // ── 8b. a list that NEVER answers ends in a sentence and a retry, not in a bare view ─────
+ // Owen, 2026-11-04: "the e-server instance selector is empty and no options are available 60-70%
+ // of the time" after signing out and back in, and the view is "completely bare" — which is what a
+ // list stuck at `loading` looks like, because both the rows and the add control are hidden in
+ // that state and the error region is shown only for `error`. This section publishes `loading` and
+ // never publishes again, which is the worst case the main process can produce; the view must end
+ // in the honest failure by itself, with the Retry the person needs. It fails on the tree before
+ // ticket (2026-11-04): there the view stayed bare for as long as the gate waited.
+ calls=[];
+ state={...state,view:'servers',servers:{state:'loading',rows:[],error:'',limit:0,fallback:''}};publish();
+ await until('the loading state to paint',`document.querySelector('#client-servers').dataset.state==='loading'`);
+ assert.equal(await read(`document.querySelector('#server-list').children.length`),0,'a loading list has no rows');
+ assert.equal(await read(`document.querySelector('#server-add').hidden`),true,'and no add control: that is the bare view Owen saw');
+ await until('the loading state to become an honest failure',`document.querySelector('#servers-error').hidden===false`,{tries:400});
+ assert.equal(await read(`document.querySelector('#servers-error-text').textContent`),'Your e-servers did not load. Try again.');
+ assert.equal(await read(`document.querySelector('#servers-retry').hidden`),false,'the failure must offer the way through');
+ // The error state's own way through is Retry (and the last server, when there is one) — the add
+ // control is hidden there by the product's own rule, so this gate does not invent a second one.
+ assert.equal(await read(`document.querySelector('#server-add').hidden`),true,'an error list offers retry, not add');
+ await read(`document.querySelector('#servers-retry').click()`);
+ await wait(120);
+ assert.deepEqual(calls.find(call=>call[0]==='refresh'),['refresh'],'Retry asks the main process again');
+ await shot('05b-loading-bounded-dark');
+
  // ── 9. the light mood, from the same document, before the first paint ───────────────────
  nativeTheme.themeSource='light';
  state={...state,servers:{state:'ready',rows:ROWS,error:'',limit:50,fallback:''}};publish();

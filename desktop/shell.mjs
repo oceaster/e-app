@@ -110,6 +110,37 @@ $('account-finish').onsubmit=event=>{
 // places is read by a person and by a screen reader, and "Remove" alone is a control with no
 // object. `data-origin` on the row is how focus follows an add back to the row it made.
 let drawn=null;
+// A LIST THAT NEVER ANSWERS IS A BROKEN SCREEN, NOT A WAIT.
+// Measured 2026-11-04, Owen's report: after signing out (or reopening the app) and signing back
+// in, the e-server selector is bare 60-70% of the time — no rows, no Add button, no sentence, and
+// nothing that ever repairs it — because the list's only state was `loading`: `drawServers` hides
+// both the rows and the Add control in that state, and `#servers-error` is shown only for `error`.
+// A single publish is all this view is ever promised, so one lost or one stuck read is a
+// permanently blank screen. `loading` is therefore BOUNDED here: after LOADING_PATIENCE_MS it is
+// drawn as the honest failure, with the Retry control that asks the main process again, so a wait
+// always ends in a named state — rows, "none yet", or a sentence and a way through.
+const LOADING_PATIENCE_MS=8000;
+const LOADING_FAILED='Your e-servers did not load. Try again.';
+let loadingAt=0, loadingTimer=null;
+function boundedList(raw){
+ if(raw.state!=='loading'){loadingAt=0;return raw;}
+ if(!loadingAt)loadingAt=Date.now();
+ if(Date.now()-loadingAt<LOADING_PATIENCE_MS)return raw;
+ return {...raw,state:'error',error:LOADING_FAILED};
+}
+function watchLoading(){
+ if((current.servers||{}).state!=='loading'){
+  loadingAt=0;
+  if(loadingTimer){clearTimeout(loadingTimer);loadingTimer=null;}
+  return;
+ }
+ if(loadingTimer)return;
+ // One redraw per loading window: the bound must be observed even when no further publish comes.
+ loadingTimer=setTimeout(()=>{
+  loadingTimer=null;
+  if((current.servers||{}).state==='loading')drawServers(current,current.accountReady===true&&current.phase==='setup');
+ },LOADING_PATIENCE_MS);
+}
 function hostOf(origin){try{return new URL(origin).host}catch{return String(origin||'')}}
 // What changed, said once, politely: the rows are rebuilt on a list change and a screen reader
 // has no way to notice that on its own.
@@ -130,9 +161,10 @@ function rowNode(row){
  item.append(choose,remove);return item;
 }
 function drawServers(state,shown){
- const list=state.servers||{state:'idle',rows:[]};
+ const list=boundedList(state.servers||{state:'idle',rows:[]});
  $('client-servers').hidden=!shown;
  if(!shown)return;
+ watchLoading();
  $('client-servers').dataset.state=list.state||'idle';
  const adding=state.view==='add';
  $('servers').hidden=adding;$('add-server-view').hidden=!adding;
