@@ -8,6 +8,7 @@
 // `window.__AGENT_HARNESS_BOOT__ = {...}` with `<` escaped inside the JSON), not against a shape
 // this test invented, so a change to that wire fails here rather than in Owen's window.
 const test=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
 const {BUILD_CHECK_MS,BUILD_FETCH_MS,revOf,decide,fetchRev,BuildWatch}=require('../desktop/build-rev.cjs');
 const {HEADER,CLIENT}=require('../desktop/security.cjs');
 
@@ -178,7 +179,6 @@ test('the fetch is bounded by its own name, not a bare number at the call site',
 test('the two files that only run in Electron actually wire the watch',()=>{
  // The gate that matters for a feature whose parts are provable but whose composition is not:
  // a module nobody instantiates would pass every test above and change nothing in the window.
- const fs=require('node:fs'),path=require('node:path');
  const main=fs.readFileSync(path.join(__dirname,'..','desktop','main.cjs'),'utf8');
  const preload=fs.readFileSync(path.join(__dirname,'..','desktop','preload.cjs'),'utf8');
  assert.match(main,/startBuildWatch\(current,activeSession,config\.server\);/,'the connected window starts a watch');
@@ -188,4 +188,76 @@ test('the two files that only run in Electron actually wire the watch',()=>{
  assert.match(preload,/ipcRenderer\.send\('client:build-action','dismiss'\)/);
  assert.match(preload,/ipcRenderer\.on\('client:build'/);
  assert.match(preload,/older build of/,'the sentence a person reads');
+});
+
+// ── DIANA'S DESIGN, AND THE CONTRACT SHE ASKED FOR ──────────────────────────────────────────
+// Her sheet is the design and it is followed byte for byte; the clearance it cannot compute from
+// inside a shadow root is a measurement the preload makes before drawing. These cases pin both,
+// because the failure mode of each is silent: an edited sheet still looks fine, and a line that
+// ignores the composer still looks fine right up until it covers what someone was typing.
+
+/** The bytes of BUILD_CSS inside desktop/preload.cjs, exactly as the template literal holds them. */
+function buildCssLiteral(){
+ const source=fs.readFileSync(path.join(__dirname,'..','desktop','preload.cjs'),'utf8');
+ const open='const BUILD_CSS=`';
+ const at=source.indexOf(open);
+ assert.notEqual(at,-1,'desktop/preload.cjs must declare BUILD_CSS as one template literal');
+ const from=at+open.length;
+ const to=source.indexOf('`;',from);
+ assert.notEqual(to,-1,'BUILD_CSS must be closed by a backtick');
+ return source.slice(from,to);
+}
+
+test('Diana\'s stylesheet is shipped byte for byte, and nothing of ours is mixed into it',()=>{
+ const vendored=fs.readFileSync(path.join(__dirname,'..','desktop','stale-build-line.css'),'utf8');
+ assert.equal(buildCssLiteral(),vendored,
+  'BUILD_CSS must be desktop/stale-build-line.css unchanged - a design edited while being followed is a guess');
+ // Her studio path is where the file is authored; when this machine has it, it must be the same
+ // bytes, so a hand-edit on either side is caught here rather than on a person's screen.
+ const studio='/home/diana/Desktop/stale-build-line.css';
+ if(fs.existsSync(studio))assert.equal(fs.readFileSync(studio,'utf8'),vendored,'the vendored copy must be her file');
+ // One string constant, no template holes: the file has no backtick and no `$`, so what is inside
+ // the literal is what she wrote, character for character.
+ assert.equal(/[\u0060]/.test(vendored),false,'her sheet must not contain a backtick');
+ assert.equal(/\$\{/.test(vendored),false,'her sheet must not contain a template hole');
+});
+
+test('the sheet keeps the clearance variable and the inset it falls back to',()=>{
+ const css=buildCssLiteral();
+ // This is the contract the preload implements. If she renames the variable or drops the
+ // fallback, the measurement stops reaching the line and nobody would notice.
+ assert.match(css,/bottom: max\(var\(--e-build-line-bottom, 16px\)/,'her sheet reads --e-build-line-bottom and falls back to 16px');
+ assert.match(css,/--build-ground: #0d2029/,'the dark ground she specified');
+ assert.match(css,/--build-ground: #eef2f9/,'the light ground she specified');
+});
+
+test('the requirements her notes name are in her sheet, not added by us',()=>{
+ const css=buildCssLiteral();
+ assert.match(css,/font: 400 12px\/18px/,'12/18 regular copy');
+ assert.match(css,/text-decoration: underline/,'Reload is underlined, not another outlined box');
+ assert.match(css,/border-radius: 8px/,'the 8px corner');
+ assert.match(css,/overflow-wrap: anywhere/,'a long hostname wraps instead of clipping');
+ assert.match(css,/min-height: 44px/,'44px mobile action targets');
+ assert.match(css,/@media \(max-width: 480px\)/,'the mobile band');
+ assert.match(css,/@media \(forced-colors: active\)/,'and a forced-colours answer');
+ assert.match(css,/button:focus-visible \{ outline: 2px solid var\(--build-ink\)/,'an explicit focus ring');
+ assert.match(css,/\.dismiss \{[\s\S]*?color: var\(--build-muted\)/,'the dismiss is her muted ink');
+ assert.equal(/opacity:\s*0?\.\d/.test(css),false,'her dismiss is fully opaque; opacity would be our invention');
+});
+
+test('the preload measures the composer and sets the clearance on the host',()=>{
+ const preload=fs.readFileSync(path.join(__dirname,'..','desktop','preload.cjs'),'utf8');
+ // The selector she is owed: the shell's own seat attribute, not a hashed CSS-module class.
+ assert.match(preload,/const COMPOSER='\[data-composer-seat\]'/,'the composer is found by the shell\'s data attribute');
+ // The takeover, and the suppression that follows from it.
+ assert.match(preload,/const EXPANDED='\[data-prompt-expanded="true"\]'/);
+ assert.match(preload,/const CLEARANCE_GAP=12/,'12px, the gap in her notes');
+ assert.match(preload,/host\.style\.setProperty\('--e-build-line-bottom',\(Math\.max\(0,Math\.round\(height-top\)\)\+CLEARANCE_GAP\)\+'px'\);/,
+  'the variable is (viewport height - composer top + 12px), on the host');
+ assert.match(preload,/host\.style\.removeProperty\('--e-build-line-bottom'\)/,'no composer means her own inset, not a stale measurement');
+ assert.match(preload,/if\(expanded\(\)\)\{clearLine\(\);watch\(\);return;\}/,'the takeover suppresses the line and keeps watching for its end');
+ assert.match(preload,/if\(!\(box\.height>0\)\|\|box\.top<0\|\|box\.bottom>height\)/,'no safe area means no line');
+ assert.match(preload,/new MutationObserver/,'suppression ends without a reload, so the page is observed');
+ assert.match(preload,/new ResizeObserver/,'and composer growth is measured, not assumed');
+ assert.match(preload,/window\.addEventListener\('scroll',schedule2,\{capture:true,passive:true\}\)/,'scrolling moves the composer too');
 });

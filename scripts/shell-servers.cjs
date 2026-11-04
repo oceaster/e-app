@@ -212,12 +212,49 @@ app.whenReady().then(async()=>{
   response.end('<!doctype html><html lang="en" data-easter-theme="dark"><head><meta charset="utf-8">'+head
    +'<script src="/plugins/@deepseek-ai/dsh-client-ui-inbox/client.js?rev='+served.rev+'"></script></head>'
    +'<body style="margin:0;background:#0d2029;color:#e6edf1;font:14px system-ui"><h1 style="font:600 18px system-ui;padding:24px">Your inbox</h1>'
-   +'<p style="padding:0 24px">The page this window loaded states its own build.</p></body></html>');
+   +'<p style="padding:0 24px">The page this window loaded states its own build.</p>'
+   // The shell's own composer seat (ConversationRoot.tsx:117 renders data-composer-seat), pinned
+   // to the bottom of the conversation exactly as its stylesheet pins it: this is what the line
+   // has to clear, so the fixture has to have one.
+   +'<div data-composer-seat="" id="composer" style="position:fixed;left:0;right:0;bottom:0;height:96px;box-sizing:border-box;padding:12px;background:#12232c;border-top:1px solid #1d3440">'
+   +'<div id="editor" style="height:100%;border-radius:10px;background:#0f1e26;color:#8fa3ad;padding:8px;box-sizing:border-box">composer</div></div>'
+   +'</body></html>');
  });
  await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+fixture.address().port;
  let buildWindow=null,watch=null;
  const BUILD_READ=`((window.__AGENT_HARNESS_BOOT__&&window.__AGENT_HARNESS_BOOT__.rev)||"")`;
+ // Everything the placement contract is about, measured in the page: where the line is, where the
+ // composer starts, and the gap in pixels a person would see.
+ const geometry=()=>buildWindow.webContents.executeJavaScript(`(()=>{const host=document.getElementById('e-server-build-line');
+  const shadow=host&&host.isConnected?host.shadowRoot:null;
+  const bar=shadow?shadow.querySelector('.bar'):null;
+  const seat=document.querySelector('[data-composer-seat]');
+  const barBox=bar?bar.getBoundingClientRect():null;
+  const seatBox=seat?seat.getBoundingClientRect():null;
+  const style=bar?getComputedStyle(bar):null;
+  const reload=shadow?shadow.querySelector('.reload'):null;
+  const dismiss=shadow?shadow.querySelector('.dismiss'):null;
+  const sentence=shadow?shadow.querySelector('.sentence'):null;
+  const reloadBox=reload?reload.getBoundingClientRect():null;
+  const dismissBox=dismiss?dismiss.getBoundingClientRect():null;
+  return {
+   width:innerWidth,height:innerHeight,present:!!bar,
+   variable:host?host.style.getPropertyValue('--e-build-line-bottom'):'',
+   left:barBox?Math.round(barBox.left):null,top:barBox?Math.round(barBox.top):null,
+   bottom:barBox?Math.round(barBox.bottom):null,barHeight:barBox?Math.round(barBox.height):null,
+   barWidth:barBox?Math.round(barBox.width):null,
+   seatTop:seatBox?Math.round(seatBox.top):null,
+   gap:barBox&&seatBox?Math.round(seatBox.top-barBox.bottom):null,
+   radius:style?style.borderTopLeftRadius:'',font:style?style.fontSize+'/'+style.lineHeight:'',
+   background:style?style.backgroundColor:'',colour:style?style.color:'',
+   underline:reload?getComputedStyle(reload).textDecorationLine:'',
+   reloadHeight:reloadBox?Math.round(reloadBox.height):null,
+   dismissWidth:dismissBox?Math.round(dismissBox.width):null,
+   lines:sentence?Math.round(sentence.getBoundingClientRect().height/18):null,
+   clipped:sentence?sentence.scrollWidth>sentence.clientWidth+1:null,
+   theme:host?host.dataset.theme:null
+  };})()`).catch(()=>null);
  const bar=()=>buildWindow.webContents.executeJavaScript(`(()=>{const host=document.getElementById('e-server-build-line');
   if(!host||!host.isConnected)return null;const shadow=host.shadowRoot;if(!shadow)return null;
   const reload=shadow.querySelector('.reload'),dismiss=shadow.querySelector('.dismiss'),sentence=shadow.querySelector('.sentence'),server=shadow.querySelector('.server');
@@ -303,6 +340,115 @@ app.whenReady().then(async()=>{
   assert.equal(await pinWatch.check(),'unknown','a server that states no build is not a stale build');
   pinPage.closeAllConnections?.();pinPage.close();
 
+  // ── 11. Diana's placement contract, in pixels, at both sizes ───────────────────────────
+  // Her notes: "--e-build-line-bottom ... with viewport height minus protected composer top plus
+  // at least 12px"; and "the 16px fallback DOES NOT guarantee composer clearance". So the claim
+  // is not that the line is on screen, it is that its BOTTOM EDGE is 12px above the composer's
+  // TOP EDGE, measured in the page, at a desktop and a phone-sized window.
+  buildWindow.showInactive();
+  served.rev='111111111111';
+  assert.equal(await watch.check(),'stale','a replaced build, so there is a line to place');
+  const at=async(width,height)=>{
+   buildWindow.setContentSize(width,height);
+   await wait(260);
+   return geometry();
+  };
+  const desktop=await at(1440,1000);
+  assert.equal(desktop.present,true,'the line is drawn at 1440x1000');
+  assert.equal(desktop.width,1440,'the window really is 1440 wide');
+  assert.equal(desktop.height,1000,'and 1000 tall');
+  assert.equal(desktop.gap,12,'12px between the line and the composer at 1440x1000: '+JSON.stringify(desktop));
+  assert.equal(desktop.variable,(desktop.height-desktop.seatTop+12)+'px','the host carries her formula: viewport - composer top + 12');
+  assert.equal(desktop.left,16,'the 16px inset on the free edge');
+  assert.equal(desktop.top>=0,true,'nothing of it reaches above the viewport');
+  assert.equal(desktop.radius,'8px','her corner');
+  assert.equal(desktop.font,'12px/18px','her 12/18 copy');
+  assert.match(desktop.underline,/underline/,'her underlined Reload');
+  assert.equal(desktop.reloadHeight,32,'32px desktop target');
+  assert.equal(desktop.background,'rgb(13, 32, 41)','her dark ground #0d2029');
+  assert.equal(desktop.colour,'rgb(171, 184, 184)','her muted ink #abb8b8');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'10-clearance-1440-dark.png'),image.toPNG());}
+
+  const phone=await at(390,844);
+  assert.equal(phone.width,390,'the window really is 390 wide');
+  assert.equal(phone.height,844,'and 844 tall');
+  assert.equal(phone.present,true,'the line is drawn at 390x844');
+  assert.equal(phone.gap,12,'12px between the line and the composer at 390x844: '+JSON.stringify(phone));
+  assert.equal(phone.variable,(phone.height-phone.seatTop+12)+'px');
+  assert.equal(phone.left,16);
+  assert.equal(phone.reloadHeight,44,'44px action targets below 480px wide');
+  assert.equal(phone.dismissWidth,44,'including the dismiss');
+  assert.equal(phone.top>=0,true,'nothing above the viewport on a phone-sized window');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'11-clearance-390-dark.png'),image.toPNG());}
+
+  // One long server name: it wraps inside the line instead of clipping or shoving the actions off.
+  const longName='easter-server.for-a-household-with-a-longer-name.example.test';
+  buildWindow.webContents.send('client:build',{state:'stale',loaded:'111111111111',current:'222222222222',server:longName});
+  await wait(200);
+  const wrapped=await geometry();
+  assert.equal(wrapped.present,true,'a long name does not remove the line');
+  assert.equal(wrapped.clipped,false,'the sentence wraps rather than clipping the hostname');
+  assert.equal(wrapped.lines>=2,true,'and it really is more than one line: '+wrapped.lines);
+  assert.equal(wrapped.barWidth<=358,true,'inside min(520px, 100vw - 32px) at 390 wide: '+wrapped.barWidth);
+  assert.equal(wrapped.gap,12,'and it is still clear of the composer when it wraps');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'12-long-name-390-dark.png'),image.toPNG());}
+
+  // The full editor: the line is withdrawn, and it comes back when it ends - without a reload,
+  // which is why this asserts the page's own marker is still the one set here.
+  //
+  // THE SUPPRESSION IS ASSERTED IN TWO STEPS, and the first one is the load-bearing one: the page
+  // says the editor is expanded while the composer is still an ordinary 96px seat with plenty of
+  // room above it. Only the page's own statement can withdraw the line there - the "no safe area"
+  // branch would happily draw it - so a build that ignored [data-prompt-expanded] fails here
+  // (mutation-checked: `expanded()` returning false -> red at this line, not at the second).
+  await buildWindow.webContents.executeJavaScript(`(()=>{window.__editorMark='before-takeover';
+   document.getElementById('editor').setAttribute('data-prompt-expanded','true');return true})()`);
+  await wait(260);
+  const declared=await geometry();
+  assert.equal(await buildWindow.webContents.executeJavaScript(`!!document.querySelector('[data-prompt-expanded="true"]')`),true,'the takeover really is present');
+  assert.equal(declared.present,false,'the page saying the editor is expanded withdraws the line on its own: '+JSON.stringify(declared));
+  assert.equal(declared.gap,null,'and it is not merely pushed out of the way, it is gone');
+  assert.equal(await buildWindow.webContents.executeJavaScript('window.__editorMark'),'before-takeover','suppression is not a reload');
+
+  // And the shape it really has: the seat grows to the whole viewport (ConversationRoot.module.css
+  // puts it at inset:0 while the editor is expanded), where there is no safe area at all.
+  await buildWindow.webContents.executeJavaScript(`(()=>{document.getElementById('composer').style.height='100vh';return true})()`);
+  await wait(260);
+  const takeover=await geometry();
+  assert.equal(takeover.present,false,'nor while the editor has the whole viewport');
+  assert.equal(takeover.seatTop,0,'the seat really is the viewport');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'13-editor-takeover-390-dark.png'),image.toPNG());}
+
+  await buildWindow.webContents.executeJavaScript(`(()=>{const editor=document.getElementById('editor');
+   editor.removeAttribute('data-prompt-expanded');
+   document.getElementById('composer').style.height='96px';return true})()`);
+  await wait(260);
+  const returned=await geometry();
+  assert.equal(returned.present,true,'the line returns when the editor collapses');
+  assert.equal(returned.gap,12,'and it is clear of the composer again: '+JSON.stringify(returned));
+  assert.equal(await buildWindow.webContents.executeJavaScript('window.__editorMark'),'before-takeover','still the same document');
+
+  // The light mood, from the page's own attribute: her two grounds, measured.
+  await buildWindow.webContents.executeJavaScript(`document.documentElement.setAttribute('data-easter-theme','light')`);
+  await wait(240);
+  const inLight=await geometry();
+  assert.equal(inLight.theme,'light','the host follows the page into light mode');
+  assert.equal(inLight.background,'rgb(238, 242, 249)','her light ground #eef2f9');
+  assert.equal(inLight.colour,'rgb(81, 91, 112)','her light muted ink #515b70');
+  assert.equal(inLight.gap,12,'and the clearance is unchanged by the theme');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'14-clearance-390-light.png'),image.toPNG());}
+
+  const wide=await at(1440,1000);
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'15-clearance-1440-light.png'),image.toPNG());}
+  assert.equal(wide.gap,12,'1440x1000 in light: 12px clear of the composer');
+
+  // The numbers the captures were taken from, beside the captures, so a reader can check a still
+  // against a measurement instead of believing either one on its own.
+  if(shotsAt)fs.writeFileSync(path.join(shotsAt,'geometry.json'),JSON.stringify(
+   {desktop,phone,wrapped,declared,takeover,returned,inLight,wide},null,2)+'\n');
+
+  console.log('PASS: Diana\'s line sits 12px above the composer at 1440x1000 and 390x844, wraps a');
+  console.log('      long hostname instead of clipping, and is suppressed while the editor has the viewport.');
   // The check costs one read of the page per interval, and it does not read the window's cache:
   // after the swap, the only way the served rev could still be REV_A is a cache hit.
   assert.ok(requests.filter(url=>url==='/').length>=6,'every check reads the page itself: '+requests.join(' '));
