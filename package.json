@@ -1,6 +1,6 @@
 {
   "name": "e-app",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "The private e-server desktop client",
   "main": "desktop/bootstrap.cjs",
   "type": "commonjs",
