@@ -30,7 +30,9 @@ the page it loaded, so it compares the build its own document carries against th
 build the server serves now (every two minutes, read through the same PIN session)
 and, when they differ, offers a quiet line - "This window is running an older build
 of <server>." with Reload and a dismiss - instead of a restart. It says nothing
-when the server does not answer, and nothing when the two agree.
+when the server does not answer, and nothing when the two agree. The line is drawn
+above the page's own composer, measured before it is shown, and it is withdrawn
+rather than drawn over the prompt editor while that editor has the whole window.
 
 The remote renderer has Node integration disabled, a sandbox and context
 isolation. Native IPC is limited to the configured main-frame origin. Other HTTPS
