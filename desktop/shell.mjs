@@ -124,6 +124,9 @@ let drawn=null;
 // gives up, so this reader-side bound only has to catch a state that was never published at all:
 // it sits ABOVE that watchdog, so a slow but real answer always wins and a lost one still ends in a
 // sentence with a way through.
+// Set when a wait took the focus off a control it was about to hide, so the settlement can hand it
+// to something real: the first Connect row, Add, or Retry — never stolen from anywhere else.
+let parkedFocus=false;
 const LOADING_PATIENCE_MS=20000;
 const LOADING_FAILED='Your e-servers did not load. Try again.';
 let loadingAt=0, loadingTimer=null;
@@ -190,9 +193,36 @@ function drawServers(state,shown){
  $('servers-fallback').hidden=!fallback;
  $('servers-fallback').textContent=fallback?'Connect to '+hostOf(fallback)+' instead':'';
  $('server-add').hidden=list.state==='loading'||list.state==='error';
- $('servers-copy').hidden=list.state==='error';
+ // A WAIT IS VISIBLE, IN DIANA'S WORDS AND HER LAYOUT (/home/diana/Desktop/servers-loading.css,
+ // NOTES.md: "Loading your e-servers…", one form immediately, no spinner, no second sentence, no
+ // timer of its own). The region exists so a person never sees a bare pane; the CSS owns how it
+ // paints, this only says which state it is in and writes the sentence ONCE on entry, because a
+ // rewritten live region announces itself again on every unrelated publication.
+ const loading=list.state==='loading';
+ // NULL-SAFE ON PURPOSE: measure-checked, a shell document without this node used to throw here
+ // and take the whole list down with it (a partial update, or a page older than this script). A
+ // missing wait line must cost the words, never the list.
+ const line=$('servers-loading');
+ if(line){
+  if(loading&&line.hidden){
+   line.textContent='Loading your e-servers…';
+   // Focus never stays on a control that is being hidden: Retry and the rows are gone in this
+   // state, so a keyboard user who pressed Retry parks on the wait itself (Diana's NOTES.md).
+   if(document.activeElement?.id==='servers-retry'){line.tabIndex=-1;line.focus();parkedFocus=true;}
+  }
+  if(!loading&&!line.hidden){line.textContent='';}
+  line.hidden=!loading;
+ }
+ $('servers-copy').hidden=list.state==='error'||loading;
  $('servers-copy').textContent=state.message||'Choose an e-server to connect to. It will ask for its own PIN.';
  if(adding&&!document.activeElement?.closest('#add-server'))setTimeout(()=>$('add-origin').focus(),0);
+ // THE PARKED FOCUS LANDS SOMEWHERE REAL when the wait has settled: the first row to connect to,
+ // Add for an empty account, or Retry for a refusal. Nothing else takes it.
+ if(parkedFocus&&!loading){
+  parkedFocus=false;
+  const target=list.state==='error'?$('servers-retry'):(list.state==='empty'?$('server-add'):$('server-list').querySelector('.server-connect'));
+  if(target&&!target.hidden)target.focus();
+ }
 }
 function focusRow(origin){
  const row=origin&&[...$('server-list').children].find(item=>item.dataset.origin===origin);

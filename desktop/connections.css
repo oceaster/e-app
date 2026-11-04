@@ -58,3 +58,22 @@
  .client-servers :is(button,input){border:1px solid ButtonText}
  .client-servers :is(button,input):focus-visible{outline:2px solid Highlight}
 }
+/* Append to desktop/connections.css. Existing household tokens only. */
+#client-servers #servers-loading {
+  margin: 0;
+  padding: 26px 0;
+  border-block: 1px solid var(--ec-line);
+  color: var(--ec-muted-panel);
+  font-family: var(--ec-font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+#client-servers:not([data-state="loading"]) #servers-loading,
+#client-servers[data-state="loading"] #servers-copy,
+#client-servers[data-state="loading"] #server-list,
+#client-servers[data-state="loading"] #servers .client-actions {
+  display: none;
+}

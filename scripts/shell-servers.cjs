@@ -169,6 +169,8 @@ app.whenReady().then(async()=>{
  // ── 7. an empty list says so, and still offers the one thing to do ─────────────────────
  state={...state,view:'servers',servers:{state:'empty',rows:[],error:'',limit:50,fallback:''}};publish();
  await until('the empty state',`document.querySelector('#client-servers').dataset.state==='empty' && document.querySelector('#servers-empty').hidden===false`);
+ assert.equal(await read(`document.querySelector('#servers-loading').hidden`),true,'the wait goes when the answer arrives');
+ assert.equal(await read(`document.querySelector('#servers-loading').textContent`),'','and is cleared, so a stale sentence cannot return');
  assert.equal(await read(`document.querySelector('#server-list').children.length`),0);
  assert.equal(await read(`document.querySelector('#server-add').hidden`),false,'an empty list must still offer the add button');
  await shot('04-empty-dark');
@@ -198,7 +200,21 @@ app.whenReady().then(async()=>{
  state={...state,view:'servers',servers:{state:'loading',rows:[],error:'',limit:0,fallback:''}};publish();
  await until('the loading state to paint',`document.querySelector('#client-servers').dataset.state==='loading'`);
  assert.equal(await read(`document.querySelector('#server-list').children.length`),0,'a loading list has no rows');
- assert.equal(await read(`document.querySelector('#server-add').hidden`),true,'and no add control: that is the bare view Owen saw');
+ assert.equal(await read(`document.querySelector('#server-add').hidden`),true,'and no add control while a wait is on');
+ // NOT BARE ANY MORE: the wait is a visible line in Diana's words (/home/diana/Desktop/
+ // servers-loading.css + NOTES.md), with her own separator rules, and the choose/PIN instruction
+ // is out of the way because there is nothing to choose yet.
+ assert.equal(await read(`!!document.querySelector('#servers-loading')`),true,'the shell carries the wait region Diana named');
+ assert.equal(await read(`document.querySelector('#servers-loading')?.hidden`),false,'the wait paints a line, not nothing');
+ assert.equal(await read(`document.querySelector('#servers-loading')?.textContent`),'Loading your e-servers…');
+ assert.equal(await read(`document.querySelector('#servers-copy').hidden`),true,'the choose instruction steps aside during the wait');
+ const paint=await read(`(()=>{const el=document.querySelector('#servers-loading');if(el===null)return null;const s=getComputedStyle(el);const r=el.getBoundingClientRect();return {size:s.fontSize,line:s.lineHeight,top:s.borderTopWidth,left:s.textAlign,width:Math.round(r.width),height:Math.round(r.height)}})()`);
+ assert.ok(paint!==null,'the wait line must be in the document to be measured');
+ assert.equal(paint.size,'14px',JSON.stringify(paint));
+ assert.equal(paint.line,'21px',JSON.stringify(paint));
+ assert.equal(paint.top,'1px','her thin top rule is the wait region\'s edge: '+JSON.stringify(paint));
+ assert.equal(paint.left,'start',JSON.stringify(paint));
+ assert.ok(paint.width>0&&paint.height>0,'the line has a painted box: '+JSON.stringify(paint));
  // The bound sits ABOVE the main process's own 15 s watchdog, so a slow but real answer always
  // wins and only a state that was never published reaches this failure. The gate waits past it.
  await until('the loading state to become an honest failure',`document.querySelector('#servers-error').hidden===false`,{tries:700});
