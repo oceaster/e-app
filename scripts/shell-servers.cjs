@@ -229,9 +229,9 @@ app.whenReady().then(async()=>{
   await buildWindow.loadURL(origin+'/');
   watch=new BuildWatch({
    session:buildWindow.webContents.session,origin,
+   window:buildWindow,
    read:()=>buildWindow.webContents.executeJavaScript(BUILD_READ),
-   notify:value=>{if(buildWindow&&!buildWindow.isDestroyed())buildWindow.webContents.send('client:build',{...value,server:new URL(origin).host});},
-   reload:()=>{void buildWindow.webContents.reloadIgnoringCache();}
+   notify:value=>{if(buildWindow&&!buildWindow.isDestroyed())buildWindow.webContents.send('client:build',{...value,server:new URL(origin).host});}
   });
   ipcMain.on('client:build-action',(event,action)=>{
    if(!buildWindow||event.sender!==buildWindow.webContents)return;

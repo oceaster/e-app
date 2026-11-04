@@ -94,16 +94,14 @@ function startBuildWatch(current,ses,origin){
  stopBuildWatch();
  let host=origin;try{host=new URL(origin).host;}catch{}
  buildWatch=new BuildWatch({
-  session:ses,origin,
+  session:ses,origin,window:current,
   // What this window holds, read out of the document itself: the field the harness injects
   // before the shell boots. A document that states no build (the PIN gate, a 401, a blank
   // window) answers '' and the check stays silent.
   read:()=>current.webContents.executeJavaScript('((window.__AGENT_HARNESS_BOOT__&&window.__AGENT_HARNESS_BOOT__.rev)||"")'),
-  notify:value=>{if(win===current&&!current.isDestroyed())current.webContents.send('client:build',{...value,server:host});},
-  // The current bundle, in place: the same window and the same PIN session, so there is
-  // nothing to sign in to, and the cache is bypassed because handing back the document that
-  // was stale a second ago is the one outcome this button must not produce.
-  reload:()=>{if(win===current&&!current.isDestroyed())current.webContents.reloadIgnoringCache();}
+  // The current bundle, in place: the same window and the same PIN session, so there is nothing
+  // to sign in to. BuildWatch's own reload bypasses the cache (desktop/build-rev.cjs).
+  notify:value=>{if(win===current&&!current.isDestroyed())current.webContents.send('client:build',{...value,server:host});}
  });
  buildWatch.window=current;buildWatch.start();
  const watch=buildWatch;current.once('closed',()=>{if(buildWatch===watch)stopBuildWatch();});

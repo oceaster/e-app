@@ -182,7 +182,7 @@ test('the two files that only run in Electron actually wire the watch',()=>{
  const main=fs.readFileSync(path.join(__dirname,'..','desktop','main.cjs'),'utf8');
  const preload=fs.readFileSync(path.join(__dirname,'..','desktop','preload.cjs'),'utf8');
  assert.match(main,/startBuildWatch\(current,activeSession,config\.server\);/,'the connected window starts a watch');
- assert.match(main,/reloadIgnoringCache\(\)/,'the reload bypasses the cache the page would otherwise keep');
+ assert.match(main,/new BuildWatch\(\{\n  session:ses,origin,window:current,/,'the watch reloads THAT window, not some other one');
  assert.match(main,/ipcMain\.on\('client:build-action',\(event,action\)=>\{try\{remote\(event\);\}/,'the two actions answer only the connected server\'s main frame');
  assert.match(preload,/ipcRenderer\.send\('client:build-action','reload'\)/);
  assert.match(preload,/ipcRenderer\.send\('client:build-action','dismiss'\)/);

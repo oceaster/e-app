@@ -84,10 +84,13 @@ function decide(loaded,current){
 /**
  * The rev the server serves RIGHT NOW, read through the person's own session.
  *
- * `cache:'no-store'` plus `no-cache`/`pragma` request headers are the whole point: the window's
- * partition keeps the HTTP cache across a quit and reopen (desktop/main.cjs's partition), so a
- * cached read of `/` would answer the OLD build for as long as its headers allow and the check
- * would never fire on the one machine that matters - the one that has been open all evening.
+ * The read is issued from the main process's own network stack, which is NOT the window's HTTP
+ * cache: measured 2026-11-04 by the gate (scripts/shell-servers.cjs section 10) with a fixture
+ * that sends `Cache-Control: max-age=600`, the swap to the new rev is seen on the next check with
+ * `cache:'no-store'` and without it. `cache:'no-store'` and the two request headers stay anyway,
+ * because they are free and because the cache this app DOES keep - the partitioned session that
+ * survives a quit and reopen (desktop/main.cjs:251) - is exactly the thing that would quietly
+ * turn this check into a no-op if a future Electron changed that.
  *
  * @param {object} session - the Electron session that holds the PIN cookie.
  * @param {string} origin - the connected e-server.
@@ -109,8 +112,8 @@ async function fetchRev(session,origin,{timeout=BUILD_FETCH_MS}={}){
 
 /**
  * The window's build watch: one interval, one comparison, and the two things a person may do
- * about it. It owns no Electron object - the caller supplies how to read its own document, how to
- * tell its renderer, and how to reload - so the same code runs in main.cjs and in the gate.
+ * about it. The caller supplies the window, how to read its document and how to tell its renderer,
+ * so the same object runs in main.cjs and in the gate (scripts/shell-servers.cjs section 10).
  */
 class BuildWatch{
  /**
@@ -119,14 +122,20 @@ class BuildWatch{
   * @param {string} options.origin - the connected e-server.
   * @param {()=>Promise<string>} options.read - the rev of the document the window holds.
   * @param {(state:{state:string,server:string,loaded:string,current:string})=>void} options.notify
-  * @param {()=>void} options.reload - apply the current build in place.
+  * @param {object} [options.window] - the BrowserWindow to reload. The default reload bypasses the
+ *   HTTP cache: handing the window back the document that was stale a second ago is the one outcome
+ *   this action must not produce. (The gate's fixture answers every request afresh, so it proves
+ *   the reload applies the new bundle but cannot prove the bypass itself - that is why the choice
+ *   is made here, once, rather than left to a call site.)
+ * @param {()=>void} [options.reload] - overrides the default reload.
   * @param {(session:string,origin:string,options:object)=>Promise<string>} [options.rev]
   * @param {number} [options.interval]
   * @param {Function} [options.tick] - setInterval, injectable so a test owns time.
   * @param {Function} [options.stopTick] - clearInterval.
   */
- constructor({session,origin,read,notify,reload,rev=fetchRev,interval=BUILD_CHECK_MS,tick=setInterval,stopTick=clearInterval}){
-  this.session=session;this.origin=origin;this.read=read;this.notify=notify;this.reload=reload;
+ constructor({session,origin,window:frame,read,notify,reload,rev=fetchRev,interval=BUILD_CHECK_MS,tick=setInterval,stopTick=clearInterval}){
+  this.session=session;this.origin=origin;this.read=read;this.notify=notify;
+  this.reload=reload||(()=>{if(frame&&!frame.isDestroyed())frame.webContents.reloadIgnoringCache();});
   this.rev=rev;this.interval=interval;this.tick=tick;this.stopTick=stopTick;
   this.timer=null;this.busy=false;this.dismissed='';this.verdict='unknown';
  }
