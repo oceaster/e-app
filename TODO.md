@@ -95,3 +95,22 @@ mutation-checked.
 - `scripts/shell-servers.cjs` drives the *source* tree. Adding an `--asar` path argument, as
   `scripts/navigation-smoke.cjs` has, would let the packaged build's views be exercised rather
   than only proved present by `scripts/smoke.cjs`.
+
+## Outstanding from the 2026-11-03/04 session
+
+Owen, 2026-11-04: "update any installed apps on this machine for my owen (or just let it
+auto-update!)". Two things are owed here and both are client-side; the editor defect itself is
+NOT one of them (measured: the client paints the expanded editor correctly in Electron 44.7.2 in
+both themes).
+
+- [ ] **Tell the person when the page it is showing is an older build than the server's**
+  (ticket 7ae869ad). An open window keeps the client JavaScript it loaded across a deploy, so a
+  shipped fix keeps looking unshipped to its owner - which is exactly what happened twice on
+  2026-11-03. The served plugin bundles already carry a content hash (`?rev=<sha1-12>`), so the
+  comparison exists; only the affordance and the reload do not. The cache is cleared today only on
+  a version-level change (`desktop/main.cjs:254-256`), which is why "quit and reopen" does not
+  clear it.
+- [ ] **Edit a connection's name** (ticket f5b2c56a). Diana's design is on disk
+  (`/home/diana/Desktop/e-app-connections/`), the row controls and the ids are frozen; the
+  in-page rename surface and the `client:servers-rename` IPC are not wired.
+
