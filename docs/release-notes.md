@@ -1,6 +1,6 @@
-The e-server list no longer flashes an error while it is still loading. If the account service is slow, the list waits for it instead of showing a retry a moment before the servers appear; if the read genuinely fails, it still says so and offers a retry.
+The e-server list now says "Loading your e-servers…" while it is fetching, instead of showing an empty pane. If the wait ends in a refusal you get the service's sentence and Try again; if it ends with nothing saved, you get the empty-account sentence and Add.
 
-Your servers now appear immediately after signing in: the account service no longer answers a fresh sign-in from a cold start, which was taking ten seconds and leaving the list empty in the meantime.
+Your servers appear immediately after signing in: the account service no longer answers a fresh sign-in from a cold start.
 
 After 30 minutes without interaction, e-server asks for the instance PIN again. If the PIN is not entered within ten minutes, the client disconnects and returns to your e-server list while keeping your Easter Company account signed in.
 
