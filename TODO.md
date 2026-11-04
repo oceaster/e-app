@@ -103,13 +103,17 @@ auto-update!)". Two things are owed here and both are client-side; the editor de
 NOT one of them (measured: the client paints the expanded editor correctly in Electron 44.7.2 in
 both themes).
 
-- [ ] **Tell the person when the page it is showing is an older build than the server's**
-  (ticket 7ae869ad). An open window keeps the client JavaScript it loaded across a deploy, so a
-  shipped fix keeps looking unshipped to its owner - which is exactly what happened twice on
-  2026-11-03. The served plugin bundles already carry a content hash (`?rev=<sha1-12>`), so the
-  comparison exists; only the affordance and the reload do not. The cache is cleared today only on
-  a version-level change (`desktop/main.cjs:254-256`), which is why "quit and reopen" does not
-  clear it.
+- [x] **Tell the person when the page it is showing is an older build than the server's**
+  (ticket 7ae869ad) - LANDED on `feat/stale-build-line`, not yet released. `desktop/build-rev.cjs`
+  compares the boot-graph rev the document itself carries
+  (`window.__AGENT_HARNESS_BOOT__.rev`) against the same field parsed out of the page the server
+  serves now, read through the person's own session; two minutes apart, one page read each. Equal
+  revs say nothing, an unreadable side says nothing, and a replaced build offers a quiet line
+  ("This window is running an older build of <server>." + Reload + dismiss) drawn by
+  `desktop/preload.cjs` into a shadow root. Reload is `reloadIgnoringCache()` on the same window,
+  so no PIN and no sign-in; the person's place is the page's own hash route
+  (`packages/client/ui-inbox/src/client/surface.ts:114`). Gates: `npm test` (tests/build-rev.test.cjs)
+  and `npm run test:servers -- --shots <dir>` (section 10 of scripts/shell-servers.cjs).
 - [ ] **Edit a connection's name** (ticket f5b2c56a). Diana's design is on disk
   (`/home/diana/Desktop/e-app-connections/`), the row controls and the ids are frozen; the
   in-page rename surface and the `client:servers-rename` IPC are not wired.

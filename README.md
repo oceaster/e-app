@@ -24,7 +24,13 @@ an otherwise reachable private server. Updates stage while open and apply only
 when unfocused and idle, outside sign-in, transfers, media and unsaved-work guards;
 the menu also offers an explicit restart. Active agent work stays on the server.
 Patch updates preserve state, minor updates clear HTTP cache, and major updates
-clear that server's local sign-in state when it next connects.
+clear that server's local sign-in state when it next connects. A deploy under an
+open window is a different thing from an update to this client: the window keeps
+the page it loaded, so it compares the build its own document carries against the
+build the server serves now (every two minutes, read through the same PIN session)
+and, when they differ, offers a quiet line - "This window is running an older build
+of <server>." with Reload and a dismiss - instead of a restart. It says nothing
+when the server does not answer, and nothing when the two agree.
 
 The remote renderer has Node integration disabled, a sandbox and context
 isolation. Native IPC is limited to the configured main-frame origin. Other HTTPS

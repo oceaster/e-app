@@ -282,6 +282,19 @@ app.whenReady().then(async()=>{
   assert.equal(await bar(),null,'dismissing takes the line away');
   assert.equal(await watch.check(),'current','and it does not come back on its own');
 
+  // 10e-bis. the same line in the light mood, from the page's own theme attribute
+  served.rev='eeeeeeeeeeee';
+  await buildWindow.webContents.executeJavaScript(`document.documentElement.setAttribute('data-easter-theme','light')`);
+  assert.equal(await watch.check(),'stale');
+  const light=await bar();
+  assert.equal(light.theme,'light','the line follows the page into light mode');
+  assert.equal(light.sentence,'This window is running an older build of 127.0.0.1:'+new URL(origin).port+'.');
+  // A capture takes the last painted frame: without this the still comes back with no line on
+  // it and a reader concludes the light mood is broken (measured, twice).
+  await wait(200);
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'09-stale-light.png'),image.toPNG());}
+  await buildWindow.webContents.executeJavaScript(`document.documentElement.setAttribute('data-easter-theme','dark')`);
+
   // 10f. a page that states no build (the PIN gate, a 401 answer) is silent
   const pinPage=http.createServer((request,response)=>{response.writeHead(401,{'Content-Type':'text/html'});response.end('<!doctype html><html><head><title>Unlock</title></head><body></body></html>');});
   await new Promise(resolve=>pinPage.listen(0,'127.0.0.1',resolve));
@@ -293,7 +306,6 @@ app.whenReady().then(async()=>{
   // The check costs one read of the page per interval, and it does not read the window's cache:
   // after the swap, the only way the served rev could still be REV_A is a cache hit.
   assert.ok(requests.filter(url=>url==='/').length>=6,'every check reads the page itself: '+requests.join(' '));
-  assert.equal(served.rev,REV_C);
   console.log('PASS: the line appears only when the server serves a different build, Reload applies');
   console.log('      the new bundle in place, a dismissal holds, and an unreachable server is silent.');
  }finally{
