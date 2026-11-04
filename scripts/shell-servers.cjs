@@ -17,13 +17,22 @@
 // process is stubbed, through the same IPC channels desktop/main.cjs registers. A renamed
 // channel, a changed argument or a missing id fails here.
 //
+// THE SECOND THING THIS GATE PROVES (Owen, 2026-11-03, twice in one evening): a fix is shipped,
+// deployed and verified, and the window that is already open keeps drawing the old editor,
+// because an open page keeps the client JavaScript it loaded. So the same script serves a real
+// page on loopback, runs the REAL desktop/build-rev.cjs against the REAL desktop/preload.cjs in a
+// real window, swaps the rev the server serves, and asserts the line appears, that pressing
+// Reload reloads IN PLACE to the new bundle, and that a dismissal and an unreachable server both
+// stay silent. Same fixture, same window, same code the app ships.
+//
 //   xvfb-run -a npx electron --no-sandbox scripts/shell-servers.cjs [--shots <dir>]
 const {app,BrowserWindow,ipcMain,nativeTheme}=require('electron');
 const assert=require('node:assert/strict');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 
 const ROOT=path.resolve(__dirname,'..');
 const SHELL=path.join(ROOT,'desktop','shell.html');
+const {BuildWatch}=require(path.join(ROOT,'desktop','build-rev.cjs'));
 const shotsAt=(()=>{const at=process.argv.indexOf('--shots');return at>0?path.resolve(process.argv[at+1]):null;})();
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'eserver-shell-servers-'));
 app.setPath('userData',home);
@@ -185,9 +194,118 @@ app.whenReady().then(async()=>{
  await shot('06-list-light');
  nativeTheme.themeSource='system';
 
+ // ── 10. the build this window is showing, against the build the server serves ───────────
+ // A page in the harness's own shape: the composed boot graph inline in the head, each row's
+ // bundle content-hashed in its URL (`/plugins/<id>/client.js?rev=<sha1-12>`), and the bundle
+ // itself doing something a person can see. The fixture sends `Cache-Control: max-age=600` on
+ // purpose: the whole point of the check is that it does not read the cache the window keeps.
+ const REV_A='aaaaaaaaaaaa',REV_B='bbbbbbbbbbbb',REV_C='cccccccccccc';
+ const served={rev:REV_A,down:false};
+ const requests=[];
+ const fixture=http.createServer((request,response)=>{
+  requests.push(request.url);
+  if(served.down){request.socket.destroy();return;}
+  if(request.url.startsWith('/plugins/')){response.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'public, max-age=600'});response.end('window.__pluginRev='+JSON.stringify(served.rev)+';');return;}
+  const graph={rev:served.rev,entries:[{id:'@deepseek-ai/dsh-client-ui-inbox',url:'/plugins/@deepseek-ai/dsh-client-ui-inbox/client.js?rev='+served.rev,rev:served.rev}]};
+  const head='<script>window.__AGENT_HARNESS_BOOT__ = '+JSON.stringify(graph).replaceAll('<','\\u003c')+'</script>';
+  response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public, max-age=600'});
+  response.end('<!doctype html><html lang="en" data-easter-theme="dark"><head><meta charset="utf-8">'+head
+   +'<script src="/plugins/@deepseek-ai/dsh-client-ui-inbox/client.js?rev='+served.rev+'"></script></head>'
+   +'<body style="margin:0;background:#0d2029;color:#e6edf1;font:14px system-ui"><h1 style="font:600 18px system-ui;padding:24px">Your inbox</h1>'
+   +'<p style="padding:0 24px">The page this window loaded states its own build.</p></body></html>');
+ });
+ await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));
+ const origin='http://127.0.0.1:'+fixture.address().port;
+ let buildWindow=null,watch=null;
+ const BUILD_READ=`((window.__AGENT_HARNESS_BOOT__&&window.__AGENT_HARNESS_BOOT__.rev)||"")`;
+ const bar=()=>buildWindow.webContents.executeJavaScript(`(()=>{const host=document.getElementById('e-server-build-line');
+  if(!host||!host.isConnected)return null;const shadow=host.shadowRoot;if(!shadow)return null;
+  const reload=shadow.querySelector('.reload'),dismiss=shadow.querySelector('.dismiss'),sentence=shadow.querySelector('.sentence'),server=shadow.querySelector('.server');
+  return {sentence:sentence?sentence.textContent:null,server:server?server.textContent:null,
+   reload:reload?reload.textContent:null,dismiss:!!dismiss,theme:host.dataset.theme||null}})()`).catch(()=>null);
+ try{
+  buildWindow=new BrowserWindow({width:900,height:600,show:false,useContentSize:true,backgroundColor:'#0d2029',
+   webPreferences:{preload:path.join(ROOT,'desktop','preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});
+  await buildWindow.loadURL(origin+'/');
+  watch=new BuildWatch({
+   session:buildWindow.webContents.session,origin,
+   read:()=>buildWindow.webContents.executeJavaScript(BUILD_READ),
+   notify:value=>{if(buildWindow&&!buildWindow.isDestroyed())buildWindow.webContents.send('client:build',{...value,server:new URL(origin).host});},
+   reload:()=>{void buildWindow.webContents.reloadIgnoringCache();}
+  });
+  ipcMain.on('client:build-action',(event,action)=>{
+   if(!buildWindow||event.sender!==buildWindow.webContents)return;
+   if(action==='reload')void watch.refresh();else if(action==='dismiss')watch.dismiss();
+  });
+
+  // 10a. the same build on both sides: silence, whatever else the window is doing
+  assert.equal(await buildWindow.webContents.executeJavaScript('window.__pluginRev'),REV_A,'the window runs the rev the fixture served');
+  assert.equal(await watch.check(),'current','equal revs must say nothing');
+  assert.equal(await bar(),null,'nothing is painted when the page is current');
+
+  // 10b. the two restart shapes: an unreachable server, and a plain restart that changes no bundle
+  served.down=true;
+  assert.equal(await watch.check(),'unknown','an unreachable server is unknown');
+  assert.equal(await bar(),null,'an unreachable server says nothing, exactly like every other cloud-optional path');
+  served.down=false;
+  assert.equal(await watch.check(),'current','the same bundles served again are the same build');
+
+  // 10c. a deploy under the open window: the rev moves, and the line says so, quietly
+  served.rev=REV_B;
+  assert.equal(await watch.check(),'stale','a replaced build is stale');
+  const shown=await bar();
+  assert.ok(shown,'the line must be on screen');
+  assert.equal(shown.sentence,'This window is running an older build of 127.0.0.1:'+new URL(origin).port+'.','the sentence, naming the server');
+  assert.equal(shown.reload,'Reload','the action the person presses');
+  assert.equal(shown.dismiss,true,'and it can be dismissed');
+  assert.equal(shown.theme,'dark','the line wears the page\'s own mood');
+  buildWindow.showInactive();
+  await wait(120);
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'07-stale-dark.png'),image.toPNG());}
+
+  // 10d. Reload applies the CURRENT bundle in place: same window, new rev, no PIN, no sign-in
+  const reloaded=new Promise(resolve=>buildWindow.webContents.once('did-finish-load',resolve));
+  await buildWindow.webContents.executeJavaScript(`document.getElementById('e-server-build-line').shadowRoot.querySelector('.reload').click()`);
+  await reloaded;
+  assert.equal(await buildWindow.webContents.executeJavaScript('window.__AGENT_HARNESS_BOOT__.rev'),REV_B,'the window now holds the new build');
+  assert.equal(await buildWindow.webContents.executeJavaScript('window.__pluginRev'),REV_B,'and it is RUNNING the new bundle, not only holding new HTML');
+  assert.equal(await bar(),null,'the line goes away once the window is current');
+  assert.equal(await watch.check(),'current','and the next check agrees');
+  if(shotsAt){const image=await buildWindow.webContents.capturePage();fs.writeFileSync(path.join(shotsAt,'08-reloaded-dark.png'),image.toPNG());}
+
+  // 10e. dismissable, and only about the build it was about
+  served.rev=REV_C;
+  assert.equal(await watch.check(),'stale');
+  assert.ok(await bar(),'a newer build asks again');
+  await buildWindow.webContents.executeJavaScript(`document.getElementById('e-server-build-line').shadowRoot.querySelector('.dismiss').click()`);
+  await wait(80);
+  assert.equal(await bar(),null,'dismissing takes the line away');
+  assert.equal(await watch.check(),'current','and it does not come back on its own');
+
+  // 10f. a page that states no build (the PIN gate, a 401 answer) is silent
+  const pinPage=http.createServer((request,response)=>{response.writeHead(401,{'Content-Type':'text/html'});response.end('<!doctype html><html><head><title>Unlock</title></head><body></body></html>');});
+  await new Promise(resolve=>pinPage.listen(0,'127.0.0.1',resolve));
+  const pinWatch=new BuildWatch({session:buildWindow.webContents.session,origin:'http://127.0.0.1:'+pinPage.address().port,
+   read:()=>buildWindow.webContents.executeJavaScript(BUILD_READ),notify:()=>{},reload:()=>{}});
+  assert.equal(await pinWatch.check(),'unknown','a server that states no build is not a stale build');
+  pinPage.closeAllConnections?.();pinPage.close();
+
+  // The check costs one read of the page per interval, and it does not read the window's cache:
+  // after the swap, the only way the served rev could still be REV_A is a cache hit.
+  assert.ok(requests.filter(url=>url==='/').length>=6,'every check reads the page itself: '+requests.join(' '));
+  assert.equal(served.rev,REV_C);
+  console.log('PASS: the line appears only when the server serves a different build, Reload applies');
+  console.log('      the new bundle in place, a dismissal holds, and an unreachable server is silent.');
+ }finally{
+  ipcMain.removeAllListeners('client:build-action');
+  watch?.stop();
+  if(buildWindow&&!buildWindow.isDestroyed())buildWindow.destroy();
+  fixture.closeAllConnections?.();fixture.close();
+ }
  console.log('PASS: the e-server list is what a signed-in person lands on, a row connects,');
  console.log('      remove names its row, add posts an address and comes back, and every');
- console.log('      state (loading, empty, error with the last server) paints what it says.');
+ console.log('      state (loading, empty, error with the last server) paints what it says;');
+ console.log('      and a window whose page predates the server\'s build is told so, and reloads.');
  if(shotsAt)console.log('screenshots: '+shotsAt);
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{
  win?.destroy();

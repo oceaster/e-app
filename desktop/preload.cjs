@@ -62,7 +62,10 @@ if(location.protocol==='file:'){
   const root=document.documentElement;
   if(!root)return null;
   const host=document.createElement('e-server-build-line');host.id=BUILD_HOST;
-  const shadow=host.attachShadow({mode:'closed'});
+  // `open` so the gate that proves this line (scripts/shell-servers.cjs) and any later
+  // screenshot tooling can read it from the main process; nothing in the page's own scripts is
+  // given a capability by that, because the actions travel down this preload's channel.
+  const shadow=host.attachShadow({mode:'open'});
   try{const sheet=new CSSStyleSheet();sheet.replaceSync(BUILD_CSS);shadow.adoptedStyleSheets=[sheet];}catch{}
   document.body?document.body.append(host):root.append(host);
   buildNode=host;buildNode.shadow=shadow;
