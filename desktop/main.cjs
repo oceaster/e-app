@@ -8,6 +8,7 @@ const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {loadServerPage}=require('./navigation.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
+const {BuildWatch}=require('./build-rev.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
@@ -32,7 +33,7 @@ let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers
 // author of the API address - the vendored account client - and is read at initializeCompany.
 let accountsOrigin='';
 let activeSession=null;
-let idleLock=null,idleTimer=null,idleCookieListener=null;
+let idleLock=null,idleTimer=null,idleCookieListener=null,buildWatch=null;
 let company=null,windowAccount=null,pendingLink=null;
 const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!updater.identifies(pkg,manifest))throw Error('Invalid e-server client update.');};
 if(!app.requestSingleInstanceLock()){app.quit();}else{
@@ -78,6 +79,35 @@ function bindCompanySession(next){
  try{token=companyToken();}catch{return Promise.resolve({ok:false,error:'company_sign_in_required',status:0,detail:''});}
  const connected=activeSession;
  return bridge.bindSession({origin:config.server,token,next,send:(url,init)=>connected?connected.fetch(url,init):Promise.reject(Error('Connect to your e-server first.'))});
+}
+// ── the build this window is showing (desktop/build-rev.cjs) ─────────────────────────────
+// A deploy replaces the server's client bundles. A window that is already open keeps the
+// JavaScript it loaded, so a shipped fix keeps looking unshipped until the page is reloaded -
+// Owen watched exactly that happen twice on 2026-11-03. The watch compares the rev the document
+// in this window was composed from against the rev the server serves now, and offers a reload:
+// never a restart, never a modal, and nothing at all when either side cannot be read.
+function stopBuildWatch(){
+ if(buildWatch)buildWatch.stop();
+ buildWatch=null;
+}
+function startBuildWatch(current,ses,origin){
+ stopBuildWatch();
+ let host=origin;try{host=new URL(origin).host;}catch{}
+ buildWatch=new BuildWatch({
+  session:ses,origin,
+  // What this window holds, read out of the document itself: the field the harness injects
+  // before the shell boots. A document that states no build (the PIN gate, a 401, a blank
+  // window) answers '' and the check stays silent.
+  read:()=>current.webContents.executeJavaScript('((window.__AGENT_HARNESS_BOOT__&&window.__AGENT_HARNESS_BOOT__.rev)||"")'),
+  notify:value=>{if(win===current&&!current.isDestroyed())current.webContents.send('client:build',{...value,server:host});},
+  // The current bundle, in place: the same window and the same PIN session, so there is
+  // nothing to sign in to, and the cache is bypassed because handing back the document that
+  // was stale a second ago is the one outcome this button must not produce.
+  reload:()=>{if(win===current&&!current.isDestroyed())current.webContents.reloadIgnoringCache();}
+ });
+ buildWatch.window=current;buildWatch.start();
+ const watch=buildWatch;current.once('closed',()=>{if(buildWatch===watch)stopBuildWatch();});
+ return buildWatch;
 }
 async function initializeCompany(){
  const {AccountClient,companySession,publicAccount,API_ORIGIN}=await import('./vendor/launcher/account-client.mjs');
@@ -292,7 +322,7 @@ async function connect(){
  win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
- startIdleLock(current,activeSession,config.server);
+ startIdleLock(current,activeSession,config.server);startBuildWatch(current,activeSession,config.server);
  current.webContents.setWindowOpenHandler(({url})=>{void openExternal(url);return {action:'deny'};});
  current.webContents.on('will-attach-webview',event=>event.preventDefault());
  current.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===config.server)return;}catch{}event.preventDefault();void openExternal(url);});
@@ -411,6 +441,10 @@ async function start(){
  ipcMain.handle('client:servers-remove',answered((id,label)=>removeServer(String(id||''),String(label||''))));
  ipcMain.handle('client:servers-use',answered(async id=>{await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};}));
  ipcMain.handle('client:retry',async event=>{local(event);company.require();if(state.phase==='update-error')await checkUpdate(true);else if(win){win.reload();setup.close();win.show();}else await connect();});
+ // The two things a person may do about a stale build. `remote(event)` is the existing
+ // main-frame-only guard, so the page itself cannot press these: only this preload's buttons
+ // send them, and a frame that is not the connected server's main frame gets a refusal.
+ ipcMain.on('client:build-action',(event,action)=>{try{remote(event);}catch{return;}if(!buildWatch)return;if(action==='reload')void buildWatch.refresh();else if(action==='dismiss')buildWatch.dismiss();});
  ipcMain.handle('client:installer',event=>{local(event);return shell.openExternal(installer);});
  ipcMain.handle('client:external',(event,value)=>{remote(event);return openExternal(value);});
  ipcMain.handle('client:provider',(event,value)=>{remote(event);externalAuth=true;return openExternal(value);});
