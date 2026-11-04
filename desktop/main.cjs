@@ -267,6 +267,19 @@ function setupWindow(){
  setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,webPreferences:preferences(session.fromPartition('setup'))});
  setup.setMenu(null);setup.setMenuBarVisibility(false);
  setup.loadFile(shellFile);setup.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+ // EVERY DOCUMENT GETS THE CURRENT STATE ONCE IT HAS LOADED.
+ // `publish()` is a broadcast into a window that may not be listening yet, and this window is
+ // created AFTER the first publish: `openServers()` publishes the setup phase, then builds the
+ // window, then awaits `refreshServers()`. When the accounts service answers quickly - a warm
+ // Lambda, which is the usual case right after signing in - the one send that carried the rows
+ // reaches a document that has not subscribed, and the renderer's own `client:state` was
+ // answered while the state still said `loading`. Both the rows and the Add control are hidden
+ // in `loading`, so the person sees an EMPTY list with no options and no error, and nothing ever
+ // repairs it. That is the reported 60-70% "the e-server selector is empty after signing out and
+ // back in": not a service answer, a last event lost between two processes. Re-publishing on
+ // every finished load makes the state object authoritative for each document, including a
+ // reload, so the order of the window and the read no longer decides the screen.
+ setup.webContents.on('did-finish-load',()=>publish({}));
  setup.webContents.on('will-navigate',(event,url)=>{if(url!==pathToFileURL(shellFile).href)event.preventDefault();});
  setup.on('closed',()=>{setup=null;if(!win&&!quitting)app.quit();});return setup;
 }
