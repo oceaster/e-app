@@ -10,6 +10,7 @@ const {loadServerPage}=require('./navigation.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
+const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
@@ -21,10 +22,15 @@ const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.
 // light - because the window paints for the frames before the document does. The old literal
 // was GitHub-dark #0d1117, which belongs to no surface of this product: it read as a colder,
 // bluer near-black against the page's teal ground, and in light mode it flashed dark under a
-// white card. The OS decides here for the same reason it decides in the page: the account has
-// published no theme preference yet, and site/theme-early.js (vendored beside the page) reads
-// exactly this signal.
-const ground=()=>nativeTheme.shouldUseDarkColors?'#0d2029':'#eef2f9';
+// white card.
+//
+// IT IS THE ACCOUNT'S ANSWER NOW (ticket c28be1de), falled back to the OS: `themePreference` is
+// the last theme the account document gave (read on this launch or cached from the last one), and
+// `system` resolves through the platform exactly as the page resolves it. The OS alone was the
+// whole of this window's theme logic, and it painted a light window at an account saved on `dark`.
+// chrome paints this ground BEFORE any document exists, so it is the one layer the page cannot
+// correct - a wrong palette here is the flash the person reports.
+const ground=()=>resolveTheme(themePreference,nativeTheme.shouldUseDarkColors)==='dark'?'#0d2029':'#eef2f9';
 const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
@@ -34,6 +40,14 @@ let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers
 let accountsOrigin='';
 let activeSession=null;
 let idleLock=null,idleTimer=null,idleCookieListener=null,buildWatch=null;
+//: The account's theme preference ('light'|'dark'|'system'|null), read from the account document
+//: and cached under the app's own config directory - see the theme block below and desktop/theme.cjs.
+let themePreference=null,themeReadAt=0,themeReading=null;
+const THEME_CACHE=path.join(HOME,THEME_CACHE_FILE);
+//: How often a window that regains focus may re-read the account document. A save in e-server's
+//: settings panel is made on another surface, so the shell asks again when it is looked at - but a
+//: focus is not a reason to ask a service a question it answered a moment ago.
+const THEME_REFRESH_MIN_MS=30000;
 let company=null,windowAccount=null,pendingLink=null;
 const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!updater.identifies(pkg,manifest))throw Error('Invalid e-server client update.');};
 if(!app.requestSingleInstanceLock()){app.quit();}else{
@@ -42,7 +56,7 @@ if(!app.requestSingleInstanceLock()){app.quit();}else{
  app.whenReady().then(start).catch(error=>{dialog.showErrorBox('e-server could not start',error.message);app.quit();});
 }
 function show(){if(!company?.authorized()){setupWindow();return;}const target=win||setup;if(target){target.show();target.focus();}}
-function publish(next){state={...state,...next,...company?.view(),version:VERSION,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);}
+function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);}
 function accountChanged(){if(!company?.authorized()){win?.hide();publish({phase:'auth',title:'Sign in to Easter Company.',error:''});setupWindow();}else publish({});}
 function changeServer(){if(!company?.authorized()){setupWindow();return;}void openServers();}
 // ONE SIGN-OUT, BOTH SCOPES (docs/COMPANY_LOGIN.md). The client's OWN half ends FIRST - the
@@ -134,6 +148,45 @@ function connectionsClient(){
  return new Connections({origin:accountsOrigin,development,credential:companyToken});
 }
 function serve(next){state={...state,servers:{...state.servers,...next}};publish({});}
+// ── the account's theme, and this window's first paint (ticket c28be1de) ─────────────────────
+// Owen, 2026-11-05: "user settings should be global and the same rules apply across all
+// interfaces". The account's own settings document is the store, every interface reads it, and the
+// client's own window is an interface: `GET /v2/accounts/settings` on the accounts service the
+// sign-in already uses, read HERE because the Company session lives here and `companyToken()` is
+// the one door to it (desktop/company.cjs states the rule) - so the token never reaches a
+// renderer and the renderer never names an address. It is never read from a connected e-server: that service translates the same
+// document for its own pages, and a second store is the defect, not the fix.
+//
+// THE ANSWER IS PUBLISHED, so the open window repaints in the frame that learns it, and CACHED, so
+// the NEXT launch's first painted frame already carries it (desktop/theme.cjs, and the synchronous
+// read in desktop/preload.cjs that desktop/theme-shell.js takes at parse time).
+//
+// A READ THAT FAILS CHANGES NOTHING ON SCREEN. The last known answer stands - the cache, or the OS
+// before the account has ever answered - because a theme is not worth an error sentence over a
+// person's account card, and a wrong palette is the one outcome this whole block exists to avoid.
+function themeClient(){
+ if(!accountsOrigin)throw Error('The Easter Company account service is not ready yet.');
+ return new AccountTheme({origin:accountsOrigin,credential:companyToken});
+}
+function readAccountTheme({force=false}={}){
+ if(!company?.authorized()||!accountsOrigin)return Promise.resolve(themePreference);
+ if(themeReading)return themeReading;
+ if(!force&&Date.now()-themeReadAt<THEME_REFRESH_MIN_MS)return Promise.resolve(themePreference);
+ themeReadAt=Date.now();
+ themeReading=(async()=>{
+  try{
+   const answer=await bounded(themeClient().read(),SERVER_LIST_WATCHDOG_MS,'The account theme');
+   if(answer.preference!==themePreference){
+    themePreference=answer.preference;
+    await writeThemeCache(THEME_CACHE,themePreference);
+    publish({});
+   }
+  }catch{/* the last known answer stands; see above */}
+  finally{themeReading=null;}
+  return themePreference;
+ })();
+ return themeReading;
+}
 // A READ THAT NEVER ANSWERS MUST NOT HOLD THE SCREEN IN `loading`.
 // Owen, 2026-11-04: the e-server list is bare 60-70% of the time after signing out and back in —
 // no rows, no Add control, no sentence. The client's request carries its own timeout, but this
@@ -174,6 +227,9 @@ async function refreshServers(){
 }
 async function openServers(){
  if(!company?.authorized()){accountChanged();return;}
+ // The account's theme is read on the way in, so the list and the card are never painted in the
+ // wrong palette while the person looks at them.
+ void readAccountTheme();
  publish({phase:'setup',view:'servers',title:'Your e-servers.',message:'Choose an e-server to connect to. It will ask for its own PIN.',error:''});
  setupWindow();await refreshServers();
 }
@@ -272,6 +328,10 @@ async function connectTo(value){
 }
 async function afterCompany(){
  if(!company.authorized())return;
+ // A sign-in is the one moment the account's document is certainly this person's and certainly
+ // new: read it before the window is built, so the cached answer is in place for the next launch
+ // and the published one arrives with the first state this window receives.
+ void readAccountTheme({force:true});
  if(pendingLink){const target=pendingLink;pendingLink=null;publish({phase:'setup',view:'servers',title:'Your e-servers.',error:''});setupWindow();await receiveLink(target,true);return;}
  await openServers();
 }
@@ -443,6 +503,11 @@ async function start(){
  if(process.platform!=='win32')await fs.chmod(HOME,0o700);
  try{config=JSON.parse(await fs.readFile(path.join(HOME,'settings.json'),'utf8'));if(config.server)config.server=serverOrigin(config.server,{development});}catch{config={};}
  if(fixture)config.server=serverOrigin(fixture,{development:true});
+ // THE LAST ANSWER THE ACCOUNT GAVE, before any window exists: `ground()` reads it for the frame
+ // colour Electron paints ahead of the document, and the shell's own blocking script reads it
+ // through the preload seam below. A machine with no cache and no session has none of this and
+ // keeps the OS answer, which is all anybody can know then.
+ themePreference=readThemeCache(THEME_CACHE);
  if(app.isPackaged)app.setAsDefaultProtocolClient('e-server');
  Menu.setApplicationMenu(null);
  try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open e-server',click:show},{label:'Change server…',click:changeServer},{label:'Sign out of Easter Company',click:()=>void signOutCompany()},{type:'separator'},{label:'Cancel sign-in',click:()=>{company?.cancel();void cancelSignIn();}},{label:'Check for updates',click:()=>void checkUpdate(false,true)},{label:'Restart to apply update',click:()=>void applyStaged(true)},{type:'separator'},{label:'Quit',click:()=>{quitting=true;app.quit();}}]));tray.on('click',show);}catch{}
@@ -475,6 +540,20 @@ async function start(){
  // main-frame-only guard, so the page itself cannot press these: only this preload's buttons
  // send them, and a frame that is not the connected server's main frame gets a refusal.
  ipcMain.on('client:build-action',(event,action)=>{try{remote(event);}catch{return;}if(!buildWatch)return;if(action==='reload')void buildWatch.refresh();else if(action==='dismiss')buildWatch.dismiss();});
+ // THE THEME SEAM, in the two directions it is needed (ticket c28be1de).
+ // `theme:cached` is SYNCHRONOUS on purpose: desktop/preload.cjs reads it while the shell document
+ // is still parsing, because a blocking classic script is the only shape that finishes before the
+ // first frame (desktop/theme-shell.js). It answers a preference already in memory - no file read,
+ // no service call, no token - and only to THIS window's own preload: any other sender gets ''.
+ ipcMain.on('theme:cached',event=>{
+  event.returnValue='';
+  if(!setup||setup.isDestroyed()||event.sender!==setup.webContents)return;
+  event.returnValue=themePreference||'';
+ });
+ // A window that has the person's attention again asks whether the account document changed (a
+ // save in e-server's settings panel). Read-only and bounded by THEME_REFRESH_MIN_MS; it answers
+ // the preference the window is already wearing and repaints through `client:state`.
+ ipcMain.handle('client:theme-refresh',event=>{local(event);void readAccountTheme();return {ok:true,theme:themePreference||''};});
  ipcMain.handle('client:installer',event=>{local(event);return shell.openExternal(installer);});
  ipcMain.handle('client:external',(event,value)=>{remote(event);return openExternal(value);});
  ipcMain.handle('client:provider',(event,value)=>{remote(event);externalAuth=true;return openExternal(value);});

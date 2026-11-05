@@ -50,6 +50,12 @@ $('account-root').append(options.node);
 let current={};
 function render(state){
  current=state;
+ // THE ACCOUNT'S THEME, in the same publish that carries the account card and the e-server list.
+ // desktop/theme-shell.js owns the rule (light/dark absolute, `system` resolved through the OS on
+ // every ask, plus the live OS listener) and the two attributes every surface publishes; this line
+ // is only the wiring, so a sign-in, a re-read or a save in e-server's settings panel repaints this
+ // window in the frame that learns it instead of leaving the OS answer standing.
+ if(state.theme)window.easterShellTheme?.paint(state.theme);
  const ready=state.accountReady===true,finish=!!state.account&&!ready,busy=state.accountBusy===true;
  const updating=['checking','downloading','verifying'].includes(state.phase);
  $('version').textContent=state.version;
@@ -259,3 +265,8 @@ $('add-server').onsubmit=event=>{
 $('signout').onclick=()=>action(()=>bridge.signOut());
 $('cancel-signin').onclick=()=>bridge.cancelAccount();
 $('retry').onclick=()=>bridge.retry();$('installer').onclick=()=>bridge.download();bridge.onState(render);bridge.state().then(render);
+// THE ACCOUNT DOCUMENT CHANGES WHILE THIS WINDOW IS NOT LOOKING: a save in e-server's settings
+// panel is made on another surface, so the window asks again the next time it has the person's
+// attention. The main process bounds how often it will ask (THEME_REFRESH_MIN_MS), and the answer
+// arrives on the usual `client:state` channel, so nothing here knows what the answer will be.
+window.addEventListener('focus',()=>{void bridge.themeRefresh?.().catch(()=>{});});

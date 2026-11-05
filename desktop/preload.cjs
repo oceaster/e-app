@@ -12,6 +12,17 @@ if(location.protocol==='file:'){
   provider:provider=>ipcRenderer.invoke('company:provider',provider),providers:()=>ipcRenderer.invoke('company:providers'),
   finish:(username,password)=>ipcRenderer.invoke('company:finish',username,password),
   cancelAccount:()=>ipcRenderer.invoke('company:cancel'),signOut:()=>ipcRenderer.invoke('company:signout'),
+  // THE ACCOUNT'S THEME, FOR THE FIRST PAINT (ticket c28be1de). `theme` is read SYNCHRONOUSLY,
+  // here, because a blocking classic script in the document head (desktop/theme-shell.js) is the
+  // only shape that finishes before the first frame: it needs the answer at parse time, not a
+  // promise. It is the preference the account gave on a PREVIOUS launch, cached under the app's
+  // own config directory by desktop/theme.cjs - one small file the main process has already read,
+  // handed over as a string. It is public, read-only and bounded, which is why it may cross this
+  // bridge at all: a theme preference is not a secret and it names no server.
+  // `themeRefresh` asks the main process to re-read the account document (a save in e-server's
+  // settings panel is the case): the answer arrives on the usual `client:state` channel.
+  theme:(()=>{try{const value=String(ipcRenderer.sendSync('theme:cached')||'');return ['light','dark','system'].includes(value)?value:'';}catch{return '';}})(),
+  themeRefresh:()=>ipcRenderer.invoke('client:theme-refresh'),
   onState:callback=>{const listener=(_,state)=>callback(state);ipcRenderer.on('client:state',listener);return()=>ipcRenderer.removeListener('client:state',listener);}
  });
 }else{
