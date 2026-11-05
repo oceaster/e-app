@@ -31,12 +31,21 @@
     },
     "files": [
       "desktop/**/*",
+      "!desktop/packaging/**",
       "package.json"
     ],
     "extraResources": [
       {
         "from": "LICENSE",
         "to": "LICENSE.txt"
+      },
+      {
+        "from": "desktop/packaging/e-app-registry-stamp",
+        "to": "e-app-registry-stamp"
+      },
+      {
+        "from": "desktop/packaging/49-e-app-registry-stamp.rules",
+        "to": "49-e-app-registry-stamp.rules"
       }
     ],
     "protocols": [
@@ -59,6 +68,10 @@
       "artifactName": "Easter-e-server-Linux-${arch}.${ext}",
       "maintainer": "Easter LTD",
       "synopsis": "Your private e-server desktop client"
+    },
+    "deb": {
+      "afterInstall": "desktop/packaging/after-install.sh",
+      "afterRemove": "desktop/packaging/after-remove.sh"
     },
     "pacman": {
       "depends": [
@@ -91,7 +104,9 @@
         "pango",
         "systemd-libs",
         "xdg-utils"
-      ]
+      ],
+      "afterInstall": "desktop/packaging/after-install.sh",
+      "afterRemove": "desktop/packaging/after-remove.sh"
     },
     "win": {
       "target": [

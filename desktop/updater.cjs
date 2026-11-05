@@ -127,7 +127,11 @@ async function stage(manifest,{root,fetch,notify=()=>{},signal}={}){
 //     release activate on the next ordinary start *without* the clear its level asks for,
 //     because bootstrap would then load the new bundle and the startup gate would find
 //     nothing newer. So the staged record is a fact about the stash, not an activation.
-async function update({current,platform=process.platform,arch=process.arch,runtime,root,fetch=globalThis.fetch,notify=()=>{},inspect=()=>{},apply=true,signal}={}){
+// `stamp` is how this path records the activation in the OS package registry (`apply:true` only):
+// main.cjs hands in desktop/registry.cjs's stamp, and it is required, because writing current.json
+// here is the same moment that makes a version real as activateStaged and must not be the one
+// activation nobody recorded (ticket 06becd1e).
+async function update({current,platform=process.platform,arch=process.arch,runtime,root,fetch=globalThis.fetch,notify=()=>{},inspect=()=>{},apply=true,stamp=null,signal}={}){
  notify({phase:'checking',percent:null,message:'Checking e-server client updates…'});
  const name='Easter-e-server-Update-'+platform+'-'+arch+'.json';
  const info=await json(fetch,LATEST+name,{signal});
@@ -137,6 +141,13 @@ async function update({current,platform=process.platform,arch=process.arch,runti
  const target=await stage(manifest,{root,fetch,notify,signal});
  await inspect(target,manifest);
  if(!apply){await atomic(path.join(root,'staged.json'),manifest);return target;}
+ // THE OTHER ACTIVATION ENTRY. `apply:true` writes the same current.json that bootstrap.cjs loads,
+ // so it is the same moment activateStaged is for, and it stamps the registry the same way. A
+ // caller with no stamper does not activate: an update nobody recorded in the registry is the
+ // defect this hook exists to stop, and a refusal names it instead of shipping the drift.
+ if(typeof stamp!=='function')throw Error('The e-server client cannot activate an update without recording it in the package registry.');
+ const stamped=await stamp(release);
+ if(stamped&&stamped.ok===false)failureLog?.append({step:'package-registry',outcome:stamped.outcome,note:stamped.sentence});
  await atomic(path.join(root,'current.json'),manifest);
  notify({phase:'restarting',version:release,percent:100,message:'Restarting e-server client…'});
  return target;

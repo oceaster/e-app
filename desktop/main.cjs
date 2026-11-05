@@ -4,6 +4,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('n
 const {pathToFileURL}=require('node:url');
 const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trusted,localFrame,updateLevel,relaunchOptions}=require('./security.cjs');
 const updater=require('./updater.cjs');
+const registry=require('./registry.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {loadServerPage}=require('./navigation.cjs');
@@ -14,6 +15,11 @@ const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:wri
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
+// THE APP'S UPDATE LOG (ticket 06becd1e). One bounded JSON line per update event: what was
+// activated, and the package registry's own sentence about it. The updater already documented this
+// seam (`updater.setFailureLog`) and had never been given a log, so every update failure until now
+// went nowhere a person could look; this is that log.
+const UPDATE_LOG=path.join(HOME,'update.log'),updateLog=new registry.UpdateLog(UPDATE_LOG);
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
 const development=!app.isPackaged,fixture=development?process.env.E_SERVER_CLIENT_TEST_ORIGIN:null;
 const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.html');
@@ -466,11 +472,30 @@ async function mayRestart(){
  if(!win||setup?.isVisible()||win.isFocused()||win.webContents.isCurrentlyAudible()||captureGranted||Date.now()-activity<60000||auth||externalAuth||company?.busy||downloads||requests.size)return false;
  try{return await win.webContents.executeJavaScript("(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return !e.defaultPrevented;})()");}catch{return false;}
 }
+// THE ONE MOMENT A VERSION BECOMES REAL, and therefore the one place the OS package registry is
+// told which version this install runs (ticket 06becd1e). Both activation paths in this file — the
+// tray's "Restart to apply update" and the startup gate — go through here, and nothing else calls
+// updater.activateStaged: a payload that reaches current.json without this running is exactly the
+// drift that left one install reporting 1.0.8-1 to pacman while running 1.0.18.
+//
+// The outcome is made VISIBLE rather than assumed: the registry's own sentence goes to the app's
+// update log verbatim, whatever it says, and the stamp rides back with the record so a caller (or
+// the published state the window paints) can never report an update whose registry entry silently
+// disagrees. A failed stamp does not block the update — the payload is already the code that will
+// run — it is recorded and surfaced, which is the difference between a defect and a known gap.
+async function activateVersion(){
+ const record=await updater.activateStaged({root:UPDATES,current:VERSION,runtime:RUNTIME,inspect});
+ if(!record)return null;
+ const stamp=await registry.stamp({version:record.version,resources:process.resourcesPath});
+ await updateLog.append({step:'package-registry',outcome:stamp.outcome,version:record.version,note:stamp.sentence});
+ publish({update:{version:record.version,registry:stamp.outcome,sentence:stamp.sentence}});
+ return {...record,registry:stamp};
+}
 async function applyStaged(manual=false){
  if(!updater.staged(UPDATES,{current:VERSION,runtime:RUNTIME}))return false;
  if(!manual&&!await mayRestart())return false;
  if(manual&&win){const result=await dialog.showMessageBox(win,{buttons:['Restart','Cancel'],defaultId:1,cancelId:1,message:'Restart e-server to install the verified update?',detail:'Finish active transfers and save your work first.'});if(result.response!==0)return false;}
- const record=await updater.activateStaged({root:UPDATES,current:VERSION,runtime:RUNTIME,inspect});if(!record)return false;
+ const record=await activateVersion();if(!record)return false;
  quitting=true;restartOnClosed=true;restartingHidden=!!win&&!win.isVisible();
  if(win)win.close();else restart();return true;
 }
@@ -485,7 +510,7 @@ async function checkUpdate(startup=false,manual=false){
    if(startup){setupWindow();publish({phase:'checking',title:'Updating e-server',message:'Checking the latest desktop client.',error:''});}
    await updater.update({current:VERSION,root:UPDATES,runtime:RUNTIME,inspect,apply:false,notify:startup?value=>publish({...value,title:'Updating e-server'}):()=>{}});
    failures=0;
-   if(startup){await updater.activateStaged({root:UPDATES,current:VERSION,runtime:RUNTIME,inspect});quitting=true;restart();return true;}
+   if(startup){await activateVersion();quitting=true;restart();return true;}
    await applyStaged(manual);
   }else if(manual){
    await dialog.showMessageBox(win||setup||undefined,{type:'info',message:'e-server is up to date.',detail:'Installed client: '+VERSION,buttons:['OK']});
@@ -512,6 +537,9 @@ async function start(){
  // keeps the OS answer, which is all anybody can know then.
  themePreference=readThemeCache(THEME_CACHE);
  if(app.isPackaged)app.setAsDefaultProtocolClient('e-server');
+ // The updater's own failure record: one bounded line per failed check or download, in the same log
+ // the registry stamp writes to (desktop/registry.cjs UpdateLog).
+ updater.setFailureLog(updateLog);
  Menu.setApplicationMenu(null);
  try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open e-server',click:show},{label:'Change server…',click:changeServer},{label:'Sign out of Easter Company',click:()=>void signOutCompany()},{type:'separator'},{label:'Cancel sign-in',click:()=>{company?.cancel();void cancelSignIn();}},{label:'Check for updates',click:()=>void checkUpdate(false,true)},{label:'Restart to apply update',click:()=>void applyStaged(true)},{type:'separator'},{label:'Quit',click:()=>{quitting=true;app.quit();}}]));tray.on('click',show);}catch{}
  ipcMain.handle('client:state',event=>{local(event);return state;});

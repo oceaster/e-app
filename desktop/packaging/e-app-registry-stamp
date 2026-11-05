@@ -1,0 +1,194 @@
+#!/bin/sh
+# e-app-registry-stamp <X.Y.Z> — tell the OS package registry which version this install runs.
+#
+# WHY THIS EXISTS. The e-server client updates itself: desktop/updater.cjs verifies a payload,
+# writes ~/.config/Easter Company/e-server-client/updates/current.json, and desktop/bootstrap.cjs
+# loads that payload as the app path on the next start. The package manager never hears about it,
+# so one install ends up telling three different stories — measured on this machine 2026-11-05:
+#   pacman -Q e-app                     -> e-app 1.0.8-1   (/var/lib/pacman/local/e-app-1.0.8-1)
+#   the installed /opt/e-server/resources/app.asar -> 1.0.14
+#   the running client (current.json, footer)      -> 1.0.18
+# Anybody reading the registry (an operator, `pacman -Q`, a support script, an upgrade check) is
+# told a version that is not running. This helper is the one small thing that can write the truth.
+#
+# IT IS ROOT, IT IS NARROW, AND IT IS DUMB ON PURPOSE. It takes exactly one strict X.Y.Z argument,
+# it touches exactly one entry whose own %NAME% says `e-app`, and it prints exactly one sentence
+# naming what it changed. Activation (desktop/main.cjs, `activateVersion`) calls it through
+# desktop/registry.cjs with the version it just activated; the privilege is the polkit rule that
+# ships beside this file (49-e-app-registry-stamp.rules), so it never prompts the player.
+#
+#   pacman: rename /var/lib/pacman/local/e-app-<ver>-<rel> and rewrite %VERSION% in its desc.
+#           The pkgrel is kept from the entry that is there (the argument is X.Y.Z only).
+#   dpkg:   rewrite the Version: field of the e-app stanza in /var/lib/dpkg/status.
+#   anything else (AppImage, a dev run, no registry): a NAMED no-op, exit 10, not a failure.
+#
+# IT IS IDEMPOTENT: a second run with the same version writes nothing and says so. IT IS
+# CONSERVATIVE: an entry that is not e-app, a second entry that already occupies the target name, a
+# registry we cannot parse — all refuse and leave the tree exactly as it was (a desc rewrite is
+# staged in the entry's own directory and the directory rename happens after it, with the entry
+# copied aside first so a failed rename puts the desc back).
+#
+# E_APP_REGISTRY_ROOT overrides the root the registry is read from ("/" by default) so the helper's
+# own tests drive a TEMPORARY fixture tree instead of the machine: the pacman database is
+# $E_APP_REGISTRY_ROOT/var/lib/pacman/local and the dpkg status file is
+# $E_APP_REGISTRY_ROOT/var/lib/dpkg/status. This override cannot be reached by a player through the
+# shipped privilege: pkexec scrubs the environment, so the root helper only ever sees the real "/".
+#
+# STDOUT is always exactly one sentence (success, no-op or refusal alike) so the caller can record
+# it verbatim. Exit codes are the verdict the caller switches on:
+#   0   the registry now reports this version (renamed/written, or it already did)
+#   10  named no-op: no e-app registry entry on this machine
+#   11  refused: not that entry (wrong %NAME%, ambiguous, conflicting target, no %VERSION%)
+#   12  refused: bad invocation (not exactly one argument, not a strict X.Y.Z)
+#   13  failed: the write did not complete and the registry was left as it was
+set -u
+
+NAME=e-app
+ROOT=${E_APP_REGISTRY_ROOT:-/}
+case "$ROOT" in
+ /*) ;;
+ *) printf '%s\n' "Refusing to stamp: E_APP_REGISTRY_ROOT must be an absolute path, not '$ROOT'."
+    exit 12 ;;
+esac
+[ "$ROOT" = / ] || ROOT=${ROOT%/}
+PACMAN_LOCAL=$ROOT/var/lib/pacman/local
+DPKG_STATUS=$ROOT/var/lib/dpkg/status
+
+say(){ printf '%s\n' "$1"; }
+
+if [ "$#" -ne 1 ]; then
+ say "Refusing to stamp: expected exactly one strict X.Y.Z version argument, got $#."
+ exit 12
+fi
+VERSION=$1
+if ! printf '%s\n' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+ say "Refusing to stamp: '$VERSION' is not a strict X.Y.Z version."
+ exit 12
+fi
+
+# ---- pacman ---------------------------------------------------------------------------------
+# The local database holds one directory per installed package, named <pkgname>-<pkgver>-<pkgrel>,
+# and a `desc` file inside it. %VERSION% is the pkgver-pkgrel pair; the pkgrel is not part of the
+# argument, so it is carried over from the entry being corrected (1.0.8-1 -> 1.0.18-1).
+entries=
+for candidate in "$PACMAN_LOCAL/$NAME"-*; do
+ [ -d "$candidate" ] || continue
+ entries="$entries $candidate"
+done
+set -- $entries
+count=$#
+
+if [ "$count" -gt 0 ]; then
+ if [ "$count" -gt 1 ]; then
+  say "Refusing to stamp: $count pacman entries under $PACMAN_LOCAL claim $NAME, and this helper changes one unambiguous entry."
+  exit 11
+ fi
+ dir=$1
+ if [ ! -f "$dir/desc" ]; then
+  say "Refusing to stamp $dir: there is no desc file, so this is not a pacman entry this helper understands."
+  exit 11
+ fi
+ declared=$(awk '$0=="%NAME%"{getline;print;exit}' "$dir/desc")
+ if [ "$declared" != "$NAME" ]; then
+  say "Refusing to stamp $dir: that entry declares the package name '$declared', not $NAME."
+  exit 11
+ fi
+ current=$(awk '$0=="%VERSION%"{getline;print;exit}' "$dir/desc")
+ if [ -z "$current" ]; then
+  say "Refusing to stamp $dir: its desc has no %VERSION% field, so there is nothing to correct."
+  exit 11
+ fi
+ rel=1
+ case "$current" in
+  *-*) rel=${current##*-} ;;
+ esac
+ case "$rel" in
+  ''|*[!0-9]*) rel=1 ;;
+ esac
+ target=$VERSION-$rel
+ if [ "$current" = "$target" ]; then
+  say "$NAME's pacman entry already reports $target; nothing to change."
+  exit 0
+ fi
+ want=$PACMAN_LOCAL/$NAME-$VERSION-$rel
+ if [ "$want" != "$dir" ] && [ -e "$want" ]; then
+  say "Refusing to stamp $dir: $want already exists, so this entry cannot be renamed onto it."
+  exit 11
+ fi
+ # Write the new desc INSIDE the entry's own directory (same filesystem, so the replace is one
+ # rename), keeping the entry aside: if the directory rename then fails, the desc goes back.
+ staged=$dir/.desc.e-app-registry-stamp
+ if ! awk -v new="$target" '$0=="%VERSION%"{print;getline;print new;next}{print}' "$dir/desc" > "$staged" 2>/dev/null; then
+  rm -f "$staged"
+  say "Refusing to stamp $dir: its desc could not be rewritten, so the registry was left as it was."
+  exit 13
+ fi
+ if ! chmod 644 "$staged" || ! mv -f "$staged" "$dir/desc"; then
+  rm -f "$staged"
+  say "Refusing to stamp $dir: its desc could not be replaced, so the registry was left as it was."
+  exit 13
+ fi
+ if ! mv "$dir" "$want"; then
+  # Put the old value back: the entry must never carry a name and a version that disagree.
+  awk -v old="$current" '$0=="%VERSION%"{print;getline;print old;next}{print}' "$dir/desc" > "$dir/.desc.e-app-registry-stamp" 2>/dev/null &&
+   chmod 644 "$dir/.desc.e-app-registry-stamp" && mv -f "$dir/.desc.e-app-registry-stamp" "$dir/desc"
+  rm -f "$dir/.desc.e-app-registry-stamp"
+  say "Refusing to stamp $dir: the entry could not be renamed to $want, so the registry was left as it was."
+  exit 13
+ fi
+ say "$NAME's pacman entry now reports $target (was $current)."
+ exit 0
+fi
+
+# ---- dpkg -----------------------------------------------------------------------------------
+# /var/lib/dpkg/status is a stack of blank-line-separated stanzas; the e-app one is the stanza
+# whose `Package:` field is e-app, and only its `Version:` line is rewritten. Everything else in
+# the file (other packages, their fields, their order) survives byte for byte.
+if [ -f "$DPKG_STATUS" ] && awk 'BEGIN{RS="";FS="\n"} {for(i=1;i<=NF;i++) if($i=="Package: e-app") found=1} END{exit found?0:1}' "$DPKG_STATUS"; then
+ current=$(awk 'BEGIN{RS="";FS="\n"} {for(i=1;i<=NF;i++) if($i=="Package: e-app") for(j=1;j<=NF;j++) if(index($j,"Version: ")==1){print substr($j,10);exit}}' "$DPKG_STATUS")
+ if [ -z "$current" ]; then
+  say "Refusing to stamp $DPKG_STATUS: the $NAME stanza has no Version: field, so there is nothing to correct."
+  exit 11
+ fi
+ if [ "$current" = "$VERSION" ]; then
+  say "$NAME's dpkg entry already reports $VERSION; nothing to change."
+  exit 0
+ fi
+ # The stanza separator is reproduced exactly as the file had it: dpkg installs end after the last
+ # field with one newline, but some tools write a trailing blank line, and this rewrite must not
+ # change a single byte other than the Version value.
+ lastbyte=$(tail -c 1 "$DPKG_STATUS" | od -An -tu1 | tr -d ' \n')
+ prevbyte=$(tail -c 2 "$DPKG_STATUS" | head -c 1 | od -An -tu1 | tr -d ' \n')
+ suffix='\n'
+ if [ "$lastbyte" = 10 ] && [ "$prevbyte" = 10 ]; then suffix='\n\n'; fi
+ staged=$DPKG_STATUS.e-app-registry-stamp
+ if ! awk -v new="$VERSION" -v tail="$suffix" '
+  BEGIN{RS="";FS="\n"}
+  {
+   own=0; seen=0; out=""
+   for(i=1;i<=NF;i++) if($i=="Package: e-app") own=1
+   for(i=1;i<=NF;i++){
+    if(i>1) out=out "\n"
+    if(own&&index($i,"Version: ")==1){out=out "Version: " new;seen=1}else out=out $i
+   }
+   if(own&&!seen) exit 3
+   if(NR>1) printf "\n\n"
+   printf "%s", out
+  }
+  END{printf "%s", tail}' "$DPKG_STATUS" > "$staged" 2>/dev/null; then
+  rm -f "$staged"
+  say "Refusing to stamp $DPKG_STATUS: it could not be rewritten, so the registry was left as it was."
+  exit 13
+ fi
+ if ! chmod 644 "$staged" || ! mv -f "$staged" "$DPKG_STATUS"; then
+  rm -f "$staged"
+  say "Refusing to stamp $DPKG_STATUS: it could not be replaced, so the registry was left as it was."
+  exit 13
+ fi
+ say "$NAME's dpkg entry now reports $VERSION (was $current)."
+ exit 0
+fi
+
+# ---- neither: a named no-op ----------------------------------------------------------------
+say "No $NAME entry exists under $PACMAN_LOCAL or in $DPKG_STATUS, so there is nothing to stamp."
+exit 10

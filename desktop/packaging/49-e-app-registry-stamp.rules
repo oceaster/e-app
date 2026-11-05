@@ -1,0 +1,22 @@
+// The privilege the e-server client's update needs, and the whole of it.
+//
+// desktop/main.cjs stamps the OS package registry at the one moment a version becomes real
+// (desktop/registry.cjs -> desktop/packaging/e-app-registry-stamp). That helper writes
+// /var/lib/pacman/local or /var/lib/dpkg/status, so it needs root — and it must not put a password
+// prompt in front of a player during an update, which is why this rule allows exactly one program
+// path to be run as root through pkexec and nothing else.
+//
+// It is installed BY THE PACKAGE, not by the app at runtime: electron-builder's fpm targets
+// (pacman, deb) are told to put this file where polkit reads rules — see the `fpm` mapping in
+// package.json. When it is not installed, desktop/registry.cjs detects its absence in
+// RULE_DIRS and records that the registry was NOT stamped; it never attempts the call blindly
+// and never prompts (the update path must not become a dialogue).
+//
+// `subject.local && subject.active` keeps the grant to a local desktop session: a remote or
+// inactive session asking for this program gets polkit's normal answer instead of root.
+polkit.addRule(function (action, subject) {
+  if (action.id !== 'org.freedesktop.policykit.exec') return;
+  if (action.lookup('program') !== '/opt/e-server/resources/e-app-registry-stamp') return;
+  if (!subject.local || !subject.active) return;
+  return polkit.Result.YES;
+});
