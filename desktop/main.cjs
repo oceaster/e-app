@@ -556,7 +556,13 @@ async function start(){
  // A window that has the person's attention again asks whether the account document changed (a
  // save in e-server's settings panel). Read-only and bounded by THEME_REFRESH_MIN_MS; it answers
  // the preference the window is already wearing and repaints through `client:state`.
- ipcMain.handle('client:theme-refresh',event=>{local(event);void readAccountTheme();return {ok:true,theme:themePreference||''};});
+ //
+ // IT REPUBLISHES AS IT ANSWERS, which is not redundant: a publish is a broadcast, and a window
+ // that is still loading can miss the one that carried the theme (the trap setupWindow's own
+ // did-finish-load handler documents). A window that has just asked is listening by definition,
+ // so this closes the window where a theme read landing during load painted the OS answer for
+ // ever. The read's own publish still covers an answer that arrives later.
+ ipcMain.handle('client:theme-refresh',event=>{local(event);void readAccountTheme();publish({});return {ok:true,theme:themePreference||''};});
  ipcMain.handle('client:installer',event=>{local(event);return shell.openExternal(installer);});
  ipcMain.handle('client:external',(event,value)=>{remote(event);return openExternal(value);});
  ipcMain.handle('client:provider',(event,value)=>{remote(event);externalAuth=true;return openExternal(value);});

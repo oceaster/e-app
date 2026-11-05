@@ -270,3 +270,8 @@ $('retry').onclick=()=>bridge.retry();$('installer').onclick=()=>bridge.download
 // attention. The main process bounds how often it will ask (THEME_REFRESH_MIN_MS), and the answer
 // arrives on the usual `client:state` channel, so nothing here knows what the answer will be.
 window.addEventListener('focus',()=>{void bridge.themeRefresh?.().catch(()=>{});});
+// AND ONCE WHEN THIS DOCUMENT HAS RENDERED ITS FIRST STATE, for the same reason: `bridge.state()`
+// can be answered a moment before the account's theme has been read, and the publish that then
+// carries it can land before this window is listening. Asking again republishes the state to a
+// window that is listening by definition, so the correction is never lost between the two.
+bridge.state().then(()=>{void bridge.themeRefresh?.().catch(()=>{});}).catch(()=>{});
