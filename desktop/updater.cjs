@@ -216,4 +216,10 @@ async function activateStaged({root,runtime,current,platform=process.platform,ar
  return {...manifest,file};
 }
 
-module.exports={update,selected,staged,activateStaged,validate,compare,version,identifies,PAYLOAD_NAMES};
+// `setFailureLog` is here because main.cjs calls it: the bound line log an update failure writes to
+// was documented at its definition and never reachable from outside this file, so main.cjs's
+// `updater.setFailureLog(updateLog)` threw on the first line of start() and the app answered with an
+// error modal instead of its window (measured 2026-11-05, and it stopped an e-server deploy whose
+// gate launches this tree). tests/updater-surface.test.cjs now holds this list to every member
+// main.cjs and bootstrap.cjs reach for, so a missing export fails the suite instead of the product.
+module.exports={update,selected,staged,activateStaged,validate,compare,version,identifies,setFailureLog,PAYLOAD_NAMES};
