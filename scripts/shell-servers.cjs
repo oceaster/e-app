@@ -77,6 +77,15 @@ async function shot(name){
 app.whenReady().then(async()=>{
  nativeTheme.themeSource='dark';
  ipcMain.handle('client:state',()=>state);
+ // THE THEME SEAM, answered the way desktop/main.cjs answers it (ticket c28be1de). The shell's
+ // preload reads the cached preference SYNCHRONOUSLY (`ipcRenderer.sendSync('theme:cached')`) so
+ // the first paint can already wear it, and a `sendSync` with no listener does not fail - it
+ // BLOCKS the renderer for ever. That is what happened here: client-v1.0.18's first release run
+ // sat on "Exercise the packaged first screen on Linux" until it was cancelled, and this gate
+ // printed "called ipcRenderer.sendSync() with 'theme:cached' channel without listeners".
+ // A stub that answers the channels the real main registers is the whole contract of this file.
+ ipcMain.on('theme:cached',event=>{event.returnValue='system';});
+ ipcMain.handle('client:theme-refresh',()=>({ok:true,theme:'system'}));
  ipcMain.handle('client:view',(event,value)=>{calls.push(['view',value]);state={...state,view:value};publish();return state;});
  ipcMain.handle('client:servers-refresh',()=>{calls.push(['refresh']);return {ok:true};});
  ipcMain.handle('client:servers-add',async(event,payload)=>{
