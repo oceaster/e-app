@@ -90,12 +90,14 @@
     },
   };
 
-  // THE OS IS FOLLOWED LIVE, and only when the account said `system`: an account saved on `dark`
-  // must not be repainted light by a machine that changes its appearance underneath it.
+  // THE OS IS FOLLOWED LIVE while the OS is what this window is wearing: the account said
+  // `system`, or the account has not answered yet (no cache, no session - the OS answer is the
+  // whole truth then, and a machine that changes its appearance underneath it should be obeyed).
+  // An account saved on `light` or `dark` is never repainted by a machine: that is the rule.
   try {
     var query = window.matchMedia && window.matchMedia(LIGHT_QUERY);
     var follow = function () {
-      if (preference === 'system') paint(preference);
+      if (preference === null || preference === 'system') paint(preference);
     };
     if (query) {
       if (typeof query.addEventListener === 'function') query.addEventListener('change', follow);
