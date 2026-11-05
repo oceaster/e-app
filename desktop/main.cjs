@@ -42,7 +42,7 @@ let activeSession=null;
 let idleLock=null,idleTimer=null,idleCookieListener=null,buildWatch=null;
 //: The account's theme preference ('light'|'dark'|'system'|null), read from the account document
 //: and cached under the app's own config directory - see the theme block below and desktop/theme.cjs.
-let themePreference=null,themeReadAt=0,themeReading=null;
+let themePreference=null,themeRefreshAt=0,themeReading=null;
 const THEME_CACHE=path.join(HOME,THEME_CACHE_FILE);
 //: How often a window that regains focus may re-read the account document. A save in e-server's
 //: settings panel is made on another surface, so the shell asks again when it is looked at - but a
@@ -171,8 +171,11 @@ function themeClient(){
 function readAccountTheme({force=false}={}){
  if(!company?.authorized()||!accountsOrigin)return Promise.resolve(themePreference);
  if(themeReading)return themeReading;
- if(!force&&Date.now()-themeReadAt<THEME_REFRESH_MIN_MS)return Promise.resolve(themePreference);
- themeReadAt=Date.now();
+ // The bound is the FOCUS path's, not the account's: a sign-in always asks (there is nothing
+ // more certainly new than the document of the person who just signed in), and a window that
+ // comes back into the light asks at most once per THEME_REFRESH_MIN_MS.
+ if(!force&&Date.now()-themeRefreshAt<THEME_REFRESH_MIN_MS)return Promise.resolve(themePreference);
+ if(!force)themeRefreshAt=Date.now();
  themeReading=(async()=>{
   try{
    const answer=await bounded(themeClient().read(),SERVER_LIST_WATCHDOG_MS,'The account theme');
