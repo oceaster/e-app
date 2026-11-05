@@ -115,7 +115,17 @@ test('the cache is written 0600 in its own directory and read back synchronously
   assert.equal(readCache(file),null,'no cache is not an error: it is a first launch');
   assert.equal(await writeCache(file,'dark'),true);
   assert.equal(readCache(file),'dark');
-  assert.equal(fs.statSync(file).mode&0o777,0o600,'the cached theme is private to this account');
+  // THE MODE IS A POSIX FACT, NOT A PORTABLE ONE. On NTFS Node reports a fixed mode for every
+  // file, so asserting 0600 there can only fail the Windows runner for a permission the writer
+  // DOES ask for (the `mode: 0o600` in `writeCache`) — measured on client-v1.0.18's first run:
+  // 89 pass, 1 fail, "the cached theme is private to this account". What is portable is checked
+  // on every platform; the mode is checked where the platform has one.
+  if(process.platform==='win32'){
+   assert.equal(fs.existsSync(file),true,'the cache exists in its own directory on every platform');
+   console.log('  (the 0600 mode is not observable on NTFS; the writer asks for it and POSIX checks it)');
+  }else{
+   assert.equal(fs.statSync(file).mode&0o777,0o600,'the cached theme is private to this account');
+  }
   // A file the next launch cannot trust is the OS answer, never a crash on the way to painting.
   fs.writeFileSync(file,'{ not json');
   assert.equal(readCache(file),null);
