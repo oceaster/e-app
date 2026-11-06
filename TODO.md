@@ -26,12 +26,14 @@ leaves the page. `npm test`: 104 pass.
 
 STILL OWED:
 
-- **The picture was synthetic in every run so far.** The deployed e-server (0.13.4) still records
-  the machine's own webcam, and `/dev/video0` is exclusively held by its ffmpeg — so the journey ran
-  with `--fake-camera`. The deploy that frees the device (e-server `b09975d93f`, "the webcam and
-  both display captures leave the source table") is merged on main but has not deployed cleanly
-  yet (0.14.0 failed its gates 20:12Z). Re-run `xvfb-run -a node scripts/live-feeds-e2e.cjs` with NO
-  flags once it has: that is the run that shows Owen's own camera.
+- **DONE 2026-11-06, after e-server 0.14.0 landed:** the physical camera is measured, dev build and
+  packaged build, with no flags. `track-label: HD Pro Webcam C920` (real UVC capabilities:
+  colorTemperature 2705, exposureTime 333, pan/tilt/zoom, 30 fps rails), and the segments carry
+  9851 and 9047 bytes per frame where the synthetic stream carried 2206 and 2489 — the size
+  difference is the sensor's own noise. Segments: `u2-<device>-1_00000.mkv`, 59104 and 54280 bytes,
+  h264 High 640x480 yuvj420p 15/1, 6 frames, decode pass clean. Before that deploy the same journey
+  could only use `--fake-camera`, because the deployed 0.13.4 held `/dev/video0` exclusively through
+  its own ffmpeg (pid 2350, a child of `e-server.service`).
 - **Audio is still video-only.** The server's segment muxer encodes `-an`
   (`e_server/streaming/client_feed.py`), so the client proves the microphone's permission and then
   releases it rather than holding a device open for a stream nobody records. When the server accepts
