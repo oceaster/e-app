@@ -62,13 +62,6 @@ const OPERATIONS={
  '/v2/accounts/emails':{repeat:true,kind:'read',budgetMs:READ_RETRY_BUDGET_MS,why:'a read: it changes nothing server side'},
  '/v2/game/status':{repeat:true,kind:'read',budgetMs:READ_RETRY_BUDGET_MS,why:'a read: it changes nothing server side, and a bounce is not an answer about the server'},
  '/v2/accounts/username/available':{repeat:true,kind:'read',budgetMs:READ_RETRY_BUDGET_MS,why:'a question about a name: it writes nothing'},
- // Not a request for an answer but a request for the service to STOP being cold: one
- // statement against a paused cluster, two words back. It writes nothing, so repeating it is
- // free, and the server bounds it per client anyway (six per ten minutes, then 429). Five
- // seconds is the window a deliberate attempt would be given, and it is the same ceiling
- // wake() puts on its own call - nothing waits on a wake today, because the seam fires it and
- // forgets it, so the declared budget documents the ceiling rather than a retry ladder.
- '/v2/accounts/wake':{repeat:true,kind:'read',budgetMs:5000,why:'one statement against a paused cluster and two words back: it writes nothing, and the service rate-limits it per client'},
  // The Community store's own three routes (desktop/store.cjs). The two reads share the store's
  // shorter window, for the reason beside that constant. The checkout is a WRITE and stays on the
  // rule every write is on: it creates a Stripe Checkout Session, a lost answer may have created
@@ -494,22 +487,6 @@ class AccountClient{
  async me(token,signal){
   const found=await this.attempt('/v2/accounts/me',{token,signal});
   return sanitizeAccount(found?.account);
- }
- // Wake the account service before asking it anything. Aurora auto-pauses after five quiet
- // minutes and the first request after that pays the whole 18-20 s resume - measured
- // 2026-10-28: GET /v2/accounts/me 20.11 s paused against 0.32-0.40 s warm, and the visitor
- // who suffers most is the returning one, who never presses Sign in. This starts that
- // resume while the page is still painting.
- //
- // Deliberately not an `attempt`: it is fired and forgotten, it must never reject, it
- // carries no credential (the visitor about to sign in has none), and its answer is
- // discarded. A 429 means this browser already woke something inside its own window, which
- // is the rate limit working, not a failure. Cost when the cluster is awake is nothing;
- // when paused, one resume (~$0.03-0.04) that the page needed anyway.
- async wake(){
-  try{
-   await this.call('/v2/accounts/wake',{method:'POST',timeout:Math.min(this.timeout,5000)});
-  }catch{/* the wake is an optimisation: never a reason to fail anything */}
  }
  // The player's own verified addresses, and the one the account service signs them in
  // with. Owner-only: the call carries the Company session and no account handle, and its
