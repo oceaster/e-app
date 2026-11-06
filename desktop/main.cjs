@@ -1,6 +1,6 @@
 'use strict';
 const {app,BrowserWindow,Menu,Tray,ipcMain,shell,dialog,session,safeStorage,desktopCapturer,nativeTheme}=require('electron');
-const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto'),https=require('node:https');
+const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto'),https=require('node:https'),os=require('node:os');
 const {pathToFileURL}=require('node:url');
 const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trusted,localFrame,updateLevel,relaunchOptions}=require('./security.cjs');
 const updater=require('./updater.cjs');
@@ -8,6 +8,7 @@ const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {loadServerPage}=require('./navigation.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
+const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
@@ -49,6 +50,30 @@ const THEME_CACHE=path.join(HOME,THEME_CACHE_FILE);
 //: focus is not a reason to ask a service a question it answered a moment ago.
 const THEME_REFRESH_MIN_MS=30000;
 let company=null,windowAccount=null,pendingLink=null;
+// ── THIS INSTALL'S OWN IDENTITY, AND ITS CAMERA'S PERMISSION ──────────────────────────────────
+// Owen, 2026-11-06: "Each client connected to an e-server instance MUST access it's web camera and
+// create a stream on the e-server security dashboard ... I can then also login on a secondary
+// client in parallel with another camera". So the e-server's publish socket needs a device id that
+// is STABLE for this installation and UNIQUE between one person's machines: generated once, kept
+// under the app's own config directory, and never anything the account or the operating system
+// hands out - a hostname is not an identity (two machines can share one) and an account name is
+// not a device (one person has several). `device_name` is a LABEL the dashboard prints and the
+// server never keys on, so the hostname is fine there.
+const DEVICE_FILE=path.join(HOME,'device.json');
+let deviceIdentity=null,deviceReading=null;
+//: The answer the person gave to this app's own camera/microphone question, per channel, for the
+//: CURRENT connection. `null` means "not asked yet" — never "denied" — because a permission nobody
+//: requested must not be reported or remembered as a refusal.
+let mediaGrant={camera:null,microphone:null},mediaAsking=null;
+//: The one live publisher for this connection (desktop/live-feed.cjs). Its life is a SOCKET's life:
+//: one per connected document, ended when that document goes away, so every reconnect is a new
+//: epoch by construction. `feedGrabs` holds the frame requests waiting on the renderer, and
+//: `feedAnswer` the one waiting on the permission answer.
+let feed=null,feedWindow=null,feedAnswer=null;
+const feedGrabs=new Map();
+//: What the publisher in the connected window last told this process (desktop/live-feed.cjs), kept
+//: so the app's own log and a diagnostic can answer "is the feed up, and did the server refuse it".
+let feedStatus={state:'idle',origin:'',epoch:'',frames:0,camera:'',microphone:'',error:null};
 const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!updater.identifies(pkg,manifest))throw Error('Invalid e-server client update.');};
 if(!app.requestSingleInstanceLock()){app.quit();}else{
  app.on('second-instance',(_,argv)=>{const link=argv.find(v=>v.startsWith('e-server:'));if(link)void receiveLink(link);else show();});
@@ -339,6 +364,157 @@ async function afterCompany(){
  await openServers();
 }
 async function save(){await fs.mkdir(HOME,{recursive:true,mode:0o700});const tmp=path.join(HOME,'settings-'+crypto.randomUUID()+'.tmp');await fs.writeFile(tmp,JSON.stringify(config),{mode:0o600});await fs.rename(tmp,path.join(HOME,'settings.json'));}
+// ── this install's device identity (see DEVICE_FILE above) ─────────────────────────────────────
+// GENERATED ONCE, KEPT FOREVER, and handed to the publisher in the connected window: a reconnect, a
+// restart and a release all keep the same id, so the dashboard groups this machine under its
+// person and never mistakes it for a different client. A file that cannot be written still yields
+// an identity for this run (an unwritable HOME must not mean "no feed"), it is just not stable.
+// ── THE LIVE USER FEED: one socket per connected document ────────────────────────────────────
+// Owen, 2026-11-06. The socket lives HERE because this process owns the connection and holds the
+// session: the server resolves the account from the `sec_session` cookie on the upgrade itself, and
+// this is the one place that cookie is already in hand (the app's own cookie jar, for the server
+// this window is on). The DEVICE stays in the renderer — it is the only process with a camera —
+// and the two halves talk through four messages: state, grab, frame, gone.
+//
+// A DOCUMENT IS AN EPOCH. The feed starts when the connected window finishes loading a document and
+// stops when that document navigates away or the window closes, so a reload (the PIN gate handing
+// over to the real page) is a new socket and therefore a new epoch, and no report from the old one
+// can be applied to the new one.
+const MEDIA_ANSWER_TIMEOUT_MS=120000;   // a person may look at the question for a while
+const FRAME_TIMEOUT_MS=5000;            // one tick's answer: a slow renderer drops a frame
+
+/** A WebSocket factory that presents the connection's own PIN session cookie on the upgrade. */
+function feedSocket(cookie){
+ return function(url){
+  // Electron 44's WebSocket (undici) takes the handshake's headers as its second argument, which is
+  // what lets the socket present a cookie that belongs to the app's jar rather than the page's.
+  return new WebSocket(url,{headers:cookie?{Cookie:'sec_session='+cookie}:{}});
+ };
+}
+async function sessionCookie(){
+ try{
+  if(!activeSession||!config.server)return '';
+  const rows=await activeSession.cookies.get({name:'sec_session',url:config.server});
+  return rows&&rows[0]?String(rows[0].value||''):'';
+ }catch{return '';}
+}
+function tellFeed(window,channel,...args){try{if(window&&!window.isDestroyed())window.send(channel,...args);}catch{}}
+/** Resolve the one pending camera question with an answer (or with nothing, when it is dropped). */
+function answerStates(states){
+ const pending=feedAnswer;
+ feedAnswer=null;
+ if(!pending)return;
+ clearTimeout(pending.timer);
+ pending.resolve(states&&typeof states==='object'?states:{});
+}
+/** The renderer's answer to the camera question; no answer leaves both channels where they are. */
+function rendererStates(window){
+ return new Promise(resolve=>{
+  if(!window||window.isDestroyed())return resolve({});
+  const pending={resolve,timer:null};
+  pending.timer=setTimeout(()=>{
+   if(feedAnswer===pending)feedAnswer=null;
+   resolve({});
+  },MEDIA_ANSWER_TIMEOUT_MS);
+  if(pending.timer.unref)pending.timer.unref();
+  feedAnswer=pending;
+  tellFeed(window,'client:feed-begin');
+ });
+}
+/** One frame from the renderer, or null: the request answers once and every wait is bounded. */
+function rendererFrame(window){
+ return new Promise(resolve=>{
+  if(!window||window.isDestroyed())return resolve(null);
+  const id=crypto.randomUUID();
+  const timer=setTimeout(()=>{feedGrabs.delete(id);resolve(null);},FRAME_TIMEOUT_MS);
+  if(timer.unref)timer.unref();
+  feedGrabs.set(id,frame=>{clearTimeout(timer);resolve(frame);});
+  tellFeed(window,'client:feed-grab',id);
+ });
+}
+async function startFeed(window){
+ if(!window||window.isDestroyed()||win!==window)return;
+ if(!config.server)return;
+ let url='';try{url=new URL(window.webContents.getURL()).origin;}catch{return;}
+ if(url!==config.server)return;                    // about:blank, the PIN gate's redirect target
+ stopFeed('a new document is publishing');
+ const identity=await device();
+ if(!String(identity.id||'').trim()){console.log('[live-feed] no device identity for this install; not publishing');return;}
+ const cookie=await sessionCookie();
+ if(!cookie)console.log('[live-feed] this window has no signed-in session on '+config.server+' yet; the server will refuse the socket until it does');
+ feedWindow=window;
+ feed=new LiveFeed({
+  origin:config.server,
+  device:{id:String(identity.id||''),name:String(identity.name||'')},
+  capture:{
+   begin:()=>rendererStates(window),
+   grab:()=>rendererFrame(window),
+   end:()=>{answerStates({});tellFeed(window,'client:feed-stop');},
+  },
+  WebSocketImpl:feedSocket(cookie),
+  // The app's own log, one prefix for every line the publisher writes: a refusal, a reconnect and
+  // a dropped frame are all findable beside the app's other lines, and none of them is chrome.
+  log:line=>console.log(String(line).startsWith('[live-feed]')?String(line):'[live-feed] '+String(line)),
+  status:value=>{feedStatus={...feedStatus,...value};},
+ });
+ feed.start();
+}
+function stopFeed(reason){
+ const current=feed;
+ feed=null;feedWindow=null;
+ answerStates({});
+ for(const [,answer] of feedGrabs){try{answer(null);}catch{}}
+ feedGrabs.clear();
+ if(!current)return;
+ try{current.stop(reason||'the connection ended');}catch{}
+}
+async function device(){
+ if(deviceIdentity)return deviceIdentity;
+ if(!deviceReading){
+  deviceReading=(async()=>{
+   try{
+    const stored=JSON.parse(await fs.readFile(DEVICE_FILE,'utf8'));
+    if(stored&&typeof stored.id==='string'&&stored.id.trim()){
+     return {id:stored.id.trim().slice(0,120),name:String(stored.name||'').slice(0,120)||label()};
+    }
+   }catch{/* no identity yet: this is the first launch, or the file was removed */}
+   const name=label();
+   const record={id:crypto.randomUUID(),name};
+   try{
+    await fs.mkdir(HOME,{recursive:true,mode:0o700});
+    const tmp=path.join(HOME,'device-'+crypto.randomUUID()+'.tmp');
+    await fs.writeFile(tmp,JSON.stringify(record),{mode:0o600});
+    await fs.rename(tmp,DEVICE_FILE);
+   }catch(error){console.log('[live-feed] this install\'s device id could not be stored: '+sentence(error));}
+   return record;
+  })().then(record=>{deviceIdentity=record;return record;},()=>({id:crypto.randomUUID(),name:label()}));
+  deviceReading.finally(()=>{deviceReading=null;});
+ }
+ return deviceReading;
+}
+/** The label the dashboard prints for this machine. A label is never a key (server side: device_id is). */
+function label(){const name=String(os.hostname()||'').trim().slice(0,120);return name||'Desktop client';}
+// ── THE QUESTION THIS APP ASKS ITS OWN PERSON ─────────────────────────────────────────────────
+// PERMISSION IS ASKED, NEVER ASSUMED, and it is asked by the APPLICATION rather than by the page:
+// the publisher in the connected window (desktop/preload.cjs) asks through this door, and the answer
+// is what the session's media permission checks are then answered from — so one question stands for
+// one connection instead of one question per getUserMedia call. `null` means "not asked", which is
+// not "denied": a channel nobody answered is reported to the e-server as `pending`, never denied.
+function askMedia(){
+ if(mediaGrant.camera!==null&&mediaGrant.microphone!==null)return Promise.resolve({...mediaGrant});
+ if(!mediaAsking){
+  mediaAsking=(async()=>{
+   const choice=await dialog.showMessageBox(win||setup||undefined,{type:'question',buttons:['Allow','Deny'],defaultId:1,cancelId:1,title:'e-server camera and microphone',
+    message:'Allow e-server to use your camera and microphone?',
+    detail:'Your camera becomes a live user feed on '+config.server+', recorded by that server for as long as this window is connected to it.'});
+   const granted=choice.response===0;
+   mediaGrant={camera:granted,microphone:granted};
+   console.log('[live-feed] camera and microphone: '+(granted?'allowed':'denied')+' by the person');
+   return {...mediaGrant};
+  })().catch(()=>({camera:false,microphone:false})).finally(()=>{mediaAsking=null;});
+ }
+ return mediaAsking;
+}
 /** The meaning of a thrown thing, without Electron's "Error invoking remote method" wrapper. */
 const sentence=value=>String(value&&value.message!==undefined?value.message:value??'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
 function local(event){if(!localFrame(event)||event.senderFrame.url!==pathToFileURL(shellFile).href)throw Error('This action is only available in e-server setup.');}
@@ -373,6 +549,9 @@ async function connect(){
  const remembered=persistent();
  const partition=(remembered?'persist:':'')+'server-'+crypto.createHash('sha256').update(config.server+'\0'+company.key()).digest('hex').slice(0,24);
  activeSession=session.fromPartition(partition);
+ // ONE CONNECTION, ONE QUESTION: a different server (or a sign-out and back in) is a different
+ // person-facing situation, and the last connection's camera answer is not carried into it.
+ mediaGrant={camera:null,microphone:null};
  const oldVersion=config.serverVersions?.[config.server];
  if(oldVersion&&updateLevel(oldVersion,VERSION)!=='patch')await activeSession.clearCache();
  if(oldVersion&&updateLevel(oldVersion,VERSION)==='major')await activeSession.clearStorageData();
@@ -386,16 +565,39 @@ async function connect(){
  });
  const complete=details=>requests.delete(details.id);
  activeSession.webRequest.onCompleted(complete);activeSession.webRequest.onErrorOccurred(complete);
- activeSession.setPermissionCheckHandler((contents,permission,origin)=>{
-  if(origin!==config.server)return false;
+ activeSession.setPermissionCheckHandler((contents,permission,origin,details)=>{
+  // `origin` arrives as a URL (Electron states it as the requesting origin, with a trailing
+  // slash), so it is normalised before it is compared with the server this window is on: a raw
+  // string comparison refused every check on the connected server, which is why a page's own
+  // getUserMedia could only ever fail.
+  let from='';try{from=new URL(String(origin)).origin;}catch{from='';}
+  if(from!==config.server)return false;
+  if(permission==='media'){
+   // ONLY AN ANSWER THE PERSON GAVE. `null` is "not asked", so a check that arrives before the
+   // question is refused - the publisher's own flow asks first, then calls getUserMedia.
+   const kind=details&&details.mediaType;
+   if(kind==='video')return mediaGrant.camera===true;
+   if(kind==='audio')return mediaGrant.microphone===true;
+   return mediaGrant.camera===true&&mediaGrant.microphone===true;
+  }
   return permission==='fullscreen'||permission==='clipboard-sanitized-write';
  });
  activeSession.setPermissionRequestHandler(async(contents,permission,answer,details)=>{
   let origin;try{origin=new URL(details.requestingUrl||contents.getURL()).origin;}catch{return answer(false);}
   if(origin!==config.server||!['media','notifications','display-capture','clipboard-sanitized-write','fullscreen'].includes(permission))return answer(false);
   if(['fullscreen','clipboard-sanitized-write'].includes(permission))return answer(true);
-  const choice=await dialog.showMessageBox(win,{type:'question',buttons:['Allow','Deny'],defaultId:1,cancelId:1,title:'e-server permission',message:`Allow your e-server to use ${permission==='media'?'your microphone or camera':permission==='display-capture'?'screen sharing':'notifications'}?`,detail:config.server});
-  if(choice.response===0&&['media','display-capture'].includes(permission))captureGranted=true;
+  if(permission==='media'){
+   // The publisher's question has already been asked (and answered) in this app's own words, so a
+   // media request from the same origin is answered from that answer rather than asking twice.
+   if(mediaGrant.camera!==null||mediaGrant.microphone!==null){
+    const kinds=Array.isArray(details.mediaTypes)?details.mediaTypes:[];
+    const allowed=kinds.length?kinds.every(kind=>kind==='video'?mediaGrant.camera===true:kind==='audio'?mediaGrant.microphone===true:false):mediaGrant.camera===true;
+    return answer(allowed);
+   }
+   return answer((await askMedia()).camera===true);
+  }
+  const choice=await dialog.showMessageBox(win,{type:'question',buttons:['Allow','Deny'],defaultId:1,cancelId:1,title:'e-server permission',message:`Allow your e-server to use ${permission==='display-capture'?'screen sharing':'notifications'}?`,detail:config.server});
+  if(choice.response===0&&['display-capture'].includes(permission))captureGranted=true;
   answer(choice.response===0);
  });
  activeSession.setDisplayMediaRequestHandler(async(request,answer)=>{
@@ -420,11 +622,15 @@ async function connect(){
  current.webContents.on('will-attach-webview',event=>event.preventDefault());
  current.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===config.server)return;}catch{}event.preventDefault();void openExternal(url);});
  current.webContents.on('did-fail-load',(_,code,message,url,mainFrame)=>{if(mainFrame&&code!==-3){publish({phase:'offline',title:'Connection unavailable',message:'Connect to your private network or VPN, then try again.',error:message});setupWindow();current.hide();}});
- current.webContents.on('render-process-gone',()=>{publish({phase:'offline',title:'Your e-server view stopped',message:'Reconnect to restore the server view.',error:''});setupWindow();current.hide();});
+ current.webContents.on('render-process-gone',()=>{stopFeed('the renderer went away');publish({phase:'offline',title:'Your e-server view stopped',message:'Reconnect to restore the server view.',error:''});setupWindow();current.hide();});
  current.once('ready-to-show',()=>{if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});
  current.webContents.on('before-input-event',(event,input)=>{if(input.type==='keyDown'&&(input.control||input.meta)&&input.key===','){event.preventDefault();changeServer();}});
  current.on('close',event=>{if(!quitting&&tray){event.preventDefault();current.hide();}});
- current.on('closed',()=>{if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
+ // EVERY DOCUMENT OF THE CONNECTED WINDOW IS ONE PUBLISHING SESSION: started when it finishes
+ // loading, ended before the next one starts, so a reload is a new socket and a new epoch.
+ current.webContents.on('did-finish-load',()=>{if(win===current)void startFeed(current);});
+ current.webContents.on('did-start-navigation',()=>{if(win===current)stopFeed('the window navigated');});
+ current.on('closed',()=>{if(win===current)stopFeed('the window closed');if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
   config.server=pendingServer;
   // The person chose a server, so the relaunch opens THAT server rather than the list again.
   config.openOnStart=pendingServer;}await save();restart();})().catch(error=>dialog.showErrorBox('Could not restart e-server',error.message));}});
@@ -574,6 +780,29 @@ async function start(){
  ipcMain.handle('client:handoff',(event,next)=>{remote(event);return bindCompanySession(next);});
  ipcMain.handle('client:signout',event=>{remote(event);return endCompanySession();});
  ipcMain.on('client:activity',event=>{try{remote(event);activity=Date.now();idleLock?.activity();}catch{}});
+ // ── the live user feed's three doors (desktop/live-feed.cjs, desktop/preload.cjs) ────────────
+ // All three are `remote(event)`: only the connected server's own main frame, in this window, may
+ // ask for this install's identity, put the permission question, or report what the feed is doing.
+ // None of them takes an argument from the page that names a server, a device or a permission —
+ // the main process already holds all three.
+ ipcMain.handle('client:device',event=>{remote(event);return device();});
+ ipcMain.handle('client:media-ask',event=>{remote(event);return askMedia();});
+ // The renderer's answers to the feed's own two questions, and the last thing a dying document says.
+ // All of them are `remote(event)`: only the connected server's main frame, in this window, may
+ // answer for the camera that window opened.
+ ipcMain.on('client:feed-state',(event,states)=>{try{remote(event);}catch{return;}answerStates(states);});
+ ipcMain.on('client:feed-frame',(event,id,frame)=>{
+  try{remote(event);}catch{return;}
+  const answer=feedGrabs.get(String(id||''));
+  if(!answer)return;
+  feedGrabs.delete(String(id||''));
+  answer(frame?Buffer.from(frame):null);
+ });
+ ipcMain.on('client:feed-gone',event=>{try{remote(event);}catch{return;}stopFeed('the page went away');});
+ // The feed's own status, so a refusal (a `stale_epoch`, a server without the route) is visible in
+ // this app rather than only in a closed socket. `[live-feed]` lines on this process's own console
+ // are the other half; both are the app's log, and neither is chrome in the window.
+ ipcMain.handle('client:feed-status',event=>{remote(event);return feedStatus;});
  ipcMain.on('client:signin-finished',event=>{try{remote(event);externalAuth=false;}catch{}});
  const accounts=await initializeCompany();
  ipcMain.handle('company:login',async(event,identifier,password)=>{local(event);await company.login(identifier,password);await afterCompany();return company.view();});
