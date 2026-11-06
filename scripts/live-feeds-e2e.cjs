@@ -46,6 +46,9 @@ const PACKAGED = process.argv.includes('--packaged');
 //: acceptance is Owen's real webcam, and a run that used this must say so.
 const FAKE_CAMERA = process.argv.includes('--fake-camera');
 const TWO = process.argv.includes('--two');
+//: Answer the camera question with Deny, and assert the server is TOLD that rather than left to
+//: infer it: a denied camera is a state the dashboard prints, never an error and never silence.
+const DENY = process.argv.includes('--deny');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 //: Set when the packaged build needs the fixture's certificate (see the TLS block in the run).
 let TLS_CA = null;
@@ -341,7 +344,7 @@ async function serverWindow(client, origin) {
    // The publisher starts on this document. Ask, then answer the app's own question.
    console.log(`${client.name}: connected; waiting for the app's own camera question`);
    await wait(1500);
-   const answer = await answerPermissionDialog({allow: true});
+   const answer = await answerPermissionDialog({allow: !DENY});
    console.log(`${client.name}: permission dialog ${answer.answered ? 'answered: ' + answer.how : 'NOT FOUND — ' + answer.reason}`);
    const device = JSON.parse(fs.readFileSync(path.join(home, 'config', 'Easter Company', 'e-server-client', 'device.json'), 'utf8'));
    client.device = device;
@@ -350,6 +353,31 @@ async function serverWindow(client, origin) {
 
   // ── the measurement: what the SERVER sees, from the server's own routes ─────────────────
   let feeds = null;
+  if (DENY) {
+   // A DENIED CAMERA IS REPORTED, NOT INFERRED: the feed is connected with nothing to capture, and
+   // the dashboard's tile says so in words of its own.
+   for (let attempt = 0; attempt < 120; attempt++) {
+    const parsed = JSON.parse((await http('GET', origin + '/api/security/live-feeds', {cookie: 'sec_session=' + token})).body.toString('utf8'));
+    feeds = parsed.feeds.filter(feed => feed.camera === 'denied');
+    if (feeds.length) break;
+    await wait(500);
+   }
+   assert.ok(feeds && feeds.length, 'a denied camera must reach the server as `denied`');
+   const feed = feeds[0];
+   console.log(`feed ${feed.feed_id}: camera=${feed.camera} microphone=${feed.microphone} frames=${feed.frames} (denied by the person)`);
+   assert.equal(feed.frames, 0, 'a denied camera produces no frames');
+   assert.equal(feed.state, 'denied', 'and the tile says denied, not live and not an error');
+   const dashboard = (await http('GET', origin + '/dashboard', {cookie: 'sec_session=' + token})).body.toString('utf8');
+   assert.match(dashboard, /data-state="denied"/, 'the dashboard renders the denied state');
+   assert.match(dashboard, /Camera permission denied/, 'in its own words');
+   await wait(1500);
+   const segments = fs.existsSync(storage) ? fs.readdirSync(storage).filter(name => name.endsWith('.mkv')) : [];
+   assert.equal(segments.length, 0, 'nothing was recorded, because nothing was captured');
+   console.log('\nPASS: the app asked, the person denied, and the server was told `denied` — with no');
+   console.log('      frames, no recording and no error sentence anywhere.');
+   process.exitCode = 0;
+   return;
+  }
   for (let attempt = 0; attempt < 240; attempt++) {
    const answer = await http('GET', origin + '/api/security/live-feeds', {cookie: 'sec_session=' + token});
    const parsed = JSON.parse(answer.body.toString('utf8'));
