@@ -303,4 +303,104 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
  });
  let last=0;
  for(const kind of ['keydown','pointerdown','input'])window.addEventListener(kind,()=>{if(Date.now()-last>300){last=Date.now();ipcRenderer.send('client:activity');}},{capture:true,passive:true});
+ // ── THIS CLIENT'S CAMERA, AS A LIVE USER FEED ───────────────────────────────────────────────
+ // Owen, 2026-11-06: "Each client connected to an e-server instance MUST access it's web camera and
+ // create a stream on the e-server security dashboard ... while logged into e-app and connected to
+ // their e-server instance". The device is opened HERE because this window IS the connection: its
+ // document is the e-server's own origin, so the publish WebSocket carries the page's own PIN
+ // session cookie and the server resolves the account on the upgrade. Closing the window (or
+ // losing the server) closes the socket, and the server's recording ends with it.
+ //
+ // THE PROTOCOL LIVES IN desktop/live-feed.cjs, tested in Node against a fake e-server
+ // (tests/live-feed.test.cjs) with no window and no camera. This half is only the device: ask, open,
+ // draw one frame per tick into a JPEG, and hand it to the socket. Nothing here draws chrome and
+ // nothing gates capture on a viewer: recording is unconditional while connected, and the camera's
+ // own LED is the physical awareness (Owen cut the indicator on 2026-11-06).
+ const FRAME_WIDTH=640,FRAME_HEIGHT=480,FRAME_QUALITY=0.72;
+ function cameraAndMicrophone(){
+  let video=null,canvas=null,context=null,streams=[];
+  const release=()=>{
+   for(const stream of streams){try{stream.getTracks().forEach(track=>track.stop());}catch{}}
+   streams=[];
+   if(video){try{video.srcObject=null;}catch{}video=null;}
+   canvas=null;context=null;
+  };
+  return {
+   async begin(){
+    // THE QUESTION FIRST (main.cjs owns it): a denial is reported as `denied`, never as an error
+    // and never as silence, and nothing is inferred on the server side.
+    let answer={camera:false,microphone:false};
+    try{answer=await ipcRenderer.invoke('client:media-ask')||answer;}catch{answer={camera:false,microphone:false};}
+    const result={camera:'denied',microphone:'denied',detail:''};
+    if(answer.camera){
+     try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:FRAME_WIDTH},height:{ideal:FRAME_HEIGHT}},audio:false});
+      streams.push(stream);
+      video=document.createElement('video');
+      video.muted=true;video.playsInline=true;video.autoplay=true;video.srcObject=stream;
+      await video.play();
+      canvas=document.createElement('canvas');
+      canvas.width=video.videoWidth||FRAME_WIDTH;
+      canvas.height=video.videoHeight||FRAME_HEIGHT;
+      context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw Error('no 2d context');
+      result.camera='granted';
+     }catch(error){
+      // A granted permission with nothing behind it is GRANTED-NO-DEVICE, which the server's state
+      // model keeps as its own state: it is not a denial and must never be shown as one.
+      result.camera=error&&error.name==='NotAllowedError'?'denied':'granted-no-device';
+      result.detail='camera: '+((error&&error.name)||'error')+(error&&error.message?': '+error.message:'');
+     }
+    }
+    if(answer.microphone){
+     // The server records video only today (`-an` in e_server/streaming/client_feed.py, a named
+     // follow-up), so the microphone is PROVEN and then released rather than held open by an app
+     // that is not sending it: the report says what the person allowed, and no device stays busy.
+     try{
+      const mic=await navigator.mediaDevices.getUserMedia({audio:true});
+      try{mic.getTracks().forEach(track=>track.stop());}catch{}
+      result.microphone='granted';
+     }catch(error){
+      result.microphone=error&&error.name==='NotAllowedError'?'denied':'granted-no-device';
+      result.detail=(result.detail?result.detail+'; ':'')+'microphone: '+((error&&error.name)||'error');
+     }
+    }
+    return result;
+   },
+   /** One JPEG for one tick, or null when there is nothing to draw (no device, or not ready). */
+   grab(){
+    if(!video||!canvas||!context)return Promise.resolve(null);
+    const width=video.videoWidth,height=video.videoHeight;
+    if(!width||!height)return Promise.resolve(null);
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+    return new Promise(resolve=>{
+     try{
+      context.drawImage(video,0,0,canvas.width,canvas.height);
+      canvas.toBlob(blob=>resolve(blob||null),'image/jpeg',FRAME_QUALITY);
+     }catch{resolve(null);}
+    });
+   },
+   end(){release();}
+  };
+ }
+ if(/^https?:$/.test(location.protocol)){
+  const {LiveFeed}=require('./live-feed.cjs');
+  const origin=location.origin;
+  let feed=null;
+  ipcRenderer.invoke('client:device').then(device=>{
+   // No identity, no feed: the server groups by device_id, and an empty one is refused.
+   if(!device||!String(device.id||'').trim())return;
+   feed=new LiveFeed({
+    origin,
+    device:{id:String(device.id),name:String(device.name||'')},
+    capture:cameraAndMicrophone(),
+    log:line=>{try{ipcRenderer.send('client:feed-log',line);}catch{}},
+    status:value=>{try{ipcRenderer.send('client:feed-status',value);}catch{}},
+   });
+   feed.start();
+  }).catch(()=>{});
+  // Closing the window (or navigating away, which is a new document and therefore a new epoch) says
+  // goodbye deliberately, so the server flushes and closes the segment instead of waiting for a drop.
+  window.addEventListener('pagehide',()=>{try{feed?.stop('this window is closing');}catch{}},{once:true});
+ }
 }
