@@ -333,8 +333,13 @@ class LiveFeed {
   }
   if (generation !== this.generation || this.stopped) return;   // an answer for a socket we left
   // Each channel is reported independently: the server stores them separately, and a denied
-  // camera with a granted microphone is a real state a person can be in.
-  this._report({camera: result.camera, microphone: result.microphone});
+  // camera with a granted microphone is a real state a person can be in. A channel the adapter
+  // leaves undefined has NOT been answered, so it is left as it is (pending) rather than being
+  // turned into a state nobody measured.
+  const channels = {};
+  if (result.camera !== undefined) channels.camera = result.camera;
+  if (result.microphone !== undefined) channels.microphone = result.microphone;
+  if (Object.keys(channels).length) this._report(channels);
   if (result.detail) this.log('capture: ' + result.detail);
   if (result.camera === 'granted') { this._startFrameTimer(); return; }
   // No frames, and no fallback: the socket stays open so the dashboard shows the honest state
@@ -380,6 +385,11 @@ class LiveFeed {
   if (this.frames === 1) {
    this._set(this.state);
    this.log('first frame sent to ' + this.origin + ' (epoch ' + this.epoch + ')');
+   // The server marks a feed's recording ACTIVE when a REPORT arrives after it has accepted
+   // frames (api/live_feeds.py, `_handle_state`), and it acknowledges on no other occasion. So the
+   // first accepted frame re-states the state the server already holds: a duplicate report, never
+   // a new claim, and it is what makes the dashboard's "Recording" true rather than "unconfirmed".
+   this._report({camera: this.camera, microphone: this.microphone});
   }
  }
 

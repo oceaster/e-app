@@ -381,3 +381,23 @@ test('a permission answer that arrives after its socket closed is never sent on 
   assert.equal(asked, 2, 'the retry asked its own question rather than reusing the old answer');
  } finally { feed.stop(); await server.close(); }
 });
+
+test('a channel the device has not answered yet stays pending and is never invented', async () => {
+ const server = await fakeServer();
+ const feed = new LiveFeed({
+  origin: server.origin,
+  device: {id: 'device-pending', name: 'Desk'},
+  // The person has not answered the camera question: the adapter returns no camera state at all,
+  // and an unanswered channel must stay `pending` rather than becoming granted-no-device.
+  capture: {begin: async () => ({microphone: 'granted'}), grab: async () => JPEG, end: () => {}},
+ });
+ try {
+  feed.start();
+  const connection = await until(() => server.connection, 'the socket');
+  await until(() => connection.reports.length >= 2, 'the microphone report');
+  assert.deepEqual(connection.reports[1], {type: 'report', epoch: connection.epochAssigned, microphone: 'granted'});
+  await wait(200);
+  assert.equal(connection.frames.length, 0, 'no camera answer means no frames');
+  assert.equal(feed.status().camera, 'pending', 'the camera is still what the server was told: pending');
+ } finally { feed.stop(); await server.close(); }
+});
