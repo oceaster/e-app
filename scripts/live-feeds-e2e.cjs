@@ -47,6 +47,8 @@ const PACKAGED = process.argv.includes('--packaged');
 const FAKE_CAMERA = process.argv.includes('--fake-camera');
 const TWO = process.argv.includes('--two');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+//: Set when the packaged build needs the fixture's certificate (see the TLS block in the run).
+let TLS_CA = null;
 
 function freePort() {
  return new Promise((resolve, reject) => {
@@ -216,12 +218,15 @@ async function startFixture({origin, storage, profiles, token, tls}) {
 }
 
 /** One client: an isolated HOME, its own debug port, the REAL app pointing at the fixture. */
-async function launchClient({name, origin, home, debuggingPort}) {
+async function launchClient({name, origin, home, debuggingPort, tlsCa = null}) {
  // The development build's own fixture: it names the server this app connects to (the packaged
  // build reads no fixture at all and takes the address over the deep link or its list).
  const env = {...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, 'config'),
   XDG_CACHE_HOME: path.join(home, 'cache'), XDG_DATA_HOME: path.join(home, 'data'),
-  ...(PACKAGED ? {} : {E_SERVER_CLIENT_TEST_ORIGIN: origin})};
+  ...(PACKAGED ? {} : {E_SERVER_CLIENT_TEST_ORIGIN: origin}),
+  // The fixture's own CA, for the main process's publish socket. The renderer gets the same trust
+  // decision from --ignore-certificate-errors, which is why both are needed for this one address.
+  ...(TLS_CA ? {NODE_EXTRA_CA_CERTS: TLS_CA} : {})};
  const flags = ['--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort}`,
   '--remote-debugging-address=127.0.0.1', ...(FAKE_CAMERA ? ['--use-fake-device-for-media-stream'] : [])];
  let command, args, cwd;
@@ -282,12 +287,24 @@ async function serverWindow(client, origin) {
  fs.mkdirSync(storage, {recursive: true});
  const token = 'e2e-' + crypto.randomUUID();
  const tls = PACKAGED ? (() => {
+  // A packaged build refuses a plain-HTTP origin (serverOrigin allows loopback HTTP only in
+  // development), so the fixture serves TLS. Its certificate is signed by a throwaway CA that is
+  // trusted for THIS PROCESS ONLY (NODE_EXTRA_CA_CERTS below) — the main process's own socket
+  // verifies it like any other server, and nothing is added to the machine's trust store.
+  const caKey = path.join(work, 'ca-key.pem'), ca = path.join(work, 'ca.pem');
   const key = path.join(work, 'key.pem'), cert = path.join(work, 'cert.pem');
-  const made = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2',
-   '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', key, '-out', cert],
-   {encoding: 'utf8'});
-  assert.equal(made.status, 0, 'a self-signed certificate for the loopback fixture: ' + (made.stderr || ''));
-  return {key, cert};
+  const csr = path.join(work, 'csr.pem'), ext = path.join(work, 'ext.cnf');
+  fs.writeFileSync(ext, 'subjectAltName=IP:127.0.0.1\n');
+  const steps = [
+   ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', '/CN=Easter live-feeds test CA', '-keyout', caKey, '-out', ca],
+   ['req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=127.0.0.1', '-keyout', key, '-out', csr],
+   ['x509', '-req', '-in', csr, '-CA', ca, '-CAkey', caKey, '-CAcreateserial', '-days', '2', '-extfile', ext, '-out', cert],
+  ];
+  for (const step of steps) {
+   const made = spawnSync('openssl', step, {encoding: 'utf8'});
+   assert.equal(made.status, 0, 'certificates for the loopback fixture: ' + (made.stderr || ''));
+  }
+  return {key, cert, ca};
  })() : null;
  const port = await freePort();
  const origin = `${PACKAGED ? 'https' : 'http'}://127.0.0.1:${port}`;
@@ -303,7 +320,8 @@ async function serverWindow(client, origin) {
    const home = path.join(work, 'home' + index);
    fs.mkdirSync(home, {recursive: true});
    const debuggingPort = await freePort();
-   const client = await launchClient({name: 'client' + (index + 1), origin, home, debuggingPort});
+   TLS_CA = tls ? tls.ca : null;
+   const client = await launchClient({name: 'client' + (index + 1), origin, home, debuggingPort, tlsCa: TLS_CA});
    clients.push(client);
    await signIn(client, account);
    // CONNECT, through the shipped IPC the list's own rows use (`window.eServerSetup.connect`),
@@ -351,8 +369,14 @@ async function serverWindow(client, origin) {
   if (TWO) {
    const ids = feeds.slice(0, 2).map(feed => feed.device_id);
    assert.notEqual(ids[0], ids[1], 'two installs are two devices');
-   const people = JSON.parse((await http('GET', origin + '/api/security/live-feeds', {cookie: 'sec_session=' + token})).body.toString('utf8'));
-   assert.equal(people.people, 2, 'two clients of one person are two devices under one person');
+   // ONE PERSON, TWO DEVICES: the grouping is by account, so the count of people stays 1 while the
+   // count of connected clients is 2 — and the dashboard draws her multi-device group for them.
+   const summary = JSON.parse((await http('GET', origin + '/api/security/live-feeds', {cookie: 'sec_session=' + token})).body.toString('utf8'));
+   assert.equal(summary.people, 1, 'two installs of one account are ONE person');
+   assert.equal(summary.connected, 2, 'and two connected clients');
+   const grouped = (await http('GET', origin + '/dashboard', {cookie: 'sec_session=' + token})).body.toString('utf8');
+   assert.match(grouped, /2 devices/, 'the dashboard groups them as one person with two devices');
+   console.log('two clients: 1 person, 2 devices, both live');
   }
 
   // ── the dashboard's own fragment and the live view it draws ──────────────────────────────
@@ -368,16 +392,21 @@ async function serverWindow(client, origin) {
   // Owen: recording "should continue always, as long as you are connected to the instance" — so
   // the other half of that sentence is measured too: the window leaves the page, and the server
   // ends the feed and closes the segment. A segment still being written has no duration to read.
-  await clients[0].page.rpc('Page.navigate', {url: 'about:blank'});
-  let dropped = null;
+  for (const client of clients) await client.page.rpc('Page.navigate', {url: 'about:blank'});
+  const published = feeds.slice(0, clients.length);
+  let dropped = [];
   for (let attempt = 0; attempt < 120; attempt++) {
    const answer = JSON.parse((await http('GET', origin + '/api/security/live-feeds', {cookie: 'sec_session=' + token})).body.toString('utf8'));
-   const feed = answer.feeds.find(item => item.feed_id === feeds[0].feed_id);
-   if (feed && feed.connection !== 'connected') { dropped = feed; break; }
+   dropped = published
+    .map(item => answer.feeds.find(feed => feed.feed_id === item.feed_id))
+    .filter(feed => feed && feed.connection !== 'connected');
+   if (dropped.length === published.length) break;
    await wait(500);
   }
-  assert.ok(dropped, 'the server must see the feed end when the window leaves it');
-  console.log(`after the window left: ${dropped.feed_id} connection=${dropped.connection} recording=${dropped.recording} frames=${dropped.frames}`);
+  assert.equal(dropped.length, published.length, 'the server must see every feed end when its window leaves it');
+  for (const feed of dropped) {
+   console.log(`after its window left: ${feed.feed_id} connection=${feed.connection} recording=${feed.recording} frames=${feed.frames}`);
+  }
 
   // ── the recording on disk ───────────────────────────────────────────────────────────────
   let segments = [];
