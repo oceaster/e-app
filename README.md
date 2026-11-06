@@ -39,7 +39,17 @@ isolation. Native IPC is limited to the configured main-frame origin. Other HTTP
 links and account providers open in the operating system browser. Microsoft uses
 a one-use, short-lived server handoff bound to the existing PIN session; the
 browser never receives the desktop PIN cookie or a Company session token. Camera,
-microphone, display sharing and notifications require permission. Files use native
+microphone, display sharing and notifications require permission. While a window is
+connected to an e-server, the client also publishes its own camera to that server as a
+live user feed: it asks once per connection in its own dialog, reports the answer to the
+server (`pending` before the question is put, then granted / denied / granted-no-device per
+channel), and sends JPEG frames over the server's documented publish socket for as long as
+the window stays connected - recording stops when it leaves. There is no on-screen
+indicator and no stop control: the camera's own LED is the awareness. Each installation
+identifies itself with a device id generated once and kept under its own config directory,
+so two machines of one person are two devices on the dashboard. The camera is opened by
+this client and never by the server, and the permission surface stays the app's own
+(`client:media-ask`), never a page's. Files use native
 save dialogs and normal web uploads/drag-and-drop. Window state, single-instance
 handling, tray entry, installer shortcuts and `e-server://connect?server=...` links
 are supported. Deep links ask before changing an existing connection.
