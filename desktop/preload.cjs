@@ -390,7 +390,10 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
   beginMedia().then(states=>{
    try{ipcRenderer.send('client:feed-state',states);}catch{}
   }).catch(()=>{
-   try{ipcRenderer.send('client:feed-state',{camera:'granted-no-device',microphone:'granted-no-device'});}catch{}
+   // beginMedia catches its own failures, so this is the end of the world rather than a normal
+   // denial — and an unknown answer reports NOTHING: the server keeps the channels `pending`, which
+   // is the honest state, instead of being told a state nobody measured.
+   try{ipcRenderer.send('client:feed-state',{});}catch{}
   });
  });
  // EVERY TICK ASKS THIS DOCUMENT AND WAITS FOR THIS DOCUMENT'S ANSWER: the pacing lives in the
