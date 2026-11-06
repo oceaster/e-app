@@ -3,6 +3,47 @@
 Pending work for the desktop client, with what "done" means. Rules live in `README.md` and
 `docs/COMPANY_LOGIN.md`; this file is what is left, not what is true.
 
+## Live user feeds: the client half (2026-11-06, on `ticket/eapp-live-feeds`, not merged)
+
+Owen: "Each client connected to an e-server instance MUST access it's web camera and create a stream
+on the e-server security dashboard ... while logged into e-app and connected to their e-server
+instance", and "I can then also login on a secondary client in parallel with another camera".
+
+Landed on the branch: `desktop/live-feed.cjs` (the protocol, from e-server's `api/live_feeds.py`
+docstring), the feed's lifecycle in `desktop/main.cjs` (one socket per connected document, the
+connection's own `sec_session` cookie on the upgrade, a new epoch per document), the device half in
+`desktop/preload.cjs` (getUserMedia, one JPEG per tick, 640x480 @ 15 fps), the app's own permission
+question (`client:media-ask`), this install's device id (`device.json`, a UUID — never a hostname,
+never the account name), `tests/live-feed.test.cjs` against a fake e-server, and
+`scripts/live-feeds-fixture.py` + `scripts/live-feeds-e2e.cjs` for the real-server journey.
+
+DONE and measured (so nobody re-does it): the packaged build publishes to a real e-server publish
+socket — feed live, `recording=active`, the dashboard fragment's `data-state="live"`, the MJPEG view
+answered with real JPEG bytes, and `{feed_id}_00000.mkv` on disk as h264 640x480 with duration
+(0.533 s while live, 5.333 s across a longer run); two isolated installs are two devices under one
+person (`people=1`, `connected=2`, her group says "2 devices"), and every feed ends when its window
+leaves the page. `npm test`: 104 pass.
+
+STILL OWED:
+
+- **The picture was synthetic in every run so far.** The deployed e-server (0.13.4) still records
+  the machine's own webcam, and `/dev/video0` is exclusively held by its ffmpeg — so the journey ran
+  with `--fake-camera`. The deploy that frees the device (e-server `b09975d93f`, "the webcam and
+  both display captures leave the source table") is merged on main but has not deployed cleanly
+  yet (0.14.0 failed its gates 20:12Z). Re-run `xvfb-run -a node scripts/live-feeds-e2e.cjs` with NO
+  flags once it has: that is the run that shows Owen's own camera.
+- **Audio is still video-only.** The server's segment muxer encodes `-an`
+  (`e_server/streaming/client_feed.py`), so the client proves the microphone's permission and then
+  releases it rather than holding a device open for a stream nobody records. When the server accepts
+  audio, the client must mux it (a `MediaRecorder`/WebM track beside the JPEG frames is the open
+  design question — the protocol has one envelope for JPEG frames today).
+- **The recording acknowledgement is the server's to fix.** `api/live_feeds.py` marks a feed's
+  recording ACTIVE only when a report arrives after frames were accepted, so the client re-states its
+  permission after the first frame to make the dashboard say "Recording" instead of "Recording
+  unconfirmed". A server-side ack on the first accepted frame would let that duplicate go.
+- **Windows and macOS are unproven** (no camera path exercised; `devicePermissionHandler` is not
+  needed on Linux and was not needed here).
+
 ## The e-servers list (2026-11-03: API deployed, client verified live, not released)
 
 Owen: after sign-in the client should stop at a list of the e-servers the Easter Company account
