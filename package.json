@@ -1,6 +1,6 @@
 {
   "name": "e-app",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "The private e-server desktop client",
   "main": "desktop/bootstrap.cjs",
   "type": "commonjs",
@@ -24,7 +24,7 @@
   "build": {
     "appId": "ltd.easter.eserver",
     "productName": "e-server",
-    "copyright": "Copyright \u00a9 2026 Easter LTD. All rights reserved.",
+    "copyright": "Copyright © 2026 Easter LTD. All rights reserved.",
     "asar": true,
     "directories": {
       "output": "release"

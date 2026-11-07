@@ -126,6 +126,7 @@ class LiveFeed {
   this.reconnectTimer = null;
   this.stopped = false;
   this.sending = false;
+  this.capturing = false;
  }
 
  /** What this app can be asked about its feed (main.cjs keeps the last one it was told). */
@@ -220,20 +221,28 @@ class LiveFeed {
    if (generation !== this.generation) return;
    this.socket = null;
    this._clearFrameTimer();
-   this._releaseCapture();
    const code = event && event.code ? event.code : 0;
-   if (this.stopped) return;
+   if (this.stopped) { this._releaseCapture(); return; }
    if (code === CLOSE_NOT_SIGNED_IN) {
     // The feed is published at connect, before any permission decision — but only to a socket
     // that carries a signed-in account. The PIN gate is up, so there is nothing to publish yet.
+    this._releaseCapture();
     this._set('refused', 'the e-server closed the feed: no signed-in account on this socket (4401)');
     this.log('refused by ' + this.origin + ': not signed in on this e-server yet (4401); the feed starts when this page reloads after the PIN');
     return;
    }
    if (this.epoch) {
+    // A DROP IS NOT THE END OF THE DEVICE. The camera belongs to the connected document, not to
+    // one socket, so it is NOT released here: releasing it switched the person's webcam off and on
+    // for every reconnect, which is the "my webcam is coming on off on off" of 2026-11-06
+    // 19:09-19:10 (sockets closing every seven or eight seconds, the LED blinking with each new
+    // epoch). The next socket re-reports the state it already holds and the frames resume where
+    // the fresh epoch picks them up. Capture is released only on the terminal paths below, and by
+    // stop().
     this._set('dropped', 'the e-server closed the feed (' + (code || 'no code') + ')');
-    this.log('dropped by ' + this.origin + ' (close code ' + (code || 'none') + '); reconnecting');
+    this.log('dropped by ' + this.origin + ' (close code ' + (code || 'none') + '); reconnecting with the camera still open');
    } else if (++this.openAttempts >= OPEN_ATTEMPTS) {
+    this._releaseCapture();
     this._set('unavailable', 'this e-server does not publish live feeds (' + (code || 'no code') + ')');
     this.log('unavailable at ' + this.origin + ': the publish route did not answer after ' + this.openAttempts + ' attempts (close code ' + (code || 'none') + ')');
     return;
@@ -246,6 +255,7 @@ class LiveFeed {
   if (this.stopped) return;
   const index = Math.min(this.reconnects, RECONNECT_DELAYS_MS.length - 1);
   if (this.reconnects >= RECONNECT_DELAYS_MS.length) {
+   this._releaseCapture();
    this._set('stopped', 'gave up reconnecting to ' + this.origin);
    this.log('gave up reconnecting to ' + this.origin + ' after ' + this.reconnects + ' attempts; a reloaded page starts a new feed');
    return;
@@ -255,6 +265,7 @@ class LiveFeed {
   this._clearTimer('reconnectTimer');
   this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this._connect('reconnect'); }, delay);
   if (this.reconnectTimer && typeof this.reconnectTimer.unref === 'function') this.reconnectTimer.unref();
+  this.log('reconnecting in ' + delay + ' ms (attempt ' + this.reconnects + ' of ' + RECONNECT_DELAYS_MS.length + ')');
  }
 
  _onMessage(message, generation) {
@@ -324,6 +335,15 @@ class LiveFeed {
 
  async _beginCapture(generation) {
   if (!this.capture || typeof this.capture.begin !== 'function') return;
+  // ONE DEVICE PER DOCUMENT, NOT ONE PER SOCKET. A reconnect re-uses the capture that is already
+  // open instead of asking for the camera again: the second `getUserMedia` left the first stream
+  // open and blinked the LED on every drop (measured 2026-11-06 19:09-19:10).
+  if (this.capturing && this.camera === 'granted') {
+   this.log('re-using the capture already open for this document');
+   this._startFrameTimer();
+   this._report({camera: this.camera, microphone: this.microphone});
+   return;
+  }
   let result;
   try {
    result = await this.capture.begin();
@@ -341,7 +361,7 @@ class LiveFeed {
   if (result.microphone !== undefined) channels.microphone = result.microphone;
   if (Object.keys(channels).length) this._report(channels);
   if (result.detail) this.log('capture: ' + result.detail);
-  if (result.camera === 'granted') { this._startFrameTimer(); return; }
+  if (result.camera === 'granted') { this.capturing = true; this._startFrameTimer(); return; }
   // No frames, and no fallback: the socket stays open so the dashboard shows the honest state
   // ("camera permission denied" / "no camera found") while the client is connected.
   this.log('not capturing: camera is ' + result.camera);
@@ -349,6 +369,7 @@ class LiveFeed {
 
  _releaseCapture() {
   this._clearFrameTimer();
+  this.capturing = false;
   if (!this.capture || typeof this.capture.end !== 'function') return;
   try { this.capture.end(); } catch {}
  }

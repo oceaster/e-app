@@ -383,6 +383,23 @@ async function save(){await fs.mkdir(HOME,{recursive:true,mode:0o700});const tmp
 const MEDIA_ANSWER_TIMEOUT_MS=120000;   // a person may look at the question for a while
 const FRAME_TIMEOUT_MS=5000;            // one tick's answer: a slow renderer drops a frame
 
+/** EVERY `[live-feed]` LINE, ON DISK. Started from the desktop launcher the app's console is
+ * invisible, so a socket that dropped every seven seconds on 2026-11-06 left nothing to read and
+ * the only account of it was the server's. One file per install, trimmed once per run when it has
+ * grown past a megabyte, and never a throw: logging must not be able to stop a feed. */
+const FEED_LOG_MAX_BYTES = 1024 * 1024;
+let feedLogTrimmed = false;
+function feedLogPath(){ try { return path.join(app.getPath('userData'), 'live-feed.log'); } catch { return ''; } }
+function feedLog(line){
+ const file = feedLogPath();
+ if(!file) return;
+ const text = new Date().toISOString() + ' ' + String(line) + '\n';
+ const append = () => { fs.appendFile(file, text).catch(() => {}); };
+ if(feedLogTrimmed){ append(); return; }
+ feedLogTrimmed = true;
+ fs.stat(file).then(info => (info.size > FEED_LOG_MAX_BYTES ? fs.writeFile(file, '') : null)).catch(() => {}).finally(append);
+}
+
 /** A WebSocket factory that presents the connection's own PIN session cookie on the upgrade. */
 function feedSocket(cookie){
  return function(url){
@@ -454,12 +471,13 @@ async function startFeed(window){
   WebSocketImpl:feedSocket(cookie),
   // The app's own log, one prefix for every line the publisher writes: a refusal, a reconnect and
   // a dropped frame are all findable beside the app's other lines, and none of them is chrome.
-  log:line=>console.log(String(line).startsWith('[live-feed]')?String(line):'[live-feed] '+String(line)),
+  log:line=>{const text=String(line).startsWith('[live-feed]')?String(line):'[live-feed] '+String(line);console.log(text);feedLog(text);},
   status:value=>{feedStatus={...feedStatus,...value};},
  });
  feed.start();
 }
 function stopFeed(reason){
+ console.log('[live-feed] stopping: '+(reason||'unnamed'));feedLog('[live-feed] stopping: '+(reason||'unnamed'));
  const current=feed;
  feed=null;feedWindow=null;
  answerStates({});

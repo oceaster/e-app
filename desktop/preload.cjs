@@ -318,13 +318,21 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
  // the indicator on 2026-11-06).
  const FRAME_WIDTH=640,FRAME_HEIGHT=480,FRAME_QUALITY=0.72;
  const media={video:null,canvas:null,context:null,streams:[]};
+ //: The answer this document already gave, kept for the life of the document. A reconnect re-asks
+ //: (the feed gives a new socket a new epoch), and re-asking must NOT open a second camera: the
+ //: first stream was never released and the LED blinked for every drop (measured 2026-11-06).
+ let mediaStates=null;
  function releaseMedia(){
+  mediaStates=null;
   for(const stream of media.streams){try{stream.getTracks().forEach(track=>track.stop());}catch{}}
   media.streams=[];
   if(media.video){try{media.video.srcObject=null;}catch{}media.video=null;}
   media.canvas=null;media.context=null;
  }
  async function beginMedia(){
+  // The device is already open for this document, so a reconnect re-uses it: no second
+  // getUserMedia, no second stream left running, and no second permission question.
+  if(mediaStates&&media.video&&media.streams.length)return mediaStates;
   // THE QUESTION FIRST (main.cjs owns it): a denial is reported as `denied`, never as an error and
   // never as silence, and nothing is inferred on the server side.
   let answer={camera:false,microphone:false};
@@ -364,6 +372,7 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
     result.detail=(result.detail?result.detail+'; ':'')+'microphone: '+((error&&error.name)||'error');
    }
   }
+  mediaStates=result;
   return result;
  }
  /** One frame for one tick: a JPEG ArrayBuffer, or null when there is nothing to draw. */
