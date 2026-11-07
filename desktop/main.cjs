@@ -400,6 +400,49 @@ function feedLog(line){
  fs.stat(file).then(info => (info.size > FEED_LOG_MAX_BYTES ? fs.writeFile(file, '') : null)).catch(() => {}).finally(append);
 }
 
+/** THE CAMERA'S OWN WINDOW. A media stream belongs to a document, and the e-server UI is
+ * server-rendered — so a camera opened by the page a person is reading dies every time they click
+ * a link (Owen, 2026-11-06: "every time I switch page my web cam turns off and comes back on").
+ * The device therefore lives in this hidden window, which loads desktop/capture.html once and is
+ * never navigated, and the visible window is free to reload as often as it likes.
+ *
+ * Measured before it was built: a hidden BrowserWindow with `show:false` and
+ * `backgroundThrottling:false` held getUserMedia and produced a real 640x480 JPEG on every grab
+ * for nine seconds (2026-11-06, /tmp/captest: `hidden=true visible=false`, frames 6554-9142 bytes).
+ * It is created on the first feed, never shown, and destroyed with the app.
+ */
+const captureFile=path.join(__dirname,'capture.html');
+let captureWindow=null,captureReady=null;
+async function feedCaptureWindow(){
+ if(!activeSession)return null;                 // no connection, so no feed to publish
+ if(captureWindow&&!captureWindow.isDestroyed()&&captureReady){await captureReady;return captureWindow;}
+ if(captureWindow&&!captureWindow.isDestroyed()){await captureReady;return captureWindow;}
+ captureWindow=new BrowserWindow({show:false,width:320,height:240,focusable:false,skipTaskbar:true,
+  title:'e-server camera',
+  webPreferences:{session:activeSession,preload:path.join(__dirname,'capture-preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,backgroundThrottling:false}});
+ captureWindow.setMenu(null);captureWindow.setMenuBarVisibility(false);
+ captureWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+ captureWindow.on('closed',()=>{captureWindow=null;captureReady=null;});
+ captureReady=new Promise(resolve=>{
+  const done=()=>resolve();
+  captureWindow.webContents.once('did-finish-load',done);
+  setTimeout(done,5000);                            // a load that fails must not hang the feed
+  captureWindow.loadFile(captureFile).catch(()=>{});
+ });
+ await captureReady;
+ return captureWindow;
+}
+/** The capture document's own door, the same shape as `remote()`: this window, this file. */
+function captureRequest(event){
+ if(!captureWindow||captureWindow.isDestroyed()||event.sender!==captureWindow.webContents)throw Error('This request did not come from the camera window.');
+ if(event.senderFrame&&event.senderFrame.url!==pathToFileURL(captureFile).href)throw Error('This request did not come from the camera document.');
+}
+/** The feed's channels answer the camera window, and still answer the server page if it ever asks. */
+function feedSender(event){
+ if(captureWindow&&!captureWindow.isDestroyed()&&event.sender===captureWindow.webContents){captureRequest(event);return;}
+ remote(event);
+}
+
 /** A WebSocket factory that presents the connection's own PIN session cookie on the upgrade. */
 function feedSocket(cookie){
  return function(url){
@@ -460,7 +503,9 @@ async function startFeed(window){
  // minutes, epochs :6 to :13, the webcam released and reopened with each). So a reload of the same
  // origin re-binds the capture and keeps the socket, the epoch and the recording.
  if(feed&&!feed.stopped&&feed.origin===config.server){
-  feedWindow=window;
+  const host=await feedCaptureWindow();
+  if(!host)return;                               // the document keeps publishing; nothing to re-bind to
+  feedWindow=host;
   const line='the document reloaded; re-binding the feed (epoch '+(feed.epoch||'pending')+')';
   console.log('[live-feed] '+line);feedLog('[live-feed] '+line);
   try{feed.retarget();}catch{}
@@ -471,7 +516,10 @@ async function startFeed(window){
  if(!String(identity.id||'').trim()){console.log('[live-feed] no device identity for this install; not publishing');return;}
  const cookie=await sessionCookie();
  if(!cookie)console.log('[live-feed] this window has no signed-in session on '+config.server+' yet; the server will refuse the socket until it does');
- feedWindow=window;
+ // The camera's window, never the page's: the page reloads, the device does not.
+ const host=await feedCaptureWindow();
+ if(!host){console.log('[live-feed] no camera window for this connection; not publishing');return;}
+ feedWindow=host;
  feed=new LiveFeed({
   origin:config.server,
   device:{id:String(identity.id||''),name:String(identity.name||'')},
@@ -603,7 +651,12 @@ async function connect(){
   // string comparison refused every check on the connected server, which is why a page's own
   // getUserMedia could only ever fail.
   let from='';try{from=new URL(String(origin)).origin;}catch{from='';}
-  if(from!==config.server)return false;
+  // THE CAMERA DOCUMENT IS THIS APP'S OWN FILE, not the server's origin: the device lives in
+  // desktop/capture.html so that a page load cannot take it away (see `feedCaptureWindow`). It is
+  // named here by its exact path, so no other local page can borrow the permission.
+  const captureDocument=pathToFileURL(captureFile).href;
+  const requesting=String(contents&&typeof contents.getURL==='function'?contents.getURL():'');
+  if(from!==config.server&&requesting!==captureDocument)return false;
   if(permission==='media'){
    // ONLY AN ANSWER THE PERSON GAVE. `null` is "not asked", so a check that arrives before the
    // question is refused - the publisher's own flow asks first, then calls getUserMedia.
@@ -615,8 +668,10 @@ async function connect(){
   return permission==='fullscreen'||permission==='clipboard-sanitized-write';
  });
  activeSession.setPermissionRequestHandler(async(contents,permission,answer,details)=>{
-  let origin;try{origin=new URL(details.requestingUrl||contents.getURL()).origin;}catch{return answer(false);}
-  if(origin!==config.server||!['media','notifications','display-capture','clipboard-sanitized-write','fullscreen'].includes(permission))return answer(false);
+  const requested=String(details.requestingUrl||contents.getURL()||'');
+  let origin;try{origin=new URL(requested).origin;}catch{return answer(false);}
+  const fromCapture=requested===pathToFileURL(captureFile).href;
+  if((origin!==config.server&&!fromCapture)||!['media','notifications','display-capture','clipboard-sanitized-write','fullscreen'].includes(permission))return answer(false);
   if(['fullscreen','clipboard-sanitized-write'].includes(permission))return answer(true);
   if(permission==='media'){
    // The publisher's question has already been asked (and answered) in this app's own words, so a
@@ -826,19 +881,19 @@ async function start(){
  // None of them takes an argument from the page that names a server, a device or a permission —
  // the main process already holds all three.
  ipcMain.handle('client:device',event=>{remote(event);return device();});
- ipcMain.handle('client:media-ask',event=>{remote(event);return askMedia();});
+ ipcMain.handle('client:media-ask',event=>{feedSender(event);return askMedia();});
  // The renderer's answers to the feed's own two questions, and the last thing a dying document says.
  // All of them are `remote(event)`: only the connected server's main frame, in this window, may
  // answer for the camera that window opened.
- ipcMain.on('client:feed-state',(event,states)=>{try{remote(event);}catch{return;}answerStates(states);});
+ ipcMain.on('client:feed-state',(event,states)=>{try{feedSender(event);}catch{return;}answerStates(states);});
  ipcMain.on('client:feed-frame',(event,id,frame)=>{
-  try{remote(event);}catch{return;}
+  try{feedSender(event);}catch{return;}
   const answer=feedGrabs.get(String(id||''));
   if(!answer)return;
   feedGrabs.delete(String(id||''));
   answer(frame?Buffer.from(frame):null);
  });
- ipcMain.on('client:feed-gone',event=>{try{remote(event);}catch{return;}stopFeed('the page went away');});
+ ipcMain.on('client:feed-gone',event=>{try{feedSender(event);}catch{return;}stopFeed('the camera document went away');});
  // The feed's own status, so a refusal (a `stale_epoch`, a server without the route) is visible in
  // this app rather than only in a closed socket. `[live-feed]` lines on this process's own console
  // are the other half; both are the app's log, and neither is chrome in the window.
@@ -861,5 +916,8 @@ async function start(){
  else if(company?.authorized())await afterCompany();else await connect();
  schedule();
 }
-app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();});
+app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();
+ // the camera window is `show:false` and would otherwise keep the app's window count above zero
+ try{if(captureWindow&&!captureWindow.isDestroyed())captureWindow.destroy();}catch{}
+ captureWindow=null;captureReady=null;stopFeed('the app is quitting');});
 app.on('window-all-closed',()=>{if(!restartOnClosed&&(!tray||quitting))app.quit();});
