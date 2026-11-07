@@ -11,9 +11,9 @@
  * shipped answer — the numbers come from the probes on the machine in front of you.
  */
 const GiB = 1024 ** 3;
-const cfg = require('./config.cjs');
-const { detect } = require('./hardware.cjs');
-const { planAll, buildServerArgs, buildEnv } = require('./planner.cjs');
+const cfg = require('../src/config.cjs');
+const { detect } = require('../src/hardware.cjs');
+const { planAll, buildServerArgs, buildEnv } = require('../src/planner.cjs');
 const fixtures = require('./fixtures.cjs');
 
 const gib = (b) => (b == null ? '?' : `${(b / GiB).toFixed(1)} GiB`);

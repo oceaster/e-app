@@ -4,8 +4,23 @@ Zero-dependency main-process CommonJS that measures a computer, decides which ca
 can hold, downloads a pinned engine and model into `userData`, runs `llama-server` behind an
 OpenAI-compatible endpoint, and reports honestly when it cannot.
 
-`node preview.cjs` prints what each rung would do **on this machine**; `node preview.cjs --matrix`
-prints the same table for nine synthetic machines. The plan table is OUTPUT, never a shipped answer.
+`node desktop/local-ai/dev/preview.cjs` prints what each rung would do **on this machine**; add
+`--matrix` for the same table on nine synthetic machines. The plan table is OUTPUT, never a shipped
+answer.
+
+## Layout, and what ships
+
+| Path | What it is | Ships in the app? |
+|---|---|---|
+| `desktop/local-ai/src/*.cjs` | the readable modules, imported by the suites | **no** (`!desktop/local-ai/src/**`) |
+| `desktop/local-ai/dev/*` | fixtures, preview, the fake engine, the preload block | **no** |
+| `desktop/local-ai/dist/local-ai.cjs` | ONE minified file built by `scripts/build-local-ai.cjs` | **yes** |
+| `desktop/local-ai/ATTRIBUTION.md` | the licence notices | **yes** |
+
+`npm run build:local-ai` builds it; `pack`/`dist:linux`/`dist:windows` rebuild it first;
+`node scripts/build-local-ai.cjs --check` fails when the shipped file is not what the committed
+sources build. Ids carry the whole naming scheme (`m1`, `q1..q4`, `b0..b4`, `en`, `e1`), and the
+manifest we serve is keyed by them.
 
 ## Wire-up (already done in this app)
 
