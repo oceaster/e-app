@@ -367,6 +367,20 @@ class LiveFeed {
   this.log('not capturing: camera is ' + result.camera);
  }
 
+ /** The same connection, a new document: keep the socket and its epoch, and open the device in the
+  *  document that is live now. The document that unloaded released its own capture on the way out,
+  *  so this is the only place that reopens it — and a reload therefore never blinks the camera off.
+  */
+ retarget() {
+  if (this.stopped) return this;
+  this.capturing = false;
+  this.frames = 0;
+  this._clearFrameTimer();
+  this.log('re-binding the capture to the reloaded document (epoch ' + (this.epoch || 'pending') + ')');
+  void this._beginCapture(this.generation);
+  return this;
+ }
+
  _releaseCapture() {
   this._clearFrameTimer();
   this.capturing = false;

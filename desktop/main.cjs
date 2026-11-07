@@ -454,6 +454,18 @@ async function startFeed(window){
  if(!config.server)return;
  let url='';try{url=new URL(window.webContents.getURL()).origin;}catch{return;}
  if(url!==config.server)return;                    // about:blank, the PIN gate's redirect target
+ // A PAGE LOAD IS NOT A NEW CONNECTION. The socket belongs to this server and this window; only the
+ // capture belongs to a document. Replacing the feed on every load minted a new epoch each time and
+ // left the dashboard a row per reload (measured 2026-11-06 19:19-19:21: thirteen of them in two
+ // minutes, epochs :6 to :13, the webcam released and reopened with each). So a reload of the same
+ // origin re-binds the capture and keeps the socket, the epoch and the recording.
+ if(feed&&!feed.stopped&&feed.origin===config.server){
+  feedWindow=window;
+  const line='the document reloaded; re-binding the feed (epoch '+(feed.epoch||'pending')+')';
+  console.log('[live-feed] '+line);feedLog('[live-feed] '+line);
+  try{feed.retarget();}catch{}
+  return;
+ }
  stopFeed('a new document is publishing');
  const identity=await device();
  if(!String(identity.id||'').trim()){console.log('[live-feed] no device identity for this install; not publishing');return;}
@@ -464,9 +476,11 @@ async function startFeed(window){
   origin:config.server,
   device:{id:String(identity.id||''),name:String(identity.name||'')},
   capture:{
-   begin:()=>rendererStates(window),
-   grab:()=>rendererFrame(window),
-   end:()=>{answerStates({});tellFeed(window,'client:feed-stop');},
+   // `feedWindow`, not the constructor's `window`: a retarget after a reload moves this to the
+   // document that is now live, without touching the socket.
+   begin:()=>rendererStates(feedWindow),
+   grab:()=>rendererFrame(feedWindow),
+   end:()=>{answerStates({});tellFeed(feedWindow,'client:feed-stop');},
   },
   WebSocketImpl:feedSocket(cookie),
   // The app's own log, one prefix for every line the publisher writes: a refusal, a reconnect and
@@ -647,7 +661,15 @@ async function connect(){
  // EVERY DOCUMENT OF THE CONNECTED WINDOW IS ONE PUBLISHING SESSION: started when it finishes
  // loading, ended before the next one starts, so a reload is a new socket and a new epoch.
  current.webContents.on('did-finish-load',()=>{if(win===current)void startFeed(current);});
- current.webContents.on('did-start-navigation',()=>{if(win===current)stopFeed('the window navigated');});
+ current.webContents.on('did-start-navigation',(event,navigationURL,isInPlace,isMainFrame)=>{
+  if(win!==current)return;
+  const line='navigation: '+String(navigationURL||'')+' (main='+isMainFrame+' inPlace='+isInPlace+')';
+  console.log('[live-feed] '+line);feedLog('[live-feed] '+line);
+  if(!isMainFrame||isInPlace)return;
+  let navigationOrigin='';try{navigationOrigin=new URL(String(navigationURL||'')).origin;}catch{navigationOrigin='';}
+  if(navigationOrigin&&navigationOrigin===config.server)return;   // our own page reloading: the feed survives
+  stopFeed('the window navigated to '+(String(navigationURL||'something else')));
+ });
  current.on('closed',()=>{if(win===current)stopFeed('the window closed');if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
   config.server=pendingServer;
   // The person chose a server, so the relaunch opens THAT server rather than the list again.
