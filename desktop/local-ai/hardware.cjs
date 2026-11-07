@@ -116,7 +116,7 @@ function nvidiaSmi(out) {
     gpus.push({
       index: num(cells[0]) === null ? gpus.length : num(cells[0]),
       uuid: cells[5] || null,
-      name: cells[1] || 'NVIDIA GPU',
+      name: cells[1] || 'GPU',
       vendor: 'nvidia',
       backend: 'cuda',
       integrated: false,
@@ -170,7 +170,7 @@ function rocmSmi(out) {
     const total = num(pick(/VRAM Total Memory/i));
     const used = num(pick(/VRAM Total Used Memory/i));
     if (total === null) continue;
-    const name = tidy(pick(/Card series|Card model|Device Name|Card SKU/i)) || 'AMD GPU';
+    const name = tidy(pick(/Card series|Card model|Device Name|Card SKU/i)) || 'GPU';
     gpus.push({
       index: gpus.length,
       name,

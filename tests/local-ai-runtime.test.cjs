@@ -73,7 +73,7 @@ test('port bind race retries on a fresh port with the SAME context', async () =>
 test('hang: times out, kills the process, does not burn a second timeout', async () => {
   const f = fixture(); const rt = mkRt(f);
   const t = Date.now();
-  await assert.rejects(rt.start(mkPlan(), launch(f, { FAKE_HANG: '1' }, { ...cfg, server: { ...cfg.server, startTimeoutMs: 700 } })), /timed out/);
+  await assert.rejects(rt.start(mkPlan(), launch(f, { FAKE_HANG: '1' }, { ...cfg, server: { ...cfg.server, startTimeoutMs: 700 } })), /E_TIMEOUT/);
   assert.ok(Date.now() - t < 2500);
   assert.strictEqual(rt.state, 'error'); assert.strictEqual(rt.pid, null);
   assert.ok(!fs.existsSync(f.pidFile));
@@ -88,7 +88,7 @@ test('engine dying after ready flips state to error', async () => {
   const f = fixture(); const rt = mkRt(f);
   await rt.start(mkPlan(), launch(f, { FAKE_DIE_AFTER_MS: '500' }));
   await proc.sleep(1200);
-  assert.strictEqual(rt.state, 'error'); assert.match(rt.error, /exited unexpectedly/);
+  assert.strictEqual(rt.state, 'error'); assert.match(rt.error, /E_EXIT/);
 });
 
 test('stop() kills the process and removes the pidfile', async () => {

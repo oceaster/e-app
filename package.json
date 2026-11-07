@@ -11,6 +11,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
+    "build:local-ai": "node desktop/local-ai/build.cjs",
     "test:navigation": "electron --no-sandbox scripts/navigation-smoke.cjs",
     "pack": "electron-builder --dir",
     "dist:linux": "electron-builder --linux AppImage deb pacman --x64 --publish never",
@@ -31,6 +32,8 @@
     },
     "files": [
       "desktop/**/*",
+      "!desktop/local-ai/**",
+      "desktop/local-ai/bundle/**",
       "package.json"
     ],
     "extraResources": [

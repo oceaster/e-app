@@ -9,7 +9,7 @@ const http = require('http');
 function request(url, { headers, allowInsecure }, redirects = 5) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
-    if (u.protocol !== 'https:' && !(allowInsecure && u.protocol === 'http:')) return reject(new Error(`refusing non-https url: ${u.protocol}`));
+    if (u.protocol !== 'https:' && !(allowInsecure && u.protocol === 'http:')) return reject(new Error(`E_INSECURE: ${u.protocol} is not allowed`));
     const req = (u.protocol === 'https:' ? https : http).get(u, { headers }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         res.resume();
@@ -53,7 +53,7 @@ async function downloadVerified({ url, dest, sha256, size, onProgress, allowInse
     const res = await request(url, { headers: have ? { Range: `bytes=${have}-` } : {}, allowInsecure });
     if (signal) signal.addEventListener('abort', () => res.destroy(new Error('aborted')), { once: true });
     if (res.statusCode === 200 && have > 0) { have = 0; hash = crypto.createHash('sha256'); } // server ignored Range
-    else if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); throw new Error(`download failed: HTTP ${res.statusCode}`); }
+    else if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); throw new Error(`E_DOWNLOAD: HTTP ${res.statusCode}`); }
 
     let received = have;
     let last = 0;
@@ -79,7 +79,7 @@ async function downloadVerified({ url, dest, sha256, size, onProgress, allowInse
   const digest = hash.digest('hex');
   if (got !== size || digest !== sha256.toLowerCase()) {
     fs.unlinkSync(part);
-    throw new Error(`verification failed for ${path.basename(dest)} (size ${got}/${size}, sha256 ${digest === sha256.toLowerCase() ? 'ok' : 'MISMATCH'})`);
+    throw new Error(`E_VERIFY: the downloaded file did not match its manifest entry (size ${got}/${size}, digest ${digest === sha256.toLowerCase() ? 'ok' : 'MISMATCH'})`);
   }
   fs.renameSync(part, dest); // atomic: dest only ever holds verified bytes
   return dest;

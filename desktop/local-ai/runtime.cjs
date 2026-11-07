@@ -89,7 +89,7 @@ class Runtime extends EventEmitter {
    * a port bind race retries on a fresh port; a timeout does not retry (it would just burn another timeout).
    */
   async start(plan, launch) {
-    if (this.state === 'starting') throw new Error('Local AI is already starting');
+    if (this.state === 'starting') throw new Error('E_BUSY: the local engine is already starting');
     await this.stop();
     this._cancelled = false;
     this.setState('starting', { plan, error: null });
@@ -142,7 +142,7 @@ class Runtime extends EventEmitter {
     child.once('error', (e) => { exit = { code: e.message }; });
     child.once('exit', (code, sig) => {
       exit = { code: code === null ? sig : code };
-      if (this.state === 'ready' && this.child === child) { this.child = null; this.pid = null; proc.removePid(this.o.pidFile); this.setState('error', { error: `llama-server exited unexpectedly (${exit.code})` }); }
+      if (this.state === 'ready' && this.child === child) { this.child = null; this.pid = null; proc.removePid(this.o.pidFile); this.setState('error', { error: `E_EXIT: the local engine stopped unexpectedly (${exit.code})` }); }
     });
     const onData = (buf) => String(buf).split(/\r?\n/).filter(Boolean).forEach((l) => this._onLine(l));
     child.stdout.on('data', onData); child.stderr.on('data', onData);
@@ -154,7 +154,7 @@ class Runtime extends EventEmitter {
       if (this._cancelled) throw err('cancelled', 'cancelled');
       if (exit) {
         const tail = this.tail.slice(-6).join(' | ');
-        throw err(/bind|address already in use|EADDRINUSE/i.test(tail) ? 'bind' : 'exit', `llama-server exited (${exit.code}). ${tail}`);
+        throw err(/bind|address already in use|EADDRINUSE/i.test(tail) ? 'bind' : 'exit', `E_${/bind|address already in use|EADDRINUSE/i.test(tail) ? 'BIND' : 'EXIT'}: the local engine stopped (${exit.code})`);
       }
       if ((await httpGet(`http://127.0.0.1:${port}/health`)).status === 200) {
         this.baseUrl = `http://127.0.0.1:${port}/v1`; this.apiKey = apiKey;
@@ -167,14 +167,14 @@ class Runtime extends EventEmitter {
       }
       await proc.sleep(cfg.server.healthIntervalMs);
     }
-    throw err('timeout', 'timed out waiting for llama-server to become ready');
+    throw err('timeout', 'E_TIMEOUT: the local engine did not become ready in time');
   }
 
   _finishKv(plan) {
     const measuredMiB = Math.round((this._kvSummary || this._kvBuffers) * 100) / 100;
     const estimatedMiB = plan.estimate ? Math.round(plan.estimate.kvGiB * 1024) : null;
     this.diag.kvCalibration = { measuredMiB, estimatedMiB, ratio: measuredMiB && estimatedMiB ? +(measuredMiB / estimatedMiB).toFixed(2) : null,
-      note: 'measured = llama-server\'s own KV size line; if ratio is far from 1, fix config.arch' };
+      note: 'measured = the engine\'s own KV size line; if ratio is far from 1, fix config.arch' };
   }
 
   /** After a crash of the app, a server may still hold VRAM. Adopt a healthy one, kill anything else of ours. */
@@ -202,7 +202,7 @@ class Runtime extends EventEmitter {
     clearInterval(this._watch);
     if (this.child) return; // spawned by us: the 'exit' event covers it
     this._watch = setInterval(() => {
-      if (this.state === 'ready' && !proc.isAlive(this.pid)) { clearInterval(this._watch); this.pid = null; proc.removePid(this.o.pidFile); this.setState('error', { error: 'adopted llama-server exited' }); }
+      if (this.state === 'ready' && !proc.isAlive(this.pid)) { clearInterval(this._watch); this.pid = null; proc.removePid(this.o.pidFile); this.setState('error', { error: 'E_EXIT: the adopted local engine stopped' }); }
     }, 2000);
     this._watch.unref();
   }

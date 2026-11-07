@@ -63,6 +63,32 @@ cliff.
 - **Nothing a person sees is built here.** No window, page, control or copy: the tier control and the
   download surface are a separate design ticket.
 
+## What ships is ONE minified file, and the sources do not
+
+Owen, 2026-11-07: "obfuscate the local AI stuff as much as possible … hide as much user touchable
+code/tech/design". So the app loads `desktop/local-ai/bundle/index.cjs`, built by
+`node desktop/local-ai/build.cjs` (`npm run build:local-ai`):
+
+- comments stripped, every module-scope identifier and every exported API name renamed to `_0`/`k1`,
+  modules inlined behind an integer require shim, **no source map**;
+- `package.json` `build.files` EXCLUDES `desktop/local-ai/**` and re-includes only
+  `desktop/local-ai/bundle/**`, so the readable sources and the test fixtures are not in the app;
+- `node desktop/local-ai/build.cjs --check` fails when the shipped bundle is not what the committed
+  sources build, and `tests/local-ai-packed.test.cjs` loads the bundle and asserts it answers the same
+  tiers as the sources on every synthetic machine;
+- paths and names a person can reach are opaque (`userData/e1`, files `c`, `p`, `l`), failures are
+  codes (`E_TIMEOUT`, `E_VERIFY`, `E_ENGINE_BUILD`, …), and `capabilities()`/`status()` answer a
+  reduced shape: a placement, one sentence, a context size and a download size — never a backend
+  name, a quant, a loop count or the KV arithmetic. `diagnostics()` stays complete, deliberately: it
+  is the maintainer's view and it is answered only to the trusted page's main frame.
+
+**The documented limit.** Two things stay readable inside the archive, and both are protocols rather
+than design: the engine's own required strings (its binary file name, the manifest build-family
+marker, the `--override-kv` keys that address the model's metadata) and the vendor TOOLS we must call
+by name (`nvidia-smi`, `vulkaninfo`, `rocm-smi`, `system_profiler`) along with the backend ids used as
+manifest pack keys. The config module's constant names are also visible to someone who unzips the
+asar — they are minified code, not a wire shape, and no page can read them.
+
 ## Tests
 
 `node --test tests/*.test.cjs` from the app root. `tests/local-ai-{hardware,planner,matrix,store,

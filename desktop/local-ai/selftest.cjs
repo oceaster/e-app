@@ -6,7 +6,7 @@
  */
 async function runSelfTest({ baseUrl, apiKey, ctx = 8192 }) {
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
-  const chat = (body) => fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers: H, body: JSON.stringify({ model: 'dory', temperature: 0, ...body }) });
+  const chat = (body) => fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers: H, body: JSON.stringify({ model: 'local', temperature: 0, ...body }) });
   const results = [];
   const check = async (name, fn) => {
     const t = Date.now();

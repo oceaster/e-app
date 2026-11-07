@@ -108,7 +108,7 @@ test('capabilities on a synthetic machine reaches the planner: tiers carry place
   assert.strictEqual(snapshot.hardware.gpus.length, 2, 'the fake machine had two cards');
   assert.strictEqual(snapshot.manifest.state, 'ready');
   for (const tier of snapshot.tiers) {
-    if (tier.ok) {
+    if (tier.available) {
       assert.ok(tier.placement && tier.why, `tier ${tier.tier} lost its placement or why on the way out`);
       assert.ok(tier.download && tier.download.state === 'ready');
       assert.ok(Number.isInteger(tier.download.engineBytes) && Number.isInteger(tier.download.modelBytes));
@@ -118,7 +118,7 @@ test('capabilities on a synthetic machine reaches the planner: tiers carry place
   }
   // The manifest is loadable but nothing is installed: the engine download is the whole pack.
   const flash = snapshot.tiers.find((t) => t.tier === 2);
-  assert.strictEqual(flash.ok, true, flash.reason);
+  assert.strictEqual(flash.available, true, flash.reason);
   assert.ok(flash.download.engineBytes > 0);
 });
 
@@ -128,11 +128,10 @@ test('a manifest that cannot be read is a NAMED state, not a thrown capabilities
   const ai = createLocalAI({ app: electron.app, ipcMain: electron.ipcMain, BrowserWindow: electron.BrowserWindow, trustedOrigins: () => ['https://one.example'], config: {}, exec: fixtures.stubExec(MACHINE) });
   const snapshot = await ai.capabilities();
   assert.strictEqual(snapshot.manifest.state, 'unavailable');
-  assert.match(snapshot.manifest.reason, /no manifest is configured/);
-  assert.ok(snapshot.tiers.every((t) => typeof t.ok === 'boolean'));
-  // Sizes are ESTIMATED from the model's parameter count when there is no manifest to read.
-  const plan = snapshot.tiers.find((t) => t.ok);
-  assert.ok(plan.estimate.weightsGiB > 0);
+  assert.match(snapshot.manifest.reason, /E_MANIFEST/);
+  assert.ok(snapshot.tiers.every((t) => typeof t.available === 'boolean'));
+  // A rung is still offered: its size is ESTIMATED from the model's parameter count.
+  assert.ok(snapshot.tiers.some((t) => t.available));
 });
 
 /* ------------------------------------------------------------------ lifetime */
@@ -228,7 +227,8 @@ test('an engine started under a trusted origin stops when that window navigates 
 
 test('main.cjs creates the engine with a LIVE trust list and adopts an orphan at boot', () => {
   const main = read('desktop/main.cjs');
-  assert.match(main, /const \{createLocalAI\}=require\('\.\/local-ai\/index\.cjs'\)/);
+  // The app loads the SHIPPED bundle (one minified file), never the readable sources.
+  assert.match(main, /const \{createLocalAI\}=require\('\.\/local-ai\/bundle\/index\.cjs'\)/);
   assert.match(main, /localAI=createLocalAI\(\{app,ipcMain,BrowserWindow,trustedOrigins:\(\)=>\[config\.server\]\.filter\(Boolean\)\}\)/,
     'trustedOrigins must be a FUNCTION reading config.server, not a snapshot of it');
   assert.match(main, /await localAI\.recover\(\)/, 'a crash may leave an engine holding VRAM: adopt or kill it at boot');

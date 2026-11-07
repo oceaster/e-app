@@ -11,11 +11,13 @@ const { EventEmitter } = require('events');
 const { downloadVerified, hashFile } = require('./downloader.cjs');
 
 const SAFE_NAME = /^[A-Za-z0-9][\w.\-]*$/;
+/** The build family the pinned engine must declare and carry (internal: never printed to a person). */
+const ENGINE_FEATURE = 'dory';
 const isWin = process.platform === 'win32';
 const EXE = isWin ? 'llama-server.exe' : 'llama-server';
 
 function validateManifest(m, { allowInsecure = false } = {}) {
-  const bad = (x) => { throw new Error(`invalid manifest: ${x}`); };
+  const bad = (x) => { throw new Error(`E_MANIFEST: ${x}`); };
   const file = (f, where) => {
     if (!f || !SAFE_NAME.test(f.name || '')) bad(`${where}: unsafe file name`);
     if (!/^[0-9a-f]{64}$/i.test(f.sha256 || '')) bad(`${where}: sha256`);
@@ -27,9 +29,11 @@ function validateManifest(m, { allowInsecure = false } = {}) {
   const e = m.engine;
   if (!/^[\w.\-]+$/.test(e.version || '')) bad('engine.version');
   if (!/^[0-9a-f]{7,40}$/i.test(e.llamaCommit || '')) bad('engine.llamaCommit');
-  if (!Array.isArray(e.features) || !e.features.includes('dory')) bad('engine must declare feature "dory"');
+  // The one engine-protocol word we cannot rename: the manifest must declare which build family it
+  // carries, and the binary's own `--version` is checked against it. Nothing a person sees prints it.
+  if (!Array.isArray(e.features) || !e.features.includes(ENGINE_FEATURE)) bad('engine build family');
   for (const [k, pack] of Object.entries(e.platforms || {})) {
-    if (!Array.isArray(pack.files) || !pack.files.some((f) => f.name === EXE || f.name === 'llama-server' || f.name === 'llama-server.exe')) bad(`platform ${k}: no llama-server binary`);
+    if (!Array.isArray(pack.files) || !pack.files.some((f) => f.name === EXE || f.name === 'llama-server' || f.name === 'llama-server.exe')) bad(`platform ${k}: no engine binary`);
     pack.files.forEach((f) => file(f, `platform ${k}`));
   }
   for (const [q, f] of Object.entries(m.models || {})) file(f, `model ${q}`);
@@ -59,7 +63,7 @@ class Store extends EventEmitter {
       const any = ['cpu', 'cuda', 'vulkan', 'metal', 'rocm'].find((name) => platforms[`${prefix}-${name}`]);
       if (any) return `${prefix}-${any}`;
     }
-    throw new Error(`no engine pack for ${want} in manifest`);
+    throw new Error(`E_PACK: no engine files for ${want}`);
   }
 
   engineInfo(backend) {
@@ -94,9 +98,9 @@ class Store extends EventEmitter {
   /** Refuse a binary whose hash doesn't match the manifest, and one that doesn't carry Dory. */
   async verifyEngine(backend) {
     const info = this.engineInfo(backend);
-    if (!info.installed) throw new Error('engine not installed');
+    if (!info.installed) throw new Error('E_NOT_INSTALLED: the local engine is not installed');
     const got = await hashFile(info.exe);
-    if (got !== info.exeFile.sha256.toLowerCase()) throw new Error('engine binary hash mismatch: refusing to run it');
+    if (got !== info.exeFile.sha256.toLowerCase()) throw new Error('E_ENGINE_HASH: the installed engine does not match its manifest entry');
     await this.probeVersion(info.exe);
     return info;
   }
@@ -108,7 +112,7 @@ class Store extends EventEmitter {
       execFile(exe, ['--version'], { cwd: path.dirname(exe), timeout: 15000, windowsHide: true }, (err, stdout, stderr) => {
         const out = `${stdout || ''}${stderr || ''}`.toLowerCase();
         if (out.includes(want)) return resolve(out.trim());
-        return reject(new Error(`engine does not carry the pinned Dory build (expected commit ${want}): ${(err && err.message) || out.trim().slice(0, 120)}`));
+        return reject(new Error(`E_ENGINE_BUILD: the installed engine is not the pinned build (expected ${want})`));
       });
     });
   }
@@ -128,7 +132,7 @@ class Store extends EventEmitter {
 
   async ensureModel(quant, { signal } = {}) {
     const f = this.manifest.models[quant];
-    if (!f) throw new Error(`manifest has no model ${quant}`);
+    if (!f) throw new Error(`E_MODEL: nothing in the manifest for ${quant}`);
     const p = this.modelPath(quant);
     if (this.modelInstalled(quant)) return p;
     await downloadVerified({ url: f.url, dest: p, sha256: f.sha256, size: f.size, allowInsecure: this.allowInsecure, signal,

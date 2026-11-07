@@ -29,6 +29,78 @@ const { Runtime } = require('./runtime.cjs');
 const { runSelfTest } = require('./selftest.cjs');
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * WHAT CROSSES THE BRIDGE, AND WHAT NEVER DOES.
+ *
+ * A person's own hardware is theirs to read — the card in their own machine, the RAM they bought —
+ * but OUR stack is not: the backend (CUDA / Vulkan / Metal / ROCm), the quant ladder, the KV layouts,
+ * the loop count and the arithmetic that chose them are the design, and they are not in any shape the
+ * page can read. `capabilities()` answers availability, a placement, one sentence, a context size and
+ * a download size; `status()` answers state and error; everything else stays in `diagnostics()`, which
+ * exists for whoever maintains this and is reachable only from the trusted page's main frame.
+ */
+const BACKEND_WORD = /\b(CUDA|Vulkan|Metal|ROCM)\s+/g;
+const plain = (text) => String(text == null ? '' : text).replace(BACKEND_WORD, '');
+const gib = (bytes) => (bytes == null ? null : Math.round((Number(bytes) / 1024 ** 3) * 10) / 10);
+
+/** The machine as its owner may see it: their own parts, and whether each is in use. */
+function publicMachine(hw) {
+  return {
+    platform: hw.platform,
+    arch: hw.arch,
+    cpu: hw.cpu.model,
+    threads: hw.cpu.logical,
+    ramGiB: gib(hw.ramTotal),
+    ramFreeGiB: gib(hw.ramFree),
+    unifiedMemory: !!hw.unifiedMemory,
+    gpus: (hw.gpus || []).map((gpu) => ({
+      name: gpu.name,
+      totalGiB: gib(gpu.totalBytes),
+      freeGiB: gpu.freeKnown ? gib(gpu.freeBytes) : null,
+      presentsDisplay: !!gpu.display,
+      inUse: gpu.busy ? { by: plain(gpu.busyOwner), kind: gpu.busy } : null,
+    })),
+    streaming: { active: !!(hw.streaming && hw.streaming.active) },
+  };
+}
+
+/**
+ * THE SENTENCE THE PAGE GETS IS NOT THE PLANNER'S SENTENCE. The planner's `why` explains itself to a
+ * maintainer — the quant, the loops, the cache layout — and none of that reaches a person: these are
+ * the tiers as a product states them, plus whatever the machine's owner needs to know about their
+ * own hardware.
+ */
+const TIER_SENTENCE = {
+  0: 'Runs on the CPU, using half of it, so the rest of this computer keeps up.',
+  1: 'The light setting: a small local model in the background, at low priority.',
+  2: 'The fast setting: one graphics card, full-precision conversation memory, long conversations.',
+  3: 'The most capable setting this computer can hold, with the longest conversation memory.',
+};
+
+function publicWhy(plan) {
+  const parts = [TIER_SENTENCE[plan.tier] || ''];
+  if ((plan.displayGpus || []).length) parts.push('It also drives the display, so some of its memory is left for that.');
+  const skipped = (plan.skippedGpus || [])[0];
+  if (skipped) parts.push(`${plain(skipped.why)}.`.replace(/\.\.$/, '.'));
+  return parts.filter(Boolean).join(' ').trim();
+}
+
+/** One rung, as the page may see it: no quant, no backend, no loop count, no estimate. */
+function publicTier(plan) {
+  if (!plan.ok) {
+    return { tier: plan.tier, label: plan.label, available: false, reason: plain(plan.reason) };
+  }
+  return {
+    tier: plan.tier,
+    label: plan.label,
+    available: true,
+    placement: plain(plan.placement),
+    why: publicWhy(plan),
+    contextTokens: plan.ctx,
+    download: plan.download,
+  };
+}
 const merge = (base, over) => {
   const out = { ...base };
   for (const k of Object.keys(over || {})) out[k] = isObj(base[k]) && isObj(over[k]) ? merge(base[k], over[k]) : over[k];
@@ -38,30 +110,35 @@ const originOf = (u) => { try { return new URL(u).origin; } catch { return null;
 
 async function loadManifest({ manifest, manifestUrl, cacheFile }) {
   if (manifest) return manifest;
-  if (!manifestUrl) throw new Error('no manifest is configured (manifestUrl or manifest)');
+  if (!manifestUrl) throw new Error('E_MANIFEST: no manifest source is configured');
   try {
     const res = await fetch(manifestUrl, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`E_MANIFEST: HTTP ${res.status}`);
     const body = await res.json();
     fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
     fs.writeFileSync(cacheFile, JSON.stringify(body));
     return body;
   } catch (e) {
-    try { return JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch { throw new Error(`cannot load manifest (${e.message}) and no cached copy`); }
+    try { return JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch { throw new Error(`E_MANIFEST: unavailable (${e.message}) and nothing cached`); }
   }
 }
 
-function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, manifestUrl, trustedOrigins = [], allowInsecureHttp = false, wireIpc = true, exec }) {
-  // `exec` is the probe executor and it exists for ONE reason: a test must be able to drive this
-  // whole stack (probes -> planner -> tiers) against a synthetic machine, because no test in this
-  // repository may read the hardware of the computer it happens to run on.
-  const probeHardware = () => detect(exec ? { cfg, exec } : { cfg });
+function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, manifestUrl, trustedOrigins = [], allowInsecureHttp = false, wireIpc = true, exec, probe }) {
+  // `exec` and `probe` exist for ONE reason: a test must be able to drive this whole stack (probes ->
+  // planner -> tiers) against a synthetic machine, because no test in this repository may read the
+  // hardware of the computer it happens to run on. `probe` carries a machine's platform/arch/os, which
+  // is everything `detect` would otherwise take from the host.
+  const probeHardware = () => detect({ cfg, ...(exec ? { exec } : {}), ...(probe || {}) });
   const cfg = merge(defaults, config);
-  const dataDir = path.join(app.getPath('userData'), 'local-ai');
-  const data = { dir: dataDir, cacheFile: path.join(dataDir, 'manifest.json'), manifest, manifestUrl };
+  // NOTHING HERE IS NAMED FOR WHAT IT IS. A person can open their own AppData / Application Support
+  // folder, so the engine's directory, cache, pidfile and log are opaque and short: `e1` is the local
+  // engine, and the file names say nothing about what runs inside it. (The ticket's rule, and the
+  // reason the readable sources are excluded from the packaged build.)
+  const dataDir = path.join(app.getPath('userData'), 'e1');
+  const data = { dir: dataDir, cacheFile: path.join(dataDir, 'c'), manifest, manifestUrl };
   const runtime = new Runtime({
-    pidFile: path.join(dataDir, 'engine.pid.json'),
-    logFile: path.join(dataDir, 'logs', 'engine.log'),
+    pidFile: path.join(dataDir, 'p'),
+    logFile: path.join(dataDir, 'l', 'l'),
     imageNames: (cfg.engine && cfg.engine.imageNames) || ['llama-server'],
     vram: () => probeHardware().then((hw) => hw.gpus),
   });
@@ -171,8 +248,8 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
           download.reason = manifestState.reason;
         }
         return { ...plan, download };
-      });
-      return { hardware: hw, manifest: manifestState, tiers, streaming: hw.streaming };
+      }).map(publicTier);
+      return { hardware: publicMachine(hw), manifest: { state: manifestState.state, reason: manifestState.reason }, tiers };
     },
 
     start(tier, ctxOwner) {
@@ -202,8 +279,24 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
     },
 
     async stop() { clearOwner(); if (abort) abort.abort(); await runtime.stop(); },
-    status: () => runtime.status(),
+    /** The public status: what is running, on which rung, how much room it has — nothing else. */
+    status() {
+      const current = runtime.status();
+      const plan = runtime.plan;
+      return {
+        state: current.state,
+        tier: current.tier,
+        label: current.label,
+        ready: current.state === 'ready',
+        contextTokens: plan ? plan.effectiveCtx || plan.ctx : null,
+        placement: plan ? plain(plan.placement) : null,
+        error: current.error,
+      };
+    },
     endpoint: () => (runtime.state === 'ready' ? { baseUrl: runtime.baseUrl, apiKey: runtime.apiKey } : null),
+    // DELIBERATELY FULL: hardware, the whole plan, the redacted argv, the KV calibration and 40+40 log
+    // lines. It is the maintainer's view (a bug report needs it) and it is answered only to the
+    // trusted page's main frame.
     diagnostics: () => ({
       hardware: lastHw,
       manifest: manifestState,

@@ -61,21 +61,21 @@ test('a hash mismatch is a NAMED STATE: nothing at dest, partial removed, nothin
   const { srv, base } = await serve({ m: data });
   const dest = path.join(tmp(), 'm.gguf');
   try {
-    await assert.rejects(downloadVerified({ url: `${base}/m`, dest, sha256: sha(Buffer.from('other')), size: data.length, allowInsecure: true }), /verification failed/);
+    await assert.rejects(downloadVerified({ url: `${base}/m`, dest, sha256: sha(Buffer.from('other')), size: data.length, allowInsecure: true }), /E_VERIFY/);
     assert.ok(!fs.existsSync(dest) && !fs.existsSync(`${dest}.part`));
   } finally { srv.close(); }
 });
 
 test('https only, unless the caller explicitly allows a local http source', async () => {
-  await assert.rejects(downloadVerified({ url: 'http://example.com/x', dest: path.join(tmp(), 'x'), sha256: 'a'.repeat(64), size: 1 }), /non-https/);
+  await assert.rejects(downloadVerified({ url: 'http://example.com/x', dest: path.join(tmp(), 'x'), sha256: 'a'.repeat(64), size: 1 }), /E_INSECURE/);
 });
 
 test('manifest validation: path traversal, a missing dory feature and a bad hash are all refused', () => {
   const good = file(EXE, Buffer.from('x'), 'https://h');
   assert.ok(validateManifest(manifestFor([good])));
   assert.throws(() => validateManifest(manifestFor([good, { ...good, name: '../evil' }])), /unsafe/);
-  assert.throws(() => validateManifest({ ...manifestFor([good]), engine: { ...manifestFor([good]).engine, features: [] } }), /dory/);
-  assert.throws(() => validateManifest(manifestFor([{ ...good, sha256: 'zz' }])), /sha256/);
+  assert.throws(() => validateManifest({ ...manifestFor([good]), engine: { ...manifestFor([good]).engine, features: [] } }), /E_MANIFEST/);
+  assert.throws(() => validateManifest(manifestFor([{ ...good, sha256: 'zz' }])), /sha256|E_MANIFEST/);
 });
 
 test('the engine pack a BACKEND needs is named per backend, and a CPU plan may reuse a GPU pack', () => {
@@ -92,7 +92,7 @@ test('the engine pack a BACKEND needs is named per backend, and a CPU plan may r
   });
   assert.strictEqual(store.variant('vulkan'), `${PREFIX}-vulkan`);
   assert.strictEqual(store.variant('cpu'), `${PREFIX}-vulkan`, 'the CPU floor runs the same binary with the devices hidden');
-  assert.throws(() => store.variant('cuda'), /no engine pack for .*-cuda/);
+  assert.throws(() => store.variant('cuda'), /E_PACK: no engine files for .*-cuda/);
 });
 
 test('engine pack installs atomically; a tampered binary is refused; the wrong commit is refused', async () => {
@@ -108,9 +108,9 @@ test('engine pack installs atomically; a tampered binary is refused; the wrong c
     if (process.platform !== 'win32') {
       await store.verifyEngine('cuda'); // hash ok + --version reports the pinned commit
       const wrong = new Store({ dir, manifest: { ...manifest, engine: { ...manifest.engine, llamaCommit: 'deadbeefcafe' } }, allowInsecureHttp: true });
-      await assert.rejects(wrong.ensureEngine('cuda').then(() => wrong.verifyEngine('cuda')), /pinned Dory build|not installed/);
+      await assert.rejects(wrong.ensureEngine('cuda').then(() => wrong.verifyEngine('cuda')), /E_ENGINE_BUILD|E_NOT_INSTALLED/);
       fs.writeFileSync(info.exe, Buffer.alloc(exe.length, 65)); // same size, different bytes
-      await assert.rejects(store.verifyEngine('cuda'), /hash mismatch/);
+      await assert.rejects(store.verifyEngine('cuda'), /E_ENGINE_HASH/);
     }
   } finally { srv.close(); }
 });
