@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-permission-state="asking">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
+<title>Grant Permissions</title>
+<link rel="stylesheet" href="permission.css">
+<script src="sources/theme-shell.js"></script>
+<script type="module" src="permission.mjs"></script>
+</head>
+<body>
+<main class="permission-stage" id="permission-stage">
+<section class="permission-card" aria-labelledby="permission-title" aria-describedby="permission-summary permission-privacy">
+<div class="permission-symbol" aria-hidden="true">
+<svg viewBox="0 0 64 48" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+<g class="capture-symbol"><rect x="5" y="12" width="29" height="25" rx="5"/><path d="m34 20 10-6v21l-10-6"/><rect x="49" y="8" width="8" height="19" rx="4"/><path d="M45 22v2a8 8 0 0 0 16 0v-2M53 32v8m-5 0h10"/></g>
+<path class="allowed-symbol" d="m19 25 9 9 19-21"/>
+<path class="denied-symbol" d="M8 5 59 44"/>
+</svg>
+</div>
+<h1 id="permission-title">Grant Permissions</h1>
+<p class="permission-summary" id="permission-summary">This e-server instance will be granted access to your camera and microphone on this device.</p>
+<p class="permission-privacy" id="permission-privacy">e-server instances are entirely owned by their users, and your data is impossible to read or manipulate without your access to your private access information.</p>
+<div class="permission-actions">
+<button type="button" id="permission-allow" data-permission-answer="allow" class="permission-primary">Allow Access</button>
+<button type="button" id="permission-deny" data-permission-answer="deny" class="permission-secondary">Deny Access</button>
+</div>
+</section>
+</main>
+<div class="permission-scrim" aria-hidden="true"></div>
+</body>
+</html>

@@ -10,6 +10,7 @@ const {loadServerPage}=require('./navigation.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
 const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
+const mediaPermission=require('./media-permission.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
@@ -17,7 +18,7 @@ const VERSION=require('../package.json').version,RUNTIME=process.versions.electr
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
 const development=!app.isPackaged,fixture=development?process.env.E_SERVER_CLIENT_TEST_ORIGIN:null;
-const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.html');
+const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.html'),permissionFile=path.join(__dirname,'permission','permission.html');
 // THE GROUND THE WINDOW WEARS BEFORE THE PAGE PAINTS. It is the account page's own colour in
 // each theme - account.css's #0d2029 ground in dark, site/launcher-light.css's --bg #eef2f9 in
 // light - because the window paints for the frames before the document does. The old literal
@@ -65,6 +66,9 @@ let deviceIdentity=null,deviceReading=null;
 //: CURRENT connection. `null` means "not asked yet" — never "denied" — because a permission nobody
 //: requested must not be reported or remembered as a refusal.
 let mediaGrant={camera:null,microphone:null},mediaAsking=null;
+//: The app's own screen for this question (desktop/permission.html — Diana's file, byte for byte)
+//: and the state the adapter paints on it.
+let permissionState={state:'',blurred:false};
 //: The one live publisher for this connection (desktop/live-feed.cjs). Its life is a SOCKET's life:
 //: one per connected document, ended when that document goes away, so every reconnect is a new
 //: epoch by construction. `feedGrabs` holds the frame requests waiting on the renderer, and
@@ -81,7 +85,15 @@ if(!app.requestSingleInstanceLock()){app.quit();}else{
  app.whenReady().then(start).catch(error=>{dialog.showErrorBox('e-server could not start',error.message);app.quit();});
 }
 function show(){if(!company?.authorized()){setupWindow();return;}const target=win||setup;if(target){target.show();target.focus();}}
-function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);}
+/** THE DEVICE-INSTANCE PERMISSION RELATIONSHIP IS PERSISTENT. Owen, 2026-11-06: "the
+ *  device-instance permission relationship should be persistent and the user should not be
+ *  prompted again". It is keyed by the e-server ORIGIN and stored with the rest of this install's
+ *  settings (0600): this device's answer for THAT instance, for ever, across restarts and
+ *  sign-ins. A second e-server is a different relationship and is asked once on its own. */
+function mediaDecision(origin){return mediaPermission.decisionFor(config,origin);}
+async function rememberMediaDecision(origin,decision){config=mediaPermission.remember(config,origin,decision);await save().catch(()=>{});}
+function showingPermission(){try{return !!(win&&!win.isDestroyed()&&win.webContents.getURL()===pathToFileURL(permissionFile).href);}catch{return false;}}
+function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);if(showingPermission())win.webContents.send('client:state',state);}
 function accountChanged(){if(!company?.authorized()){win?.hide();publish({phase:'auth',title:'Sign in to Easter Company.',error:''});setupWindow();}else publish({});}
 function changeServer(){if(!company?.authorized()){setupWindow();return;}void openServers();}
 // ONE SIGN-OUT, BOTH SCOPES (docs/COMPANY_LOGIN.md). The client's OWN half ends FIRST - the
@@ -492,6 +504,48 @@ function rendererFrame(window){
   tellFeed(window,'client:feed-grab',id);
  });
 }
+/** The device is opened from the permission screen, BEFORE the person is let in, so an operating
+ *  system dialog that appears while it opens has the screen behind it — blurred, per Owen,
+ *  2026-11-06: "if there is an os pop-up active waiting for the allow/deny permissions
+ *  confirmation then the screen should blur out until the dialogue is interacted with and
+ *  complete". */
+async function openDeviceFromScreen(){
+ const host=await feedCaptureWindow();
+ if(!host)return {};
+ try{return await rendererStates(host);}catch{return {};}
+}
+/** Answering the screen: remember it, open the device while the screen stays up, then let them in. */
+async function finishPermission(value){
+ const current=win;
+ if(!current||current.isDestroyed()||!config.server)return;
+ const allow=value==='allow';
+ mediaGrant={camera:allow,microphone:allow};
+ let states={};
+ if(allow){
+  permissionState={state:'os-pending',blurred:true};
+  publish({permission:permissionState});
+  states=await openDeviceFromScreen();
+ }
+ // WHAT THE DEVICE ACTUALLY SAID, not what was clicked: an Allow answered by an operating system
+ // refusal is a refusal, and it is that answer the relationship remembers.
+ const answered=allow&&states&&states.camera==='granted';
+ await rememberMediaDecision(config.server,answered?'granted':'denied');
+ if(!answered)mediaGrant={camera:false,microphone:false};
+ permissionState={state:answered?'allowed':'denied',blurred:false};
+ publish({permission:permissionState});
+ if(!current.isDestroyed())await loadServerPage(current,config.server+'/').catch(()=>{});
+}
+/** True when this document must give way to the permission screen (and it has been shown). */
+async function permissionScreenNeeded(current){
+ if(!config.server||mediaDecision(config.server))return false;
+ if(!(await sessionCookie()))return false;           // the PIN gate is still up: nothing to ask yet
+ const present=await fs.stat(permissionFile).then(()=>true).catch(()=>false);
+ if(!present)return false;                           // no screen shipped: today's dialog stands
+ permissionState={state:'asking',blurred:false};
+ publish({permission:permissionState});
+ await current.loadFile(permissionFile).catch(()=>{});
+ return true;
+}
 async function startFeed(window){
  if(!window||window.isDestroyed()||win!==window)return;
  if(!config.server)return;
@@ -597,6 +651,11 @@ function askMedia(){
 }
 /** The meaning of a thrown thing, without Electron's "Error invoking remote method" wrapper. */
 const sentence=value=>String(value&&value.message!==undefined?value.message:value??'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
+/** The permission screen's own door: this window, this file, nothing else. */
+function permissionFrame(event){
+ if(!win||event.sender!==win.webContents)throw Error('This request did not come from this window.');
+ if(!event.senderFrame||event.senderFrame.url!==pathToFileURL(permissionFile).href)throw Error('This request did not come from the permission screen.');
+}
 function local(event){if(!localFrame(event)||event.senderFrame.url!==pathToFileURL(shellFile).href)throw Error('This action is only available in e-server setup.');}
 function remote(event){company?.require();if(!config.server||!win||event.sender!==win.webContents||!trusted(event,config.server))throw Error('This request did not come from your e-server.');}
 const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
@@ -629,9 +688,12 @@ async function connect(){
  const remembered=persistent();
  const partition=(remembered?'persist:':'')+'server-'+crypto.createHash('sha256').update(config.server+'\0'+company.key()).digest('hex').slice(0,24);
  activeSession=session.fromPartition(partition);
- // ONE CONNECTION, ONE QUESTION: a different server (or a sign-out and back in) is a different
- // person-facing situation, and the last connection's camera answer is not carried into it.
- mediaGrant={camera:null,microphone:null};
+ // A REMEMBERED ANSWER IS NOT A QUESTION. If this device has already answered for this instance
+ // the person is never asked again; the camera simply stays as they chose. Only an instance this
+ // device has no relationship with yet starts from "not asked".
+ const decided=mediaDecision(config.server);
+ mediaGrant=decided?{camera:decided==='granted',microphone:decided==='granted'}:{camera:null,microphone:null};
+ permissionState={state:'',blurred:false};
  const oldVersion=config.serverVersions?.[config.server];
  if(oldVersion&&updateLevel(oldVersion,VERSION)!=='patch')await activeSession.clearCache();
  if(oldVersion&&updateLevel(oldVersion,VERSION)==='major')await activeSession.clearStorageData();
@@ -715,7 +777,13 @@ async function connect(){
  current.on('close',event=>{if(!quitting&&tray){event.preventDefault();current.hide();}});
  // EVERY DOCUMENT OF THE CONNECTED WINDOW IS ONE PUBLISHING SESSION: started when it finishes
  // loading, ended before the next one starts, so a reload is a new socket and a new epoch.
- current.webContents.on('did-finish-load',()=>{if(win===current)void startFeed(current);});
+ current.webContents.on('did-finish-load',async()=>{
+  if(win!==current)return;
+  // THE PERMISSION SCREEN COMES BEFORE THE INSTANCE (Owen, 2026-11-06), and only the first time
+  // this device meets this e-server.
+  if(await permissionScreenNeeded(current))return;
+  await startFeed(current);
+ });
  current.webContents.on('did-start-navigation',(event,navigationURL,isInPlace,isMainFrame)=>{
   if(win!==current)return;
   const line='navigation: '+String(navigationURL||'')+' (main='+isMainFrame+' inPlace='+isInPlace+')';
@@ -839,6 +907,10 @@ async function start(){
  ipcMain.handle('client:servers-add',answered(payload=>addServer(payload||{})));
  ipcMain.handle('client:servers-remove',answered((id,label)=>removeServer(String(id||''),String(label||''))));
  ipcMain.handle('client:servers-use',answered(async id=>{await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};}));
+ // THE PERMISSION SCREEN'S TWO CALLS (desktop/preload.cjs wires them, so Diana's document carries
+ // no script of ours): its answer, and the state to paint. Both are guarded to that one file.
+ ipcMain.handle('client:permission-state',event=>{permissionFrame(event);return {...state,permission:permissionState};});
+ ipcMain.on('client:permission-answer',(event,value)=>{try{permissionFrame(event);}catch{return;}void finishPermission(String(value||'deny'));});
  ipcMain.handle('client:retry',async event=>{local(event);company.require();if(state.phase==='update-error')await checkUpdate(true);else if(win){win.reload();setup.close();win.show();}else await connect();});
  // The two things a person may do about a stale build. `remote(event)` is the existing
  // main-frame-only guard, so the page itself cannot press these: only this preload's buttons

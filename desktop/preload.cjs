@@ -25,6 +25,52 @@ if(location.protocol==='file:'){
   themeRefresh:()=>ipcRenderer.invoke('client:theme-refresh'),
   onState:callback=>{const listener=(_,state)=>callback(state);ipcRenderer.on('client:state',listener);return()=>ipcRenderer.removeListener('client:state',listener);}
  });
+ // ── THE PERMISSION SCREEN'S ADAPTER, WHICH LIVES HERE ON PURPOSE ────────────────────────────
+ // desktop/permission/permission.html, its stylesheet and its module are Diana's files and ship
+ // byte for byte (cmp clean, asserted by scripts/permission-screen-smoke.cjs). The behaviour they
+ // need is attached from this preload rather than from a script tag she would have to carry, and
+ // it is HER contract, not one invented here: the state is `body[data-permission-state]`, which is
+ // the selector her CSS owns, and her `setPermissionState` also makes the stage inert, marks it
+ // busy and disables both buttons while an answer is being carried out.
+ //
+ // WHY THE ADAPTER RESTATES THREE LINES OF HER MODULE. Her `permission.mjs` is a `<script
+ // type="module">` inside a file:// document, and Chromium refuses a module script from an opaque
+ // origin (and her own CSP says `script-src 'self'`): it never runs in the app. So the state is
+ // painted here, in the preload, exactly as her module would have painted it — dataset, inert,
+ // aria-busy, disabled — and her module stays the specification rather than a runtime dependency.
+ const PERMISSION_STATES=['asking','os-pending','allowed','denied'];
+ if(location.pathname.endsWith('permission.html')){
+  const paint=next=>{
+   const raw=String((next&&next.permission&&next.permission.state)||'asking');
+   const state=PERMISSION_STATES.includes(raw)?raw:'asking';
+   const asking=state==='asking';
+   // HER SELECTOR IS `:root[data-permission-state]`, and her module mirrors that attribute into
+   // inert/disabled/aria-busy through a MutationObserver. The mirror below is the same three lines
+   // done by hand, because a `<script type="module">` does not run from a file:// document (opaque
+   // origin, and her own CSP keeps it to 'self'): with her module inert the mirror is what keeps an
+   // answered screen from being clickable twice.
+   document.documentElement.dataset.permissionState=state;
+   const stage=document.getElementById('permission-stage');
+   if(stage){stage.inert=!asking;stage.setAttribute('aria-busy',String(state==='os-pending'));}
+   for(const button of document.querySelectorAll('[data-permission-answer]'))button.disabled=!asking;
+  };
+  const choose=value=>{
+   const state=document.documentElement.dataset.permissionState||'asking';
+   if(state!=='asking')return;                       // one answer per screen, enforced twice
+   paint({permission:{state:'os-pending'}});         // lock the view until the main process answers
+   ipcRenderer.send('client:permission-answer',String(value||'deny'));
+  };
+  document.addEventListener('click',event=>{
+   const button=event.target&&event.target.closest?event.target.closest('#permission-allow, #permission-deny, [data-permission-answer]'):null;
+   if(!button)return;
+   event.preventDefault();
+   if(button.disabled)return;
+   const named=button.getAttribute('data-permission-answer');
+   choose(named||(button.id==='permission-allow'?'allow':'deny'));
+  });
+  ipcRenderer.on('client:state',(_event,next)=>paint(next));
+  ipcRenderer.invoke('client:permission-state').then(paint).catch(()=>{});
+ }
 }else{
  contextBridge.exposeInMainWorld('eServerClient',{
   openExternal:value=>ipcRenderer.invoke('client:external',value),microsoft:()=>ipcRenderer.invoke('client:microsoft'),

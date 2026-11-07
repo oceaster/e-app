@@ -1,0 +1,121 @@
+/* Local aliases consume the actual shell contract; fallback colours are preview-only. */
+:root {
+  color-scheme: dark;
+  --permission-bg: var(--ec-bg, #111311);
+  --permission-panel: var(--ec-panel, #1b1d19);
+  --permission-soft: var(--ec-panel-soft, #242720);
+  --permission-ink: var(--ec-ink, #f0eee5);
+  --permission-muted: var(--ec-muted-panel, #b1b3a6);
+  --permission-line: var(--ec-control-line, #45493b);
+  --permission-accent: var(--ec-accent-action, #d6bd79);
+  --permission-hover: var(--ec-accent-hover, #e6cd88);
+  --permission-on-accent: var(--ec-on-accent, #202014);
+  --permission-scrim: rgb(0 0 0 / 20%);
+}
+:root[data-easter-theme="light"] {
+  color-scheme: light;
+  --permission-bg: var(--ec-bg, #f3f1e9);
+  --permission-panel: var(--ec-panel, #fffdf6);
+  --permission-soft: var(--ec-panel-soft, #efede3);
+  --permission-ink: var(--ec-ink, #292d25);
+  --permission-muted: var(--ec-muted-panel, #626658);
+  --permission-line: var(--ec-control-line, #b8b9a9);
+  --permission-accent: var(--ec-accent-action, #756020);
+  --permission-hover: var(--ec-accent-hover, #635018);
+  --permission-on-accent: var(--ec-on-accent, #ffffff);
+  --permission-scrim: rgb(255 255 255 / 18%);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--permission-bg);
+  color: var(--permission-ink);
+  font-family: var(--ec-font-body, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+.permission-stage {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+}
+.permission-card {
+  width: 100%;
+  max-width: 536px;
+  padding: 42px 44px 40px;
+  border: 1px solid var(--permission-line);
+  border-radius: 12px;
+  background: var(--permission-panel);
+  box-shadow: 0 16px 60px rgb(0 0 0 / 8%);
+}
+.permission-symbol {
+  width: 72px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border: 1px solid var(--permission-line);
+  border-radius: 14px;
+  background: var(--permission-soft);
+  color: var(--permission-accent);
+}
+.permission-symbol svg { width: 54px; height: 42px; }
+.allowed-symbol, .denied-symbol { display: none; }
+h1 {
+  margin: 0 0 18px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 36px;
+  line-height: 1.12;
+  font-weight: 400;
+  letter-spacing: -.025em;
+}
+p { margin: 0; text-wrap: pretty; }
+.permission-summary { font-size: 15px; line-height: 1.65; }
+.permission-privacy {
+  margin-top: 18px;
+  color: var(--permission-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.permission-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 30px; }
+button {
+  min-width: 0;
+  min-height: 46px;
+  padding: 11px 14px;
+  border: 1px solid var(--permission-line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  cursor: pointer;
+}
+.permission-primary { background: var(--permission-accent); color: var(--permission-on-accent); border-color: var(--permission-accent); }
+.permission-secondary { background: var(--permission-panel); color: var(--permission-ink); }
+.permission-primary:hover:not(:disabled) { background: var(--permission-hover); border-color: var(--permission-hover); }
+.permission-secondary:hover:not(:disabled) { background: var(--permission-soft); }
+button:focus-visible { outline: 2px solid var(--permission-accent); outline-offset: 4px; }
+button:disabled { cursor: default; }
+.permission-scrim { position: fixed; inset: 0; background: var(--permission-scrim); pointer-events: none; opacity: 0; }
+:root[data-permission-state="os-pending"] .permission-stage { filter: blur(8px); }
+:root[data-permission-state="os-pending"] .permission-scrim { opacity: 1; pointer-events: auto; }
+:root[data-permission-state="allowed"] .capture-symbol { display: none; }
+:root[data-permission-state="allowed"] .allowed-symbol { display: block; }
+:root[data-permission-state="denied"] .denied-symbol { display: block; }
+:root[data-permission-state="denied"] .permission-symbol { color: var(--permission-muted); }
+:root:is([data-permission-state="allowed"], [data-permission-state="denied"]) .permission-actions { opacity: .55; }
+/* No transition on entry: native permission UI must never outrun the obscuring layer. */
+@media (max-width: 480px) {
+  .permission-stage { padding: 20px 16px; }
+  .permission-card { padding: 26px 24px; border-radius: 10px; }
+  .permission-symbol { width: 60px; height: 54px; margin-bottom: 20px; }
+  h1 { font-size: 30px; margin-bottom: 16px; }
+  .permission-summary { font-size: 14px; line-height: 1.6; }
+  .permission-privacy { font-size: 12px; line-height: 1.65; margin-top: 16px; }
+  .permission-actions { margin-top: 24px; gap: 10px; }
+  button { padding-inline: 8px; }
+}
+@media (forced-colors: active) {
+  button:focus-visible { outline-color: Highlight; }
+  .permission-symbol { color: CanvasText; }
+}
