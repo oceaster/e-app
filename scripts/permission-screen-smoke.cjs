@@ -33,7 +33,7 @@ function ok(sentence) { pass.push(sentence); console.log(`PASS  ${sentence}`); }
 function at(stage) { console.log(`\n-- ${stage}`); }
 
 let answer = null;
-let state = { permission: { state: 'asking', blurred: false } };
+let state = { permission: { state: 'asking', blurred: false }, theme: 'dark' };
 const paint = () => {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send('client:state', state);
@@ -41,9 +41,14 @@ const paint = () => {
 };
 
 ipcMain.handle('client:permission-state', () => state);
+// The shell probe below mounts desktop/shell.html, which asks for its own state on load; answer it
+// so a gate run is not full of "No handler registered" noise that could hide a real failure.
+ipcMain.handle('client:state', () => state);
 // The preload reads the cached theme synchronously at parse time; without a listener that call
 // blocks the renderer, so answer it exactly as main.cjs does.
-ipcMain.on('theme:cached', (event) => { event.returnValue = 'dark'; });
+//: The theme the run is proving. The gate sets it, then loads the same document twice.
+let cachedTheme = 'dark';
+ipcMain.on('theme:cached', (event) => { event.returnValue = cachedTheme; });
 ipcMain.on('client:permission-answer', (_event, value) => {
   answer = String(value);
   // What the main process does: an answer means a native prompt MAY be outstanding, so the screen
@@ -201,6 +206,63 @@ app.whenReady().then(async () => {
     dark: getComputedStyle(document.body).backgroundColor,
     root: document.documentElement.getAttribute('data-easter-theme') };`);
   ok(`body background ${themes.dark} with root theme ${JSON.stringify(themes.root)}`);
+
+
+  at('the palette is the app\'s, in both themes');
+  // OWEN, 2026-11-06: "the camera & microphone permission screen is not consistently styled and
+  // respecting the global light/dark theme style guide". Her sheet consumes the host's --ec-*
+  // tokens with standalone fallbacks, so before the adapter injected the host theme sheets the
+  // page painted #111311/#f2efe6 while the app painted #0d2029/#eef2f9. This asserts the page and
+  // the app's own shell agree, in BOTH themes, rather than trusting that the links loaded.
+  const SHELL = path.join(ROOT, 'desktop', 'shell.html');
+  const paletteOf = async (theme) => {
+    cachedTheme = theme;
+    state = { ...state, theme };
+    const probe = new BrowserWindow({
+      show: false, width: 1280, height: 900,
+      webPreferences: {
+        preload: path.join(ROOT, 'desktop', 'preload.cjs'),
+        contextIsolation: true, nodeIntegration: false, sandbox: true,
+      },
+    });
+    await probe.loadFile(SHELL);
+    const shellBg = await probe.webContents.executeJavaScript(
+      `getComputedStyle(document.documentElement).getPropertyValue('--ec-bg').trim()`, true);
+    probe.destroy();
+    const page = new BrowserWindow({
+      show: false, width: 1280, height: 900,
+      webPreferences: {
+        preload: path.join(ROOT, 'desktop', 'preload.cjs'),
+        contextIsolation: true, nodeIntegration: false, sandbox: true,
+      },
+    });
+    await page.loadFile(path.join(HER, 'permission.html'));
+    await new Promise((resolve) => setTimeout(resolve, 400));   // the injected sheets are async
+    const read = await page.webContents.executeJavaScript(`(() => {
+      const root = document.documentElement;
+      const body = getComputedStyle(document.body);
+      return {
+        theme: root.getAttribute('data-easter-theme'),
+        attribute: getComputedStyle(root).getPropertyValue('--ec-bg').trim(),
+        background: body.backgroundColor,
+        links: [...document.querySelectorAll('link[data-host-sheet]')].map(link => link.getAttribute('data-host-sheet')),
+      }; })()`, true);
+    page.destroy();
+    return { shellBg, ...read };
+  };
+
+  const dark = await paletteOf('dark');
+  assert.ok(dark.links.length >= 2, `the host theme sheets are injected: ${JSON.stringify(dark.links)}`);
+  assert.equal(dark.theme, 'dark', 'the document wears the app\'s theme attribute');
+  assert.ok(dark.attribute, `--ec-bg resolves from the host sheets, not a fallback: ${JSON.stringify(dark.attribute)}`);
+  assert.equal(dark.attribute, dark.shellBg, `dark: the screen and the shell share one --ec-bg (screen ${dark.attribute}, shell ${dark.shellBg})`);
+  ok(`dark: --ec-bg ${dark.attribute} on the screen and the shell, ${dark.links.length} host sheets`);
+
+  const light = await paletteOf('light');
+  assert.equal(light.theme, 'light', 'and it follows the account into light');
+  assert.equal(light.attribute, light.shellBg, `light: the screen and the shell share one --ec-bg (screen ${light.attribute}, shell ${light.shellBg})`);
+  assert.notEqual(light.background, dark.background, `light and dark paint different surfaces (${light.background} vs ${dark.background})`);
+  ok(`light: --ec-bg ${light.attribute}, background ${light.background} vs dark ${dark.background}`);
 
   console.log(`\nPERMISSION_SCREEN_SMOKE_PASS — ${pass.length} checks`);
   app.exit(0);

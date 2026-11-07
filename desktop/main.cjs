@@ -945,7 +945,11 @@ async function start(){
  // no service call, no token - and only to THIS window's own preload: any other sender gets ''.
  ipcMain.on('theme:cached',event=>{
   event.returnValue='';
-  if(!setup||setup.isDestroyed()||event.sender!==setup.webContents)return;
+  // THE PERMISSION SCREEN ASKS THIS BEFORE ITS FIRST PAINT (desktop/preload.cjs): it is the app's
+  // own document, and a palette is not a secret. Anything else still gets ''.
+  const permissionDocument=win&&!win.isDestroyed()&&event.sender===win.webContents
+   &&showingFile(win,permissionFile);
+  if(!permissionDocument&&(!setup||setup.isDestroyed()||event.sender!==setup.webContents))return;
   event.returnValue=themePreference||'';
  });
  // A window that has the person's attention again asks whether the account document changed (a

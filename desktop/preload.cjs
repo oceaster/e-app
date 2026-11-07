@@ -40,6 +40,56 @@ if(location.protocol==='file:'){
  // aria-busy, disabled — and her module stays the specification rather than a runtime dependency.
  const PERMISSION_STATES=['asking','os-pending','allowed','denied'];
  if(location.pathname.endsWith('permission.html')){
+  // THE SCREEN WEARS THE APP'S THEME, NOT ITS OWN APPROXIMATION. Owen, 2026-11-06: "the camera &
+  // microphone permission screen is not consistently styled and respecting the global light/dark
+  // theme style guide". Diana's sheet consumes the host's --ec-* custom properties with standalone fallbacks
+  // (`--permission-bg: var(--ec-bg, #111311)`), and her NOTES say the canonical palette was not in
+  // the sources she was given — so without the host's own theme sheets every custom property falls back to
+  // an approximation (#111311 against the real #0d2029 dark and #eef2f9 light). These are the same
+  // sheets desktop/shell.html loads, in the same order, injected here rather than in her file.
+  const HOST_SHEETS=['vendor/launcher/theme/theme.css','vendor/launcher/theme/launcher-light.css',
+   'vendor/launcher/theme/launcher-light-adapter.css','vendor/launcher/theme/launcher-bindings.css',
+   'connections.css','connections-adapter.css','shell.css'];
+  // A PRELOAD RUNS BEFORE THE PARSER HAS A <head>: `document.head` is null here (measured
+  // 2026-11-06 — appending then threw "Cannot read properties of null" and the whole preload,
+  // including the two buttons, never loaded). The sheets are appended as soon as a head exists.
+  const injectSheets=()=>{
+   if(!document.head)return;
+   for(const href of HOST_SHEETS){
+    if(document.querySelector('link[data-host-sheet="'+href+'"]'))continue;
+    const link=document.createElement('link');
+    link.rel='stylesheet';link.href='../'+href;link.setAttribute('data-host-sheet',href);
+    document.head.appendChild(link);
+   }
+  };
+  const firstPaint=()=>{injectSheets();paintTheme(undefined);};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',firstPaint,{once:true});
+  else firstPaint();
+  // THE THEME ITSELF COMES FROM THE STATE, not from her `sources/theme-shell.js`: that classic
+  // script is inside a document whose CSP says `script-src 'self'`, and whether it runs is a
+  // decision this adapter must not depend on for something as visible as the palette.
+  // THE CACHED PREFERENCE, READ THE SAME WAY THE SHELL READS IT: a synchronous answer from the
+  // main process, available before the first paint, so a light-theme person never sees the dark
+  // fallback flash and then repaint.
+  let cachedTheme='';
+  try{cachedTheme=String(ipcRenderer.sendSync('theme:cached')||'');}catch{cachedTheme='';}
+  const resolveTheme=value=>{
+   if(value==='light'||value==='dark')return value;
+   try{return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch{return 'dark';}
+  };
+  const paintTheme=next=>{
+   // NOTHING HERE MAY COST THE PERSON THEIR BUTTONS. At preload time `document.documentElement`
+   // can still be null (measured 2026-11-06: appending to a null head, then setting an attribute
+   // on a null root, each threw and the whole preload failed — the screen painted but Allow did
+   // nothing). So a theme that cannot be painted yet is retried, and any failure is contained.
+   const root=document.documentElement;
+   if(!root)return;
+   try{
+    const chosen=String((next&&next.theme)||cachedTheme||'');
+    root.setAttribute('data-easter-theme',resolveTheme(chosen));
+    root.style.colorScheme=resolveTheme(chosen);
+   }catch{}
+  };
   const paint=next=>{
    const raw=String((next&&next.permission&&next.permission.state)||'asking');
    const state=PERMISSION_STATES.includes(raw)?raw:'asking';
@@ -68,8 +118,8 @@ if(location.protocol==='file:'){
    const named=button.getAttribute('data-permission-answer');
    choose(named||(button.id==='permission-allow'?'allow':'deny'));
   });
-  ipcRenderer.on('client:state',(_event,next)=>paint(next));
-  ipcRenderer.invoke('client:permission-state').then(paint).catch(()=>{});
+  ipcRenderer.on('client:state',(_event,next)=>{paintTheme(next);paint(next);});
+  ipcRenderer.invoke('client:permission-state').then(next=>{paintTheme(next);paint(next);}).catch(()=>{});
  }
 }else{
  contextBridge.exposeInMainWorld('eServerClient',{
