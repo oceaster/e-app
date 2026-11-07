@@ -2,3 +2,4 @@ node_modules/
 release/
 .openai/
 *.log
+release-debug/

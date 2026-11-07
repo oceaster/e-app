@@ -9,7 +9,9 @@ your Easter Company account are still required. No server address, PIN, Company 
 backend source is bundled into releases.
 
 `npm ci`, `npm test`, `npm start`. `npm run dist:linux` builds AppImage, DEB and
-pacman; `npm run dist:windows` builds an NSIS installer on Windows. The release
+pacman; `npm run dist:windows` builds an NSIS installer on Windows. `npm run pack:debug` builds a support-only
+debug pack in `release-debug/` (readable engine sources beside the asar, boots in debug mode
+with no flag); it is never a release input. The release
 workflow builds both operating systems and refuses to publish without every
 installer, both verified ASAR update payloads and SHA256SUMS. Windows binaries are
 unsigned; the download instructions explain SmartScreen accurately.

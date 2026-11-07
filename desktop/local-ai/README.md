@@ -166,6 +166,14 @@ tells you "the pack predates the dist; run `npm run pack`"), lists the real asar
 bundle for the engine/model words and the family marker, then starts the same tree with `--debug` and
 proves the readable sources and the detail are back.
 
+**A debug pack: `npm run pack:debug`.** It is FOR reproducing a person's exact build with the detail
+on — the same tree, the same `app.asar`, plus the readable sources at `resources/local-ai/src` and a
+`resources/debug-pack` marker, so it boots in debug mode with **no flag** (`[e-app] mode=debug
+(debug-pack) engine=resources`). It is NEVER a release input: it is written to `release-debug/`, its
+archive is byte-identical to production's, and `pack`, `dist:linux` and `dist:windows` do not depend on
+it. `tests/debug-pack.test.cjs` builds both side by side, lists and boots each, and says which is
+which.
+
 ## Tests
 
 `node --test tests/*.test.cjs` from the app root. `tests/local-ai-{hardware,planner,matrix,store,

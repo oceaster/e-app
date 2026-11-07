@@ -9,7 +9,13 @@
  * ONE SWITCH, RESOLVED ONCE AT BOOT (`resolveDebug`), in this order:
  *   1. `--debug` on the command line, or `E_APP_DEBUG=1`            -> debug ON
  *   2. `--no-debug`, or `E_APP_DEBUG=0`                            -> debug OFF
- *   3. otherwise the DEFAULT: production when the app is packaged, debug in an unpackaged dev tree
+ *   3. a DEBUG PACK — the marker file `resources/debug-pack`, written only by `npm run pack:debug`
+ *      -> debug ON. This is what makes a debug pack boot in debug WITHOUT a flag: a person
+ *      double-clicks an executable, so no environment variable set in a build shell travels with the
+ *      artifact, and the maintainer reproducing their report should not have to know a flag exists.
+ *      An explicit request still wins both ways, so the SAME debug pack started with `--app-no-debug`
+ *      is production — which is how a maintainer compares the two behaviours on one artifact.
+ *   4. otherwise the DEFAULT: production when the app is packaged, debug in an unpackaged dev tree
  *
  * `app.isPackaged` STAYS A SEPARATE FACT. It only feeds that default. A person running a PACKAGED
  * build with `--debug` gets debug behaviour, and a packaged release without the flag can never get it.
@@ -54,16 +60,38 @@ function explicit({ argv = [], env = {} } = {}) {
 }
 
 /**
- * THE decision. Called once, at boot, with the three facts it needs — nothing may re-derive it.
- * @returns {{debug: boolean, source: 'flag'|'env'|'default-packaged'|'default-unpackaged', packaged: boolean}}
+ * THE DEBUG PACK'S MARKER, and it is a FILE because a file is the only thing that travels.
+ * `npm run pack:debug` writes `resources/debug-pack` beside the asar; `npm run pack` never does, and
+ * `tests/debug-pack.test.cjs` proves both. Env baked at pack time would be a lie — nothing inherits a
+ * build shell's environment — and a build-time constant inside the asar would put the switch back in
+ * the shipped code, which is the thing the flag exists to keep out.
  */
-function resolveDebug({ argv = process.argv, env = process.env, isPackaged = false } = {}) {
+const DEBUG_PACK_MARKER = 'debug-pack';
+
+function debugPackMarker({ resourcesPath = process.resourcesPath } = {}) {
+  if (!resourcesPath) return null;
+  try {
+    const marker = path.join(resourcesPath, DEBUG_PACK_MARKER);
+    return fs.existsSync(marker) ? marker : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * THE decision. Called once, at boot, with the facts it needs — nothing may re-derive it.
+ * @returns {{debug: boolean, source: 'flag'|'env'|'debug-pack'|'default-packaged'|'default-unpackaged', packaged: boolean}}
+ */
+function resolveDebug({ argv = process.argv, env = process.env, isPackaged = false, resourcesPath = process.resourcesPath, debugPack } = {}) {
   const wanted = explicit({ argv, env });
   if (wanted === true) {
     const byFlag = (argv || []).map(String).some((arg) => ON_FLAGS.includes(arg));
     return { debug: true, source: byFlag ? 'flag' : 'env', packaged: !!isPackaged };
   }
   if (wanted === false) return { debug: false, source: 'flag', packaged: !!isPackaged };
+  // No explicit request: a debug pack turns debug on, and a production pack never carries the marker.
+  const packed = typeof debugPack === 'boolean' ? debugPack : !!debugPackMarker({ resourcesPath });
+  if (packed) return { debug: true, source: 'debug-pack', packaged: !!isPackaged };
   return {
     debug: !isPackaged,
     source: isPackaged ? 'default-packaged' : 'default-unpackaged',
@@ -89,4 +117,4 @@ function engineEntry({ debug = false, base = __dirname, resourcesPath = process.
   return { require: dist, readable: false, where: 'bundle' };
 }
 
-module.exports = { resolveDebug, explicit, engineEntry };
+module.exports = { resolveDebug, explicit, engineEntry, debugPackMarker, DEBUG_PACK_MARKER };

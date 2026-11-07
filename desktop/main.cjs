@@ -17,12 +17,14 @@ const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./v
 // ── DEBUG IS ITS OWN SWITCH ─────────────────────────────────────────────────────────────────────
 // Owen, 2026-11-07: "both e-server and e-app have 'debug mode' flags ... in production mode these
 // things should never have exposing error messages". Resolved ONCE here, by `--debug` / `-no-debug`
-// or E_APP_DEBUG, defaulting to production when packaged. `development` above is a different fact
-// (a fixture origin, a dev tree) and is NOT debug: a packaged build started with --debug is debug.
+// or E_APP_DEBUG, defaulting to production when packaged — and defaulting to DEBUG in a debug pack,
+// whose `resources/debug-pack` marker is written only by `npm run pack:debug`. `development` above is
+// a different fact (a fixture origin, a dev tree) and is NOT debug: a packaged build started with
+// --debug is debug.
 // What it changes is DETAIL only — which engine entry loads, whether diagnostics() answers, whether
 // a failure carries its stack — never a permission, a secret or the shape of what a page receives.
 const {resolveDebug,engineEntry}=require('./debug.cjs');
-const DEBUG=resolveDebug({argv:process.argv,env:process.env,isPackaged:app.isPackaged});
+const DEBUG=resolveDebug({argv:process.argv,env:process.env,isPackaged:app.isPackaged,resourcesPath:process.resourcesPath});
 const DEBUG_MODE=DEBUG.debug;
 const ENGINE_ENTRY=engineEntry({debug:DEBUG_MODE,base:__dirname});
 console.log(`[e-app] mode=${DEBUG_MODE?'debug':'production'} (${DEBUG.source}) engine=${ENGINE_ENTRY.where}`);
