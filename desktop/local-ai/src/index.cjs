@@ -273,8 +273,12 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
         let engine;
         try { engine = await storeNow.verifyEngine(plan.backend); } catch (e) { runtime.setState('error', { error: e.message }); throw e; }
         if (ctxOwner) setOwner(ctxOwner.sender, ctxOwner.origin);
+        // THE ENGINE'S OWN METADATA COMES FROM THE MANIFEST, not from this bundle: `launchData()` is
+        // validated at manifest parse (E_MANIFEST names the missing field), so a launch can never fall
+        // back to a hard-coded family or an empty --override-kv.
+        const meta = storeNow.launchData();
         // The model is ALWAYS a local path: `-m <file>` and never `-hf`, because a launch is not a download.
-        return runtime.start(plan, { binaryPath: engine.exe, modelArgs: ['-m', storeNow.modelPath(plan.quant)], cfg });
+        return runtime.start(plan, { binaryPath: engine.exe, modelArgs: ['-m', storeNow.modelPath(plan.quant)], cfg, overrides: meta.overrides, family: meta.family });
       });
     },
 
@@ -300,7 +304,7 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
     diagnostics: () => ({
       hardware: lastHw,
       manifest: manifestState,
-      engine: store ? { version: store.manifest.engine.version, commit: store.manifest.engine.build } : null,
+      engine: store ? { version: store.manifest.engine.version, commit: store.manifest.engine.build, family: store.manifest.engine.family } : null,
       ...runtime.diagnostics(),
     }),
     async selfTest() {

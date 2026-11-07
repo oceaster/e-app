@@ -124,12 +124,12 @@ class Runtime extends EventEmitter {
     return this.status();
   }
 
-  async _launch(plan, { binaryPath, modelArgs, cfg, env = {} }) {
+  async _launch(plan, { binaryPath, modelArgs, cfg, env = {}, overrides, family }) {
     const port = await freePort();
     const apiKey = crypto.randomBytes(16).toString('hex');
     this._secret = apiKey;
     this.head = []; this.tail = []; this._kvSummary = 0; this._kvBuffers = 0;
-    const args = [...modelArgs, ...buildServerArgs(plan, { port, apiKey, cfg })];
+    const args = [...modelArgs, ...buildServerArgs(plan, { port, apiKey, cfg, overrides })];
     this.diag.argv = this._redact([binaryPath, ...args].join(' '));
 
     const child = spawn(binaryPath, args, {
@@ -147,7 +147,9 @@ class Runtime extends EventEmitter {
     const onData = (buf) => String(buf).split(/\r?\n/).filter(Boolean).forEach((l) => this._onLine(l));
     child.stdout.on('data', onData); child.stderr.on('data', onData);
     try { os.setPriority(child.pid, PRIORITY[plan.priority] ?? PRIORITY.normal); } catch { /* best effort */ }
-    if (this.o.pidFile) proc.writePid(this.o.pidFile, { pid: child.pid, port, apiKey, baseUrl: `http://127.0.0.1:${port}/v1`, plan, exe: path.basename(binaryPath), startedAt: Date.now() });
+    // `family` is recorded (not printed) so whoever maintains this can tell which build a running
+    // engine belongs to without the bundle ever naming one.
+    if (this.o.pidFile) proc.writePid(this.o.pidFile, { pid: child.pid, port, apiKey, baseUrl: `http://127.0.0.1:${port}/v1`, plan, family: family || null, exe: path.basename(binaryPath), startedAt: Date.now() });
 
     const deadline = Date.now() + cfg.server.startTimeoutMs;
     while (Date.now() < deadline) {

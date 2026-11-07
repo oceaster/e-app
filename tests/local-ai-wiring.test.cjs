@@ -23,6 +23,7 @@ const IDS = require('../desktop/local-ai/src/config.cjs').ids;
 const EXE = process.platform === 'win32' ? IDS.binary.win32 : IDS.binary.unix;
 const { createLocalAI } = require('../desktop/local-ai/src/index.cjs');
 const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
+const { ENGINE_META } = fixtures;
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
@@ -62,7 +63,7 @@ const options = (dir, extra = {}) => ({
   config: {},
   manifest: {
     engine: {
-      version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+      version: '1.0.0', build: '43e865ec059a', family: ENGINE_META.family, overrides: { ...ENGINE_META.overrides },
       platforms: { [`${process.platform}-${process.arch}-${IDS.backend.cuda}`]: { files: [{ name: EXE, url: 'https://example.invalid/e', sha256: 'a'.repeat(64), size: 10 }] } },
     },
     models: { [`${IDS.model}-q2`]: { name: `${IDS.model}-q2.bin`, url: 'https://example.invalid/m', sha256: 'b'.repeat(64), size: 1000 } },
@@ -180,7 +181,7 @@ test('an engine started under a trusted origin stops when that window navigates 
   const sha256 = '43e865ec059a'.padEnd(64, '0').slice(0, 64);
   const manifest = {
     engine: {
-      version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+      version: '1.0.0', build: '43e865ec059a', family: ENGINE_META.family, overrides: { ...ENGINE_META.overrides },
       platforms: { [`${process.platform}-${process.arch}-${IDS.backend.cuda}`]: { files: [{ name: EXE, url: `${base}/e`, sha256: sha(files.e), size: files.e.length }] } },
     },
     models: { [`${IDS.model}-q4`]: { name: `${IDS.model}-q4.bin`, url: `${base}/m`, sha256: sha(files.m), size: files.m.length } },

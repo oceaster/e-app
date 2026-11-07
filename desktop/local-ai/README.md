@@ -97,12 +97,31 @@ code/tech/design". So the app loads `desktop/local-ai/bundle/index.cjs`, built b
   name, a quant, a loop count or the KV arithmetic. `diagnostics()` stays complete, deliberately: it
   is the maintainer's view and it is answered only to the trusted page's main frame.
 
-**The documented limit.** Two things stay readable inside the archive, and both are protocols rather
-than design: the engine's own required strings (its binary file name, the manifest build-family
-marker, the `--override-kv` keys that address the model's metadata) and the vendor TOOLS we must call
-by name (`nvidia-smi`, `vulkaninfo`, `rocm-smi`, `system_profiler`) along with the backend ids used as
-manifest pack keys. The config module's constant names are also visible to someone who unzips the
-asar — they are minified code, not a wire shape, and no page can read them.
+**The documented limit, and it is now two lines.**
+
+1. **The vendor probe TOOLS** — `nvidia-smi`, `vulkaninfo`, `rocm-smi`, `system_profiler` — because a
+   machine has to be measured with the tools the machine's vendors installed, and we call them by
+   name. There is no portable alternative.
+2. **The backend pack-key ids** — `b0`..`b4` — because the download has to ask for the right engine
+   pack, so its id crosses the wire. They are already opaque and never a backend word.
+
+**No longer in the bundle at all (moved, not renamed):** the model FAMILY marker and the
+`--override-kv` metadata keys. They arrive from the downloaded manifest as `engine.family`,
+`engine.overrides.loops` and `engine.overrides.cache`, validated at parse and read at start by
+`Store.launchData()`. A manifest that omits either is refused by name (`E_MANIFEST: engine.family`,
+`E_MANIFEST: engine.overrides.loops`) rather than launching with an empty `--override-kv`, which would
+silently run a different model configuration. Consequence: `grep -E 'dory|<family>|num_loops'` of
+`desktop/local-ai/dist/local-ai.cjs` extracted from a packed `app.asar` returns nothing.
+
+The manifest these fields belong to (served by e-server, not written yet):
+
+```json
+{ "engine": { "version": "…", "build": "<pinned build id>",
+              "family": "<build family token>",
+              "overrides": { "loops": "<family>.…", "cache": "<family>.…" },
+              "platforms": { "<platform>-<arch>-<b#>": { "files": [ … ] } } },
+  "models":   { "model-m1-q#": { "name": "m1-q#.bin", … } } }
+```
 
 ## Tests
 

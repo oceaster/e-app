@@ -56,15 +56,31 @@ test('the ladder is four DIFFERENT rungs, ordered by capability class', async ()
   assert.ok(light.gpus.every((g) => !light.displayGpus.includes(g)), 'Light avoids the display GPU');
 });
 
+test('the override keys are DATA from the manifest, and a launch without them is refused', async () => {
+  const plan = await planOn('two-nvidia-gpus', 2);
+  // Supplied: the args carry exactly what the manifest named — the bundle knows no family of its own.
+  const supplied = buildServerArgs(plan, { port: 1, apiKey: 'k', cfg, overrides: fixtures.ENGINE_META.overrides });
+  const override = supplied[supplied.indexOf('--override-kv') + 1];
+  assert.match(override, new RegExp(`^${fixtures.ENGINE_META.overrides.loops}=int:${plan.loops},${fixtures.ENGINE_META.overrides.cache}=str:${plan.cache}$`));
+  // A different manifest naming different keys changes the flag and nothing else.
+  const other = { loops: 'fam9.l', cache: 'fam9.c' };
+  const swapped = buildServerArgs(plan, { port: 1, apiKey: 'k', cfg, overrides: other });
+  assert.match(swapped[swapped.indexOf('--override-kv') + 1], /^fam9\.l=int:/);
+  // Absent: refused by name, never an empty flag and never a fallback.
+  for (const overrides of [undefined, {}, { loops: 'fam0.loops' }, { loops: '', cache: '' }]) {
+    assert.throws(() => buildServerArgs(plan, { port: 1, apiKey: 'k', cfg, overrides }), /E_MANIFEST: the engine override keys were not supplied/);
+  }
+});
+
 test('the LAUNCH ARGS: -ngl 999 on a GPU, 0 on the CPU, -c = ctx*np, -np 2, and never -hf', async () => {
   const gpu = await planOn('two-nvidia-gpus', 2);
-  const args = buildServerArgs(gpu, { port: 1, apiKey: 'k', cfg });
+  const args = buildServerArgs(gpu, { port: 1, apiKey: 'k', cfg, overrides: fixtures.ENGINE_META.overrides });
   assert.strictEqual(args[args.indexOf('-ngl') + 1], '999');
   assert.strictEqual(args[args.indexOf('-np') + 1], String(cfg.server.parallel));
   assert.strictEqual(args[args.indexOf('-c') + 1], String(gpu.ctx * cfg.server.parallel));
   assert.ok(!args.includes('-hf'), 'a launch must never download the model');
   const cpu = await planOn('no-gpu', 0);
-  const cpuArgs = buildServerArgs(cpu, { port: 1, apiKey: 'k', cfg });
+  const cpuArgs = buildServerArgs(cpu, { port: 1, apiKey: 'k', cfg, overrides: fixtures.ENGINE_META.overrides });
   assert.strictEqual(cpuArgs[cpuArgs.indexOf('-ngl') + 1], '0');
   assert.deepStrictEqual(buildEnv(cpu), { CUDA_VISIBLE_DEVICES: '-1' }, 'a CPU plan hides the GPUs');
 });

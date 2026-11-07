@@ -1,7 +1,10 @@
 'use strict';
 /**
  * Engine packs + models live in userData, never in the app bundle (the updater refuses >200 MB).
- * Everything is described by a manifest {engine:{version,build,features,platforms},models}.
+ * Everything is described by a manifest
+ *   {engine:{version,build,family,overrides:{loops,cache},platforms},models}
+ * — and `family`/`overrides` are how the engine's own metadata reaches a launch WITHOUT this bundle
+ * ever containing it: they are downloaded with the manifest and passed through as data.
  * Files are individually sha256-pinned, so no archive extraction is needed.
  */
 const fs = require('fs');
@@ -13,7 +16,8 @@ const { downloadVerified, hashFile } = require('./downloader.cjs');
 const DEFAULT_IDS = require('./config.cjs').ids;
 const SAFE_NAME = /^[A-Za-z0-9][\w.\-]*$/;
 /** The build family the pinned engine must declare and carry (internal: never printed to a person). */
-const ENGINE_FEATURE = 'dory';
+// Tokens the manifest must supply for the engine's own metadata. Nothing here names a family.
+const SAFE_TOKEN = /^[A-Za-z0-9_][\w.\-]{0,63}$/;
 const isWin = process.platform === 'win32';
 // The installed engine binary's own name is an ID (see config.ids.binary): a person browsing their
 // own application-data folder reads `en`, not the engine's name.
@@ -33,9 +37,17 @@ function validateManifest(m, { allowInsecure = false } = {}) {
   const e = m.engine;
   if (!/^[\w.\-]+$/.test(e.version || '')) bad('engine.version');
   if (!/^[0-9a-f]{7,40}$/i.test(e.build || '')) bad('engine.build id');
-  // The one engine-protocol word we cannot rename: the manifest must declare which build family it
-  // carries, and the binary's own `--version` is checked against it. Nothing a person sees prints it.
-  if (!Array.isArray(e.features) || !e.features.includes(ENGINE_FEATURE)) bad('engine build family');
+  // THE TWO FIELDS THAT CARRY THE ENGINE'S METADATA, refused BY NAME when absent: a launch must never
+  // fall back to a hard-coded family or an empty override.
+  //   engine.family               — the build family this pack belongs to
+  //   engine.overrides.loops      — the metadata key for the model's loop count
+  //   engine.overrides.cache      — the metadata key for its per-loop KV layout
+  if (!SAFE_TOKEN.test(e.family || '')) bad('engine.family');
+  const overrides = e.overrides || {};
+  for (const field of ['loops', 'cache']) {
+    if (!SAFE_TOKEN.test(overrides[field] || '')) bad(`engine.overrides.${field}`);
+    if (overrides[field].slice(0, e.family.length + 1) !== `${e.family}.`) bad(`engine.overrides.${field} must belong to engine.family`);
+  }
   for (const [k, pack] of Object.entries(e.platforms || {})) {
     if (!Array.isArray(pack.files) || !pack.files.some((f) => f.name === EXE)) bad(`platform ${k}: no engine binary`);
     pack.files.forEach((f) => file(f, `platform ${k}`));
@@ -126,6 +138,15 @@ class Store extends EventEmitter {
         return reject(new Error(`E_ENGINE_BUILD: the installed engine is not the pinned build (expected ${want})`));
       });
     });
+  }
+
+  /**
+   * What a launch needs from the manifest, already validated: the build family and the two metadata
+   * keys. This is the ONLY way they reach the engine, so the bundle never carries them itself.
+   */
+  launchData() {
+    const engine = this.manifest.engine;
+    return { family: engine.family, overrides: { loops: engine.overrides.loops, cache: engine.overrides.cache } };
   }
 
   modelPath(quant) {

@@ -19,6 +19,7 @@ const cfg0 = require('../desktop/local-ai/src/config.cjs');
 const { Runtime } = require('../desktop/local-ai/src/runtime.cjs');
 const proc = require('../desktop/local-ai/src/proc.cjs');
 const { runSelfTest } = require('../desktop/local-ai/src/selftest.cjs');
+const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const cfg = { ...cfg0, server: { ...cfg0.server, startTimeoutMs: 6000, healthIntervalMs: 40 } };
 const IMAGES = ['node']; // the fixture runs under node; production uses the opaque binary stem ('en')
@@ -34,7 +35,7 @@ function fixture() {
 const mkPlan = (o = {}) => ({ ok: true, tier: 2, label: 't', backend: 'cuda', gpus: [0], quant: 'q2', loops: 2, cache: 'per_loop', kvq: 'f16', ctx: 8192,
   threads: 1, priority: 'normal', nkvo: false, tensorSplit: null, estimate: { kvGiB: 0.3 }, ...o });
 const mkRt = (f) => new Runtime({ pidFile: f.pidFile, logFile: f.logFile, imageNames: IMAGES });
-const launch = (f, env = {}, c = cfg) => ({ binaryPath: f.bin, modelArgs: ['-m', 'x.gguf'], cfg: c, env });
+const launch = (f, env = {}, c = cfg) => ({ binaryPath: f.bin, modelArgs: ['-m', 'x.gguf'], cfg: c, env, overrides: fixtures.ENGINE_META.overrides, family: fixtures.ENGINE_META.family });
 const np = cfg.server.parallel;
 
 test('starts, reports the ctx the server accepted, redacts the key, parses KV size', async () => {

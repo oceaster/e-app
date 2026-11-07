@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { downloadVerified } = require('../desktop/local-ai/src/downloader.cjs');
 const { Store, validateManifest } = require('../desktop/local-ai/src/store.cjs');
 const IDS = require('../desktop/local-ai/src/config.cjs').ids;
+const { ENGINE_META } = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'lai-store-'));
@@ -42,7 +43,7 @@ function serve(files, { cutFirst } = {}) {
 
 const file = (name, buf, base) => ({ name, url: `${base}/${name}`, sha256: sha(buf), size: buf.length });
 const manifestFor = (files, extra = {}, backend = 'cuda') => ({
-  engine: { version: '1.0.0', build: '43e865ec059a', features: ['dory'], platforms: { [packKey(backend)]: { files } } },
+  engine: { version: '1.0.0', build: '43e865ec059a', family: ENGINE_META.family, overrides: { ...ENGINE_META.overrides }, platforms: { [packKey(backend)]: { files } } },
   models: {},
   ...extra,
 });
@@ -75,11 +76,32 @@ test('https only, unless the caller explicitly allows a local http source', asyn
   await assert.rejects(downloadVerified({ url: 'http://example.com/x', dest: path.join(tmp(), 'x'), sha256: 'a'.repeat(64), size: 1 }), /E_INSECURE/);
 });
 
-test('manifest validation: path traversal, a missing dory feature and a bad hash are all refused', () => {
+/**
+ * THE TWO FIELDS THAT CARRY THE ENGINE'S METADATA, and the refusals that make them mandatory. A launch
+ * with an empty --override-kv would silently run a different model configuration, so a manifest that
+ * omits them is refused BY NAME — never defaulted.
+ */
+test('the manifest must carry engine.family and engine.overrides, refused by name when absent', () => {
+  const good = file(EXE, Buffer.from('x'), 'https://h');
+  const withEngine = (patch) => ({ ...manifestFor([good]), engine: { ...manifestFor([good]).engine, ...patch } });
+  assert.ok(validateManifest(manifestFor([good])));
+  assert.throws(() => validateManifest(withEngine({ family: '' })), /E_MANIFEST: engine\.family/);
+  assert.throws(() => validateManifest(withEngine({ family: undefined })), /E_MANIFEST: engine\.family/);
+  assert.throws(() => validateManifest(withEngine({ overrides: {} })), /E_MANIFEST: engine\.overrides\.loops/);
+  assert.throws(() => validateManifest(withEngine({ overrides: { loops: ENGINE_META.overrides.loops } })), /E_MANIFEST: engine\.overrides\.cache/);
+  // An override key that belongs to another family is a mismatch, not a launch.
+  assert.throws(() => validateManifest(withEngine({ overrides: { loops: 'other.loops', cache: 'other.cache' } })),
+    /E_MANIFEST: engine\.overrides\.loops must belong to engine\.family/);
+  // And the validated pair is what a launch gets.
+  const store = new Store({ dir: tmp(), manifest: manifestFor([good]) });
+  assert.deepStrictEqual(store.launchData(), { family: ENGINE_META.family, overrides: ENGINE_META.overrides });
+});
+
+test('manifest validation: path traversal, a missing build family and a bad hash are all refused', () => {
   const good = file(EXE, Buffer.from('x'), 'https://h');
   assert.ok(validateManifest(manifestFor([good])));
   assert.throws(() => validateManifest(manifestFor([good, { ...good, name: '../evil' }])), /unsafe/);
-  assert.throws(() => validateManifest({ ...manifestFor([good]), engine: { ...manifestFor([good]).engine, features: [] } }), /E_MANIFEST/);
+  assert.throws(() => validateManifest({ ...manifestFor([good]), engine: { ...manifestFor([good]).engine, family: '' } }), /E_MANIFEST/);
   assert.throws(() => validateManifest(manifestFor([{ ...good, sha256: 'zz' }])), /sha256|E_MANIFEST/);
 });
 
@@ -89,7 +111,7 @@ test('the engine pack a BACKEND needs is named per backend, and a CPU plan may r
     dir: tmp(),
     manifest: {
       engine: {
-        version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+        version: '1.0.0', build: '43e865ec059a', family: ENGINE_META.family, overrides: { ...ENGINE_META.overrides },
         platforms: { [packKey('vulkan')]: { files: [exe] } },
       },
       models: {},

@@ -49,7 +49,7 @@ function planLines(tiers, { showArgs = false } = {}) {
     lines.push(`  ${''.padEnd(16)} why: ${plan.why}`);
     if (plan.rejectedQuants && plan.rejectedQuants.length) lines.push(`  ${''.padEnd(16)} larger quants that did not fit: ${plan.rejectedQuants.join(', ')}`);
     if (showArgs) {
-      const args = buildServerArgs(plan, { port: 8080, apiKey: 'KEY', cfg });
+      const args = buildServerArgs(plan, { port: 8080, apiKey: 'KEY', cfg, overrides: fixtures.ENGINE_META.overrides });
       lines.push(`  ${''.padEnd(16)} ${JSON.stringify(buildEnv(plan))} -m <model.gguf> ${args.join(' ')}`);
     }
   }

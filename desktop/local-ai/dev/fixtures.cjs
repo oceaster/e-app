@@ -234,6 +234,15 @@ function optionsFor(machine, cfg) {
 const byId = (id) => MACHINES.find((m) => m.id === id);
 
 /** The model inventory a manifest would report, with realistic GGUF sizes for a ~4B model. */
+/**
+ * THE ENGINE'S OWN METADATA, as a manifest supplies it: a build-family token and the two metadata keys
+ * that address a looped model. Nothing in the bundle names a family; these arrive as data at start.
+ */
+const ENGINE_META = {
+  family: 'fam0',
+  overrides: { loops: 'fam0.loops', cache: 'fam0.loops_cache' },
+};
+
 /** Weight sizes keyed by BUILD ID (see config.ids.quant): q4 smallest, q1 widest. */
 const INVENTORY = {
   q4: { bytes: Math.round(2.4 * GiB) },
@@ -242,4 +251,4 @@ const INVENTORY = {
   q1: { bytes: Math.round(7.4 * GiB) },
 };
 
-module.exports = { MACHINES, stubExec, optionsFor, byId, INVENTORY, GiB };
+module.exports = { MACHINES, stubExec, optionsFor, byId, INVENTORY, ENGINE_META, GiB };

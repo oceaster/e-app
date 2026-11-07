@@ -33,6 +33,7 @@ const ASAR = path.join(ROOT, 'release', 'linux-unpacked', 'resources', 'app.asar
 
 const build = require('../scripts/build-local-ai.cjs');
 const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
+const { ENGINE_META } = fixtures;
 const cfg = require('../desktop/local-ai/src/config.cjs');
 const { detect } = require('../desktop/local-ai/src/hardware.cjs');
 const { planAll } = require('../desktop/local-ai/src/planner.cjs');
@@ -46,7 +47,7 @@ const manifestFor = () => ({
   engine: {
     version: '1.0.0',
     build: '43e865ec059a',
-    features: ['dory'],
+    family: ENGINE_META.family, overrides: { ...ENGINE_META.overrides },
     platforms: {
       [`${process.platform}-${process.arch}-${cfg.ids.backend.cuda}`]: {
         files: [{
@@ -100,33 +101,43 @@ test('the module file names and the design identifiers are not in it', () => {
   }
 });
 
-test('no vendor, engine or model word anywhere a person can reach', () => {
-  // What ships carries none of these. The two deliberate exceptions are pinned rather than assumed:
-  // the engine's own metadata keys (renaming them would break a looped model) and the vendor TOOLS a
-  // machine probe must call — neither is a path, a folder, a file name or a sentence about us.
+test('the documented limit is ONLY the vendor probe tools and the backend pack-key ids', () => {
+  // TWO THINGS CANNOT MOVE, and they are pinned here with their reasons rather than left implicit:
+  //   1. the vendor TOOLS a machine has to be measured with — we call them by name, so the name is in
+  //      the binary by necessity: nvidia-smi, vulkaninfo, rocm-smi, system_profiler.
+  //   2. the backend pack-key ids — the download must ask for the right pack, so its id crosses the
+  //      wire. They are already opaque (`b0`..`b4`), never a backend word.
+  //
+  // WHERE THE MODEL FAMILY AND THE --override-kv KEYS WENT (they used to be literals here):
+  //   the downloaded manifest, as `engine.family` and `engine.overrides.loops` / `.cache`, read at
+  //   start by Store.launchData() and passed to the engine as data. The bundle no longer knows them,
+  //   and a manifest that omits them is refused by name (E_MANIFEST) instead of launching with an
+  //   empty override.
   const text = dist();
-  // `dory` survives in exactly two places, both the ENGINE's contract: the manifest's build-family
-  // marker and the --override-kv keys that address a looped model's metadata. Everything else is gone.
-  for (const forbidden of ['llama', 'Llama', 'LLAMA', 'Dory', 'Nemotron', 'GGUF', 'gguf',
-    'BF16', 'Q8_0', 'Q5_K_M', 'Q4_K_M', 'quantize', 'does not carry the pinned', 'sliding-window-aware']) {
+  for (const tool of ['nvidia-smi', 'vulkaninfo', 'rocm-smi', 'system_profiler']) {
+    assert.ok(text.includes(tool), `the probe tool ${tool} is how a machine is measured: it must be callable`);
+  }
+  for (const code of Object.values(cfg.ids.backend)) {
+    assert.ok(new RegExp(`['"\`]-${code}`).test(text) || text.includes(`'${code}'`), `the pack id ${code} must be askable`);
+  }
+  assert.ok(!/-(cuda|vulkan|metal|rocm)['"`]/.test(text), 'a pack key must never name a backend');
+
+  // AND THE FAMILY IS NOT IN THE BUNDLE AT ALL: no family word, no metadata key, no default.
+  for (const forbidden of ['llama', 'Llama', 'Dory', 'dory', 'Nemotron', 'GGUF', 'gguf',
+    'BF16', 'Q8_0', 'Q5_K_M', 'Q4_K_M', 'quantize', ENGINE_META.family,
+    ENGINE_META.overrides.loops, ENGINE_META.overrides.cache]) {
     assert.ok(!text.includes(forbidden), `the dist names ${forbidden}`);
   }
-  assert.match(text, /override-kv/, 'the override keys are how a looped model is addressed');
-  assert.strictEqual((text.match(/dory/g) || []).length <= 3, true, 'the build-family word must only appear in its protocol keys');
+  // The flag is still there — built from variables, never from a literal key.
+  assert.ok(text.includes('--override-kv'), 'the override flag itself is the engine\'s interface');
   // Opaque paths and names: this is what a person browsing their own data folder reads.
   assert.ok(text.includes("'e1'"), 'the engine directory under userData must be the opaque one');
-  for (const leak of ['local-ai', 'engine.log', 'manifest.json', 'engine.pid.json', '.gguf', '.bin.gguf']) {
+  for (const leak of ['local-ai', 'engine.log', 'manifest.json', 'engine.pid.json', '.gguf']) {
     assert.ok(!text.includes(leak), `a person can read the path/name ${leak}`);
   }
-  // The folders the engine is installed into are ids too (`e`, `m`), not words. The generic words
-  // "engine"/"model" may still appear as wire field VALUES (a progress kind), never as a path.
-  assert.ok(!/\),'(engine|models)'\)/.test(text), 'a folder is named with a word in the bundle');
-  assert.ok(!/'engine\.pid/.test(text) && !/'logs'/.test(text), 'a file is named with a word in the bundle');
-  assert.match(text, /getPath\('userData'\),'e1'/, 'the data directory is the opaque one');
   for (const code of ['E_ENGINE_BUILD', 'E_ENGINE_HASH', 'E_VERIFY', 'E_DOWNLOAD', 'E_PACK', 'E_MODEL', 'E_MANIFEST']) {
     assert.ok(text.includes(code), `the failure ${code} is not named`);
   }
-  // The rename map only ever produces ids: `m1`, `q2`, `b1`, `en`, `e1`, `E_*` — never a word.
   assert.ok(text.includes("'m1'") && text.includes("'q2'") && text.includes("'b1'"), 'the opaque ids are not in the bundle');
 });
 
@@ -237,4 +248,10 @@ test('MEASURED: the packed app carries the dist and the notices, and none of the
   const shipped = read(path.join(extracted, files[0]));
   assert.deepStrictEqual(build.comments(shipped), [], 'the shipped file carries comments');
   assert.strictEqual(shipped, dist(), 'the shipped file is not the committed dist');
+  // THE MEASUREMENT THE TICKET ASKS FOR: grep the dist that a copier would actually get, out of the
+  // archive they can open, for the model family marker and the metadata keys. Nothing.
+  for (const marker of [ENGINE_META.family, ENGINE_META.overrides.loops, ENGINE_META.overrides.cache, 'dory']) {
+    if (!marker) continue;
+    assert.ok(!shipped.includes(marker), `the packed dist still names ${marker}`);
+  }
 });

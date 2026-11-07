@@ -414,10 +414,19 @@ const planAll = (hw, cfg, inv) => [0, 1, 2, 3].map((t) => planTier(t, hw, cfg, i
 /* ---------------------------------- Launch arguments --------------------------------------- */
 
 /**
- * llama-server CLI args. The model's `-m <path>` is added by the caller and is ALWAYS a local file:
+ * The engine's CLI args. The model's `-m <path>` is added by the caller and is ALWAYS a local file:
  * `-hf` (download at launch) is never emitted, because a launch is not a download.
+ *
+ * THE OVERRIDE KEYS ARE DATA, NEVER LITERALS. They address the model's own metadata (its loop count
+ * and its per-loop KV layout), so they name the model family — and a person with our bundle should not
+ * be able to learn that family from one grep. They arrive from the downloaded manifest as
+ * `engine.overrides.loops` / `engine.overrides.cache`, and a launch with neither is REFUSED rather
+ * than run with an empty flag: an empty override silently gives a different model configuration,
+ * which is worse than a refusal.
  */
-function buildServerArgs(plan, { port, apiKey, cfg }) {
+function buildServerArgs(plan, { port, apiKey, cfg, overrides } = {}) {
+  const keys = overrides || {};
+  if (!keys.loops || !keys.cache) throw new Error('E_MANIFEST: the engine override keys were not supplied to the launch');
   const np = cfg.server.parallel;
   const args = [
     '--host', '127.0.0.1', '--port', String(port), '--api-key', apiKey,
@@ -425,7 +434,7 @@ function buildServerArgs(plan, { port, apiKey, cfg }) {
     '-ngl', plan.backend === 'cpu' ? '0' : '999', // virtual layers (192 at 4 loops): a small -ngl silently offloads part of the model
     '-t', String(plan.threads), '--threads-batch', String(plan.threads),
     '-fa', 'on', '-ctk', plan.kvq, '-ctv', plan.kvq, '--no-context-shift',
-    '--override-kv', `dory.num_loops=int:${plan.loops},dory.recurrent_kv_cache_mode=str:${plan.cache}`,
+    '--override-kv', `${keys.loops}=int:${plan.loops},${keys.cache}=str:${plan.cache}`,
     ...cfg.server.baseArgs,
   ];
   if (cfg.server.swaFull) args.push('--swa-full');
