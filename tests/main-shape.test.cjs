@@ -109,3 +109,19 @@ test('the permission screen is never loaded over itself',()=>{
   'permissionScreenNeeded must return before loadFile when the screen is already showing');
  assert.match(main,/const \{loadServerPage,showingFile\}=require\('\.\/navigation\.cjs'\)/);
 });
+
+test('main.cjs resolves the debug switch BEFORE it loads the engine entry',()=>{
+ // Measured on a packed build, 2026-11-07: `require(ENGINE_ENTRY.require)` sat above the line that
+ // declares ENGINE_ENTRY, so the PACKAGED app died with "Cannot access 'ENGINE_ENTRY' before
+ // initialization" while every suite stayed green (no test loads main.cjs). Order is the fix, and
+ // order is what this gate holds.
+ const main=fs.readFileSync(path.join(ROOT,'desktop','main.cjs'),'utf8').split('\n');
+ const declaration=main.findIndex(line=>/const ENGINE_ENTRY=engineEntry\(/.test(line));
+ const use=main.findIndex(line=>/require\(ENGINE_ENTRY\.require\)/.test(line));
+ assert.ok(declaration>=0,'main.cjs must resolve its engine entry with engineEntry()');
+ assert.ok(use>=0,'main.cjs must load the engine through that entry');
+ assert.ok(declaration<use,`ENGINE_ENTRY is used on line ${use+1} but declared on line ${declaration+1}`);
+ // And the switch itself is resolved once, above both.
+ const resolved=main.findIndex(line=>/const DEBUG=resolveDebug\(/.test(line));
+ assert.ok(resolved>=0&&resolved<declaration,'the debug switch must be resolved before the engine entry');
+});

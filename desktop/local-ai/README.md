@@ -123,6 +123,49 @@ The manifest these fields belong to (served by e-server, not written yet):
   "models":   { "model-m1-q#": { "name": "m1-q#.bin", … } } }
 ```
 
+## Debug mode — how to run it, what it changes, and what production never ships
+
+ONE switch, resolved once at boot by `desktop/debug.cjs`:
+
+| How you start it | Mode |
+|---|---|
+| `e-server-client --app-debug` (or `E_APP_DEBUG=1`) | **debug**, packaged or not |
+| `e-server-client --app-no-debug` (or `E_APP_DEBUG=0`) | **production**, packaged or not |
+| `--debug` / `--no-debug` (in a dev tree, or after `electron . --`) | same, when Electron passes them through |
+| no flag, packaged build | production |
+| no flag, unpackaged dev tree | debug |
+
+THE FLAG IS NAMESPACED ON PURPOSE: Electron owns `--debug` in its own switch namespace (measured
+2026-11-07: a packed build with `--debug` printed node's "`node --debug` is invalid" notice and the app
+never saw it), so `--app-debug` is the spelling that reaches the app. `--debug` still works where it
+arrives, and `E_APP_DEBUG=1` always works.
+
+`app.isPackaged` is a SEPARATE fact: it only feeds that default. A person running a PACKAGED build
+with `--debug` gets debug behaviour, and a packaged release started without the flag can never get it.
+Nothing else in the app infers the mode; `main.cjs` resolves it once into `DEBUG_MODE` and prints one
+line (`[e-app] mode=debug (flag) engine=app`).
+
+WHAT DEBUG CHANGES — DETAIL ONLY:
+- the app loads the READABLE engine sources (`desktop/local-ai/src/index.cjs`) instead of the minified
+  bundle, which is the "non-obfuscated files for debugging" half of the owner's rule;
+- `diagnostics()` answers to the trusted main frame (production refuses it with `E_DEBUG_ONLY`), so a
+  maintainer can see the redacted argv, the plan, the KV calibration and the log lines;
+- a failure's `status().detail` carries the code, the message and the stack, and the dialog prints it;
+- the app log records the whole failure.
+
+WHAT IT NEVER CHANGES — AUTHORITY: no new permission, no secret becomes readable (`redact()` still
+strips the api key and long hex secrets), and the shape of what a page receives is the same object in
+both modes; only whether `detail` is filled in. Debug is not a privilege escalation with a flag.
+
+PRODUCTION NEVER SHIPS THE DEBUG SURFACE: the asar holds `desktop/local-ai/dist/local-ai.cjs` and
+`ATTRIBUTION.md` only — no `src/`, no `.map`, no comments — and every user-facing failure is ONE PLAIN
+SENTENCE plus ONE NEXT STEP (`desktop/local-ai/src/messages.cjs`), with the detail in the log.
+
+The gate is `tests/debug-mode.test.cjs`: it packs nothing itself (re-run `npm run pack` first, or it
+tells you "the pack predates the dist; run `npm run pack`"), lists the real asar, greps the packed
+bundle for the engine/model words and the family marker, then starts the same tree with `--debug` and
+proves the readable sources and the detail are back.
+
 ## Tests
 
 `node --test tests/*.test.cjs` from the app root. `tests/local-ai-{hardware,planner,matrix,store,

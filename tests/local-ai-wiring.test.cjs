@@ -233,9 +233,11 @@ test('an engine started under a trusted origin stops when that window navigates 
 
 test('main.cjs creates the engine with a LIVE trust list and adopts an orphan at boot', () => {
   const main = read('desktop/main.cjs');
-  // The app loads the SHIPPED bundle (one minified file), never the readable sources.
-  assert.match(main, /const \{createLocalAI\}=require\('\.\/local-ai\/dist\/local-ai\.cjs'\)/);
-  assert.match(main, /localAI=createLocalAI\(\{app,ipcMain,BrowserWindow,trustedOrigins:\(\)=>\[config\.server\]\.filter\(Boolean\)\}\)/,
+  // The app loads the engine through the one debug-aware resolver: the bundle in production, the
+  // readable sources in debug (desktop/debug.cjs's `engineEntry`).
+  assert.match(main, /const \{createLocalAI,userFailure,detailFor,redact\}=require\(ENGINE_ENTRY\.require\)/);
+  assert.match(main, /const ENGINE_ENTRY=engineEntry\(\{debug:DEBUG_MODE,base:__dirname\}\)/);
+  assert.match(main, /localAI=createLocalAI\(\{app,ipcMain,BrowserWindow,debug:DEBUG_MODE,trustedOrigins:\(\)=>\[config\.server\]\.filter\(Boolean\)\}\)/,
     'trustedOrigins must be a FUNCTION reading config.server, not a snapshot of it');
   assert.match(main, /await localAI\.recover\(\)/, 'a crash may leave an engine holding VRAM: adopt or kill it at boot');
   assert.match(main, /localAI\?\.syncTrust\(\)/, 'switching servers must retire the engine of the old one');

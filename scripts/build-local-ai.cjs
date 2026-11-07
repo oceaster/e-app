@@ -35,6 +35,7 @@ const BUNDLE = path.join(ROOT, 'desktop', 'local-ai', 'dist', 'local-ai.cjs');
 /** Dependency order: a module may only require one before it. */
 const MODULES = [
   'config.cjs',
+  'messages.cjs',
   'context-window.cjs',
   'downloader.cjs',
   'proc.cjs',
@@ -402,10 +403,10 @@ function exportKeys(tokens) {
 }
 
 /** Indices of ident tokens that are module-API KEYS, so `render` can replace them. */
-function exportKeyIndexes(tokens) {
+function exportKeyIndexes(tokens, { skipOwnExports = false } = {}) {
   const marked = new Set();
-  // 1. the object literal of `module.exports = {…}`
-  for (let i = 0; i < tokens.length; i += 1) {
+  // 1. the object literal of `module.exports = {…}` (skipped for the bundle's own public entry)
+  for (let i = 0; skipOwnExports ? false : i < tokens.length; i += 1) {
     const at = tokens[i];
     if (!(at.t === 'ident' && at.v === 'module' && tokens[i + 1] && tokens[i + 1].v === '.'
       && tokens[i + 2] && tokens[i + 2].v === 'exports' && tokens[i + 3] && tokens[i + 3].v === '='
@@ -474,7 +475,8 @@ function renderModule(name) {
   const list = sources();
   const keyMap = apiKeyMap(list);
   const { tokens } = list.find((entry) => entry.name === name);
-  return `((module,exports,__r)=>{${render(tokens, mangle(tokens), keyMap, exportKeyIndexes(tokens))}})`;
+  const marked = exportKeyIndexes(tokens, { skipOwnExports: name === 'index.cjs' });
+  return `((module,exports,__r)=>{${render(tokens, mangle(tokens), keyMap, marked)}})`;
 }
 
 function sources() {
@@ -516,10 +518,13 @@ function apiKeyMap(list) {
 function build() {
   const list = sources();
   const keyMap = apiKeyMap(list);
-  const bodies = list.map(({ tokens }) => {
+  const bodies = list.map(({ name, tokens }) => {
     const map = mangle(tokens);
+    // `index.cjs` IS the bundle's public entry: its export names are the app's contract, so they are
+    // never renamed even though the modules it re-exports have their keys mangled.
+    const marked = exportKeyIndexes(tokens, { skipOwnExports: name === 'index.cjs' });
     // A body starts with `'use strict';`, which is a STATEMENT: it needs a block, not parentheses.
-    return `((module,exports,__r)=>{${render(tokens, map, keyMap, exportKeyIndexes(tokens))}})`;
+    return `((module,exports,__r)=>{${render(tokens, map, keyMap, marked)}})`;
   });
   const shim = 'const __c={},__d=[' + bodies.join(',') + '];'
     + 'function __r(i){const h=__c[i];if(h)return h.exports;const m={exports:{}};__c[i]=m;__d[i](m,m.exports,__r);return m.exports;}'

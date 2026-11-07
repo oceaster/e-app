@@ -27,6 +27,7 @@ const { planTier, planAll } = require('./planner.cjs');
 const { Store } = require('./store.cjs');
 const { Runtime } = require('./runtime.cjs');
 const { runSelfTest } = require('./selftest.cjs');
+const { userFailure, detailFor, redact } = require('./messages.cjs');
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -123,7 +124,7 @@ async function loadManifest({ manifest, manifestUrl, cacheFile }) {
   }
 }
 
-function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, manifestUrl, trustedOrigins = [], allowInsecureHttp = false, wireIpc = true, exec, probe }) {
+function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, manifestUrl, trustedOrigins = [], allowInsecureHttp = false, wireIpc = true, exec, probe, debug = false }) {
   // `exec` and `probe` exist for ONE reason: a test must be able to drive this whole stack (probes ->
   // planner -> tiers) against a synthetic machine, because no test in this repository may read the
   // hardware of the computer it happens to run on. `probe` carries a machine's platform/arch/os, which
@@ -266,12 +267,13 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
           await storeNow.ensureEngine(plan.backend, { signal: abort.signal });
           await storeNow.ensureModel(plan.quant, { signal: abort.signal });
         } catch (e) {
+          runtime.note(`install failed: ${detailFor(e, debug)}`);
           runtime.setState('error', { error: e.message });
           throw e;
         }
         if (abort.signal.aborted) { runtime.setState('stopped'); return runtime.status(); }
         let engine;
-        try { engine = await storeNow.verifyEngine(plan.backend); } catch (e) { runtime.setState('error', { error: e.message }); throw e; }
+        try { engine = await storeNow.verifyEngine(plan.backend); } catch (e) { runtime.note(`engine refused: ${detailFor(e, debug)}`); runtime.setState('error', { error: e.message }); throw e; }
         if (ctxOwner) setOwner(ctxOwner.sender, ctxOwner.origin);
         // THE ENGINE'S OWN METADATA COMES FROM THE MANIFEST, not from this bundle: `launchData()` is
         // validated at manifest parse (E_MANIFEST names the missing field), so a launch can never fall
@@ -283,30 +285,39 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
     },
 
     async stop() { clearOwner(); if (abort) abort.abort(); await runtime.stop(); },
-    /** The public status: what is running, on which rung, how much room it has — nothing else. */
+    /**
+     * The public status: what is running, on which rung, how much room it has, and — when something
+     * failed — ONE SENTENCE AND A NEXT STEP. The raw failure only ever appears in `detail`, and only
+     * in debug; the engine's log has it either way.
+     */
     status() {
       const current = runtime.status();
       const plan = runtime.plan;
-      return {
+      const out = {
         state: current.state,
         tier: current.tier,
         label: current.label,
         ready: current.state === 'ready',
         contextTokens: plan ? plan.effectiveCtx || plan.ctx : null,
         placement: plan ? plain(plan.placement) : null,
-        error: current.error,
+        error: current.error ? userFailure(current.error) : null,
       };
+      if (debug && current.error) out.detail = detailFor(current.error, true);
+      return out;
     },
     endpoint: () => (runtime.state === 'ready' ? { baseUrl: runtime.baseUrl, apiKey: runtime.apiKey } : null),
-    // DELIBERATELY FULL: hardware, the whole plan, the redacted argv, the KV calibration and 40+40 log
-    // lines. It is the maintainer's view (a bug report needs it) and it is answered only to the
-    // trusted page's main frame.
-    diagnostics: () => ({
+    // DELIBERATELY FULL, AND DELIBERATELY DEBUG-ONLY: hardware, the whole plan, the redacted argv, the
+    // KV calibration and 40+40 log lines. A debug build answers it to the trusted page's main frame;
+    // production refuses it by name, because an argv and a path are exactly what a copier wants.
+    diagnostics() {
+      if (!debug) throw new Error('E_DEBUG_ONLY: the local engine diagnostics are only available in debug mode');
+      return {
       hardware: lastHw,
       manifest: manifestState,
       engine: store ? { version: store.manifest.engine.version, commit: store.manifest.engine.build, family: store.manifest.engine.family } : null,
       ...runtime.diagnostics(),
-    }),
+      };
+    },
     async selfTest() {
       const endpoint = api.endpoint();
       if (!endpoint) throw new Error('the local engine is not running');
@@ -358,4 +369,4 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
   return api;
 }
 
-module.exports = { createLocalAI };
+module.exports = { createLocalAI, userFailure, detailFor, redact };

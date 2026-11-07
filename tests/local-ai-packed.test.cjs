@@ -41,6 +41,44 @@ const { createLocalAI: fromSources } = require('../desktop/local-ai/src/index.cj
 const { createLocalAI: fromDist } = require('../desktop/local-ai/dist/local-ai.cjs');
 
 const read = (file) => fs.readFileSync(file, 'utf8');
+/**
+ * LIST AN ASAR WITHOUT A DEPENDENCY. `@electron/asar` is a devDependency of the app and may not be
+ * installed in every checkout, so the gate reads the archive's own header — the format is one pickle
+ * header and a JSON tree — and walks it. No node_modules, no CLI lookup, no PATH.
+ */
+function asarEntries(file) {
+  const buffer = fs.readFileSync(file);
+  const headerSize = buffer.readUInt32LE(12);
+  const header = JSON.parse(buffer.slice(16, 16 + headerSize).toString('utf8'));
+  const entries = [];
+  const walk = (node, prefix) => {
+    for (const [name, value] of Object.entries(node.files || {})) {
+      const at = `${prefix}/${name}`;
+      if (value.files) walk(value, at); else entries.push({ path: at, size: Number(value.size), offset: Number(value.offset) });
+    }
+  };
+  walk(header, '');
+  return entries;
+}
+
+/** One file out of an asar, by its path inside the archive: `offset` in the header is relative to the
+ *  end of the header block and follows the leading 8-byte size field of each entry. */
+function asarFile(file, wanted) {
+  const buffer = fs.readFileSync(file);
+  const headerSize = buffer.readUInt32LE(12);
+  const header = JSON.parse(buffer.slice(16, 16 + headerSize).toString('utf8'));
+  // Measured 2026-11-07 against a real archive: the data begins at 16 + headerSize (the pickle header
+  // and the two size fields are the 16), and each entry's `offset` is a string, so Number() it.
+  const base = 16 + headerSize;
+  let node = header;
+  for (const part of wanted.split('/').filter(Boolean)) {
+    node = node.files && node.files[part];
+    if (!node) throw new Error(`not in the archive: ${wanted}`);
+  }
+  const start = base + Number(node.offset);
+  return buffer.slice(start, start + Number(node.size));
+}
+
 const dist = () => read(DIST);
 
 const manifestFor = () => ({
@@ -148,6 +186,9 @@ test('the wire shape the page can read carries no backend, quant or KV arithmeti
   const ai = fromDist({
     app: electron.app, ipcMain: electron.ipcMain, BrowserWindow: electron.BrowserWindow,
     trustedOrigins: () => ['https://one.example'],
+    // DEBUG, because `diagnostics()` is a maintainer's view now: production refuses it by name (see
+    // tests/debug-mode.test.cjs). The wire shape asserted here is the same object in both modes.
+    debug: true,
     manifest: manifestFor(),
     exec: fixtures.stubExec(machine),
     probe: { platform: machine.platform, arch: machine.arch, os: machine.os },
@@ -198,7 +239,9 @@ test('the dist answers the SAME tiers as the sources on every synthetic machine'
 
 test('the app loads the dist; the build runs from npm scripts before every pack', () => {
   const main = read(path.join(ROOT, 'desktop', 'main.cjs'));
-  assert.match(main, /require\('\.\/local-ai\/dist\/local-ai\.cjs'\)/, 'the app must load the dist bundle, not the sources');
+  // The app loads the engine through the one debug-aware resolver: the bundle in production.
+  assert.match(main, /const ENGINE_ENTRY=engineEntry\(\{debug:DEBUG_MODE,base:__dirname\}\)/);
+  assert.match(main, /require\(ENGINE_ENTRY\.require\)/);
   assert.strictEqual(typeof fromSources, 'function');
   assert.strictEqual(typeof fromDist, 'function');
   const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
@@ -228,10 +271,8 @@ test('MEASURED: the packed app carries the dist and the notices, and none of the
     t.skip('no packed app here: run `npm run pack` to measure the archive');
     return;
   }
-  const cli = [path.join(ROOT, 'node_modules', '@electron', 'asar', 'bin', 'asar.js'),
-    path.join(ROOT, 'node_modules', 'asar', 'bin', 'asar.js')].find((candidate) => fs.existsSync(candidate));
-  assert.ok(cli, 'no asar CLI is installed: cannot measure the archive');
-  const listing = execFileSync(process.execPath, [cli, 'list', ASAR], { encoding: 'utf8' }).split('\n');
+  // The archive is read through its own header (see `asarEntries`): no CLI, no node_modules.
+  const listing = asarEntries(ASAR).map((entry) => entry.path);
   const localAi = listing.filter((line) => line.includes('local-ai'));
   assert.ok(localAi.includes('/desktop/local-ai/dist/local-ai.cjs'), 'the dist bundle is not in the app');
   assert.ok(localAi.includes('/desktop/local-ai/ATTRIBUTION.md'), 'the licence notices are not in the app');
@@ -241,11 +282,7 @@ test('MEASURED: the packed app carries the dist and the notices, and none of the
   for (const name of fs.readdirSync(DEV)) {
     assert.ok(!localAi.some((line) => line.endsWith(`/dev/${name}`)), `${name} shipped in the app: a dev tool leaked`);
   }
-  const extracted = fs.mkdtempSync(path.join(os.tmpdir(), 'lai-asar-'));
-  execFileSync(process.execPath, [cli, 'extract-file', ASAR, 'desktop/local-ai/dist/local-ai.cjs'], { cwd: extracted, stdio: 'pipe' });
-  const files = fs.readdirSync(extracted);
-  assert.strictEqual(files.length, 1, 'the archive extraction produced more than the one dist file');
-  const shipped = read(path.join(extracted, files[0]));
+  const shipped = asarFile(ASAR, 'desktop/local-ai/dist/local-ai.cjs').toString('utf8');
   assert.deepStrictEqual(build.comments(shipped), [], 'the shipped file carries comments');
   assert.strictEqual(shipped, dist(), 'the shipped file is not the committed dist');
   // THE MEASUREMENT THE TICKET ASKS FOR: grep the dist that a copier would actually get, out of the

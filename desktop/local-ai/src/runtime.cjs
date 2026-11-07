@@ -69,6 +69,11 @@ class Runtime extends EventEmitter {
     } catch { /* logging must never break the engine */ }
   }
 
+  /** One line to the engine log, redacted. The detail of a failure goes here, never to a page. */
+  note(line) {
+    this._log(this._redact(line));
+  }
+
   _onLine(raw) {
     const line = this._redact(raw);
     if (this.head.length < 40) this.head.push(line);

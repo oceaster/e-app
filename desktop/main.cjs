@@ -14,13 +14,27 @@ const mediaPermission=require('./media-permission.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
+// ── DEBUG IS ITS OWN SWITCH ─────────────────────────────────────────────────────────────────────
+// Owen, 2026-11-07: "both e-server and e-app have 'debug mode' flags ... in production mode these
+// things should never have exposing error messages". Resolved ONCE here, by `--debug` / `-no-debug`
+// or E_APP_DEBUG, defaulting to production when packaged. `development` above is a different fact
+// (a fixture origin, a dev tree) and is NOT debug: a packaged build started with --debug is debug.
+// What it changes is DETAIL only — which engine entry loads, whether diagnostics() answers, whether
+// a failure carries its stack — never a permission, a secret or the shape of what a page receives.
+const {resolveDebug,engineEntry}=require('./debug.cjs');
+const DEBUG=resolveDebug({argv:process.argv,env:process.env,isPackaged:app.isPackaged});
+const DEBUG_MODE=DEBUG.debug;
+const ENGINE_ENTRY=engineEntry({debug:DEBUG_MODE,base:__dirname});
+console.log(`[e-app] mode=${DEBUG_MODE?'debug':'production'} (${DEBUG.source}) engine=${ENGINE_ENTRY.where}`);
+const {createLocalAI,userFailure,detailFor,redact}=require(ENGINE_ENTRY.require);
 // THE LOCAL MODEL ENGINE (Dexter's foundation): measured, planned and run on THIS person's computer.
 // It is created in start() because it needs `app` ready for its userData path; nothing it does is
 // visible in the window yet — the tier control is a design ticket of its own.
 // THE SHIPPED ARTIFACT, NOT THE READABLE SOURCES: desktop/local-ai/dist/local-ai.cjs is ONE minified
 // file built from desktop/local-ai/src/ by scripts/build-local-ai.cjs, and package.json excludes the
 // sources from the packaged app. `npm run build:local-ai -- --check` fails if the dist file is stale.
-const {createLocalAI}=require('./local-ai/dist/local-ai.cjs');
+// In DEBUG the readable sources are loaded instead (see desktop/debug.cjs's `engineEntry`), which is
+// the "non-obfuscated files for debugging" half of the owner's rule. Same API either way.
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
@@ -89,7 +103,7 @@ const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!upda
 if(!app.requestSingleInstanceLock()){app.quit();}else{
  app.on('second-instance',(_,argv)=>{const link=argv.find(v=>v.startsWith('e-server:'));if(link)void receiveLink(link);else show();});
  app.on('open-url',(event,url)=>{event.preventDefault();void receiveLink(url);});
- app.whenReady().then(start).catch(error=>{dialog.showErrorBox('e-server could not start',error.message);app.quit();});
+ app.whenReady().then(start).catch(error=>{explain('e-server could not start',error);app.quit();});
 }
 function show(){if(!company?.authorized()){setupWindow();return;}const target=win||setup;if(target){target.show();target.focus();}}
 /** THE DEVICE-INSTANCE PERMISSION RELATIONSHIP IS PERSISTENT. Owen, 2026-11-06: "the
@@ -680,6 +694,19 @@ function askMedia(){
 }
 /** The meaning of a thrown thing, without Electron's "Error invoking remote method" wrapper. */
 const sentence=value=>String(value&&value.message!==undefined?value.message:value??'').replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError|RangeError|SyntaxError|URIError|ReferenceError|EvalError)?:?\s*/,'');
+/**
+ * ONE SENTENCE AND A NEXT STEP, WITH THE DETAIL IN THE LOG.
+ * The owner's rule: production must not print a stack, an argv, a path or an upstream body at a
+ * person. `userFailure` maps the failure's code to a sentence and a next step; `detailFor` writes the
+ * whole thing to this process's own log, and only in debug does it reach the dialog.
+ */
+function explain(title,error,next){
+ const plain=userFailure(error,next?{next}:undefined);
+ const detail=redact(detailFor(error,DEBUG_MODE));
+ console.log(`[e-app] ${title}: ${plain.code} ${detail}`);
+ try{dialog.showErrorBox(title,DEBUG_MODE?`${plain.message}\n\n${detail}`:`${plain.message}\n\n${plain.next}`);}catch{}
+ return plain;
+}
 /** The permission screen's own door: this window, this file, nothing else. */
 function permissionFrame(event){
  if(!win||event.sender!==win.webContents)throw Error('This request did not come from this window.');
@@ -828,7 +855,7 @@ async function connect(){
  current.on('closed',()=>{if(win===current)stopFeed('the window closed');if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
   config.server=pendingServer;
   // The person chose a server, so the relaunch opens THAT server rather than the list again.
-  config.openOnStart=pendingServer;}await save();restart();})().catch(error=>dialog.showErrorBox('Could not restart e-server',error.message));}});
+  config.openOnStart=pendingServer;}await save();restart();})().catch(error=>explain('Could not restart e-server',error));}});
  current.on('resize',()=>{if(!current.isMaximized()&&!current.isMinimized()){config.bounds=current.getBounds();void save();}});
  current.webContents.on('will-prevent-unload',async event=>{
   const result=await dialog.showMessageBox(current,{type:'warning',buttons:['Stay','Leave'],defaultId:0,cancelId:0,message:'This page has unsaved work or an active transfer. Leave anyway?'});
@@ -892,7 +919,7 @@ async function checkUpdate(startup=false,manual=false){
    await dialog.showMessageBox(win||setup||undefined,{type:'info',message:'e-server is up to date.',detail:'Installed client: '+VERSION,buttons:['OK']});
   }
   failures=0;
- }catch(error){failures=Math.min(3,failures+1);if(startup){setupWindow();publish({phase:'update-error',title:'Update unavailable',message:'The installed client will keep working. Use the app menu to check again.',error:error.message});}else if(manual){const choice=await dialog.showMessageBox(win||setup||undefined,{type:'warning',message:'The update could not be installed.',detail:error.message+'\nYour installed client will keep working. A new desktop runtime may require the full installer.',buttons:['Download installer','Close'],defaultId:1,cancelId:1});if(choice.response===0)await shell.openExternal(installer);}}
+ }catch(error){failures=Math.min(3,failures+1);if(startup){setupWindow();publish({phase:'update-error',title:'Update unavailable',message:'The installed client will keep working. Use the app menu to check again.',error:DEBUG_MODE?redact(detailFor(error,true)):''});}else if(manual){const choice=await dialog.showMessageBox(win||setup||undefined,{type:'warning',message:'The update could not be installed.',detail:(DEBUG_MODE?redact(detailFor(error,true)):'The update could not be installed.')+'\nYour installed client will keep working. A new desktop runtime may require the full installer.',buttons:['Download installer','Close'],defaultId:1,cancelId:1});if(choice.response===0)await shell.openExternal(installer);}}
  return false;
 }
 function schedule(){clearTimeout(pollTimer);pollTimer=setTimeout(async()=>{await checkUpdate();await applyStaged(false);schedule();},Math.min(60,15*2**failures)*60000+Math.random()*90000);pollTimer.unref();}
@@ -1036,7 +1063,7 @@ async function start(){
  // THE ENGINE'S TRUST LIST IS A FUNCTION, NOT A SNAPSHOT: `config.server` is the server this person
  // connected to, and it changes when they switch servers. Every bridge call re-reads it, and the
  // engine stops on navigation away from that origin, on window destroy and on quit.
- localAI=createLocalAI({app,ipcMain,BrowserWindow,trustedOrigins:()=>[config.server].filter(Boolean)});
+ localAI=createLocalAI({app,ipcMain,BrowserWindow,debug:DEBUG_MODE,trustedOrigins:()=>[config.server].filter(Boolean)});
  // A previous run may have died holding VRAM: adopt its engine if it is still healthy, kill it if not.
  await localAI.recover().catch(()=>{});
  ready=true;const link=process.argv.find(v=>v.startsWith('e-server:'));
