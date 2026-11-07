@@ -46,3 +46,14 @@ test('a junk answer is not written, and remembering never mutates its input', ()
   assert.equal(after.server, ONE, 'unrelated settings survive');
   assert.equal(remember(before, ONE, 'maybe'), before, 'only the two answers are stored');
 });
+
+test('the screen is asked once: a remembered answer of either kind ends the question', () => {
+  const { shouldAsk } = require('../desktop/media-permission.cjs');
+  assert.equal(shouldAsk({}, ONE), true, 'a new instance is asked once');
+  assert.equal(shouldAsk(remember({}, ONE, 'granted'), ONE), false, 'an allow is never re-asked');
+  assert.equal(shouldAsk(remember({}, ONE, 'denied'), ONE), false, 'and a denial is never re-asked either');
+  const both = remember(remember({}, ONE, 'denied'), TWO, 'granted');
+  assert.equal(shouldAsk(both, ONE), false);
+  assert.equal(shouldAsk(both, TWO), false);
+  assert.equal(shouldAsk(both, 'https://third.example'), true, 'a third instance is its own question');
+});

@@ -44,4 +44,17 @@ function allowsMedia(settings, origin) {
   return decisionFor(settings, origin) === 'granted';
 }
 
-module.exports = { DECISIONS, decisionFor, remember, allowsMedia };
+/**
+ * True when the screen must be SHOWN for this instance — that is, exactly once, and never again.
+ *
+ * Owen, 2026-11-06: "the device-instance permission relationship should be persistent and the user
+ * should not be prompted again". So this is the one place the prompt decision is written down, and
+ * it reads the same table `decisionFor` does: an answer of either kind means the question is over.
+ * It is a function rather than a comparison at a call site so the rule cannot drift into "ask when
+ * denied" or "ask twice" without a test failing.
+ */
+function shouldAsk(settings, origin) {
+  return decisionFor(settings, origin) === '';
+}
+
+module.exports = { DECISIONS, decisionFor, remember, allowsMedia, shouldAsk };
