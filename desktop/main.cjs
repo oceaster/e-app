@@ -892,6 +892,24 @@ async function receiveLink(value,originOnly=false){try{const origin=originOnly?s
  // Best effort and bounded - the link's own job is to connect, not to write a list.
  if(!(state.servers.rows||[]).some(row=>row.origin===origin)){await connectionsClient().add({origin}).catch(()=>{});}
  if(origin===config.server){await connect();return;}if(config.server){const choice=await dialog.showMessageBox(win||undefined,{buttons:['Cancel','Connect'],defaultId:0,cancelId:0,message:'Connect e-server to this server?',detail:origin});if(choice.response!==1)return;}if(win){pendingServer=origin;quitting=true;restartOnClosed=true;win.close();}else{config.server=origin;await save();if(ready)await connect();}}catch(error){dialog.showErrorBox('Invalid e-server connection',error.message);}}
+// THE TRAY MENU IS FOUR ITEMS, BY THE OWNER'S OWN LIST. Owen, 2026-11-07:
+//   "e-app system tray icon right click drop down menu options should only be: Open / Change
+//    server / --- / Sign out / Quit"
+// Everything that used to live here is gone: "Cancel sign-in" (the sign-in window has its own
+// cancel), "Check for updates" and "Restart to apply update" (a staged update still applies on
+// the next launch, which is what `activateVersion` was built for). A later edit that wants a
+// fifth item has to change this function AND tests/tray-menu.test.cjs, which is the point: the
+// menu is a product decision, not a place to put a button.
+function trayTemplate(){
+	return [
+		{label:'Open',click:show},
+		{label:'Change server',click:changeServer},
+		{type:'separator'},
+		{label:'Sign out',click:()=>void signOutCompany()},
+		{label:'Quit',click:()=>{quitting=true;app.quit();}},
+	];
+}
+
 async function start(){
  await fs.mkdir(HOME,{recursive:true,mode:0o700});
  if(process.platform!=='win32')await fs.chmod(HOME,0o700);
@@ -904,7 +922,7 @@ async function start(){
  themePreference=readThemeCache(THEME_CACHE);
  if(app.isPackaged)app.setAsDefaultProtocolClient('e-server');
  Menu.setApplicationMenu(null);
- try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open e-server',click:show},{label:'Change server…',click:changeServer},{label:'Sign out of Easter Company',click:()=>void signOutCompany()},{type:'separator'},{label:'Cancel sign-in',click:()=>{company?.cancel();void cancelSignIn();}},{label:'Check for updates',click:()=>void checkUpdate(false,true)},{label:'Restart to apply update',click:()=>void applyStaged(true)},{type:'separator'},{label:'Quit',click:()=>{quitting=true;app.quit();}}]));tray.on('click',show);}catch{}
+ try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));tray.on('click',show);}catch{}
  ipcMain.handle('client:state',event=>{local(event);return state;});
  // Choosing an e-server, from the list or from anywhere else. One path, so the switch
  // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
