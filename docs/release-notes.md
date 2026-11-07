@@ -1,3 +1,3 @@
-The client's own window now wears the theme saved in your Easter Company account. Before you connect to any e-server, the account card and your e-servers list open in your account's light or dark theme rather than in whatever your operating system is set to. Choose "system" and the window keeps following your machine while it is open, and the theme your account last gave is remembered, so the next launch opens in it immediately.
+The camera and microphone question can be answered again. In 1.0.24 the screen reloaded itself as fast as it could load, so Allow and Deny could not be reached; 1.0.25 asks once, remembers your answer for that e-server on this device, and keeps the camera publishing after you allow it.
 
 e-server desktop client for Windows 10+ (x64), Ubuntu, Arch Linux and Linux AppImage (x86_64). Windows installers are unsigned; verify the source repository and SHA256SUMS before running. Linux AppImage may require FUSE 2.

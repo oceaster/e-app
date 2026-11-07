@@ -6,7 +6,7 @@ const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trust
 const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
-const {loadServerPage}=require('./navigation.cjs');
+const {loadServerPage,showingFile}=require('./navigation.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
 const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
@@ -73,7 +73,7 @@ let permissionState={state:'',blurred:false};
 //: one per connected document, ended when that document goes away, so every reconnect is a new
 //: epoch by construction. `feedGrabs` holds the frame requests waiting on the renderer, and
 //: `feedAnswer` the one waiting on the permission answer.
-let feed=null,feedWindow=null,feedAnswer=null;
+let feed=null,feedWindow=null,feedAnswer=null,feedCookie='';
 const feedGrabs=new Map();
 //: What the publisher in the connected window last told this process (desktop/live-feed.cjs), kept
 //: so the app's own log and a diagnostic can answer "is the feed up, and did the server refuse it".
@@ -92,7 +92,7 @@ function show(){if(!company?.authorized()){setupWindow();return;}const target=wi
  *  sign-ins. A second e-server is a different relationship and is asked once on its own. */
 function mediaDecision(origin){return mediaPermission.decisionFor(config,origin);}
 async function rememberMediaDecision(origin,decision){config=mediaPermission.remember(config,origin,decision);await save().catch(()=>{});}
-function showingPermission(){try{return !!(win&&!win.isDestroyed()&&win.webContents.getURL()===pathToFileURL(permissionFile).href);}catch{return false;}}
+function showingPermission(){return showingFile(win,permissionFile);}
 function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);if(showingPermission())win.webContents.send('client:state',state);}
 function accountChanged(){if(!company?.authorized()){win?.hide();publish({phase:'auth',title:'Sign in to Easter Company.',error:''});setupWindow();}else publish({});}
 function changeServer(){if(!company?.authorized()){setupWindow();return;}void openServers();}
@@ -538,6 +538,11 @@ async function finishPermission(value){
 /** True when this document must give way to the permission screen (and it has been shown). */
 async function permissionScreenNeeded(current){
  if(!config.server||mediaDecision(config.server))return false;
+ // ALREADY ASKING IS THE ANSWER, NOT ANOTHER LOAD. `loadFile` below finishes with
+ // `did-finish-load`, whose handler calls this function again; without this line the screen
+ // reloaded itself as fast as it could load (measured 2026-11-06 20:54: ~125 loads a second,
+ // resetting the page before a person could click Allow).
+ if(showingFile(current,permissionFile))return true;
  if(!(await sessionCookie()))return false;           // the PIN gate is still up: nothing to ask yet
  const present=await fs.stat(permissionFile).then(()=>true).catch(()=>false);
  if(!present)return false;                           // no screen shipped: today's dialog stands
@@ -546,33 +551,49 @@ async function permissionScreenNeeded(current){
  await current.loadFile(permissionFile).catch(()=>{});
  return true;
 }
+/** True while this window is still showing the connected server's page, not the PIN gate, the
+ *  permission screen or about:blank. `startFeed` awaits the device and the capture window; the
+ *  document can move in that time, and a feed created afterwards would belong to no page at all. */
+function connectedDocument(window){
+ try{return !!(window&&!window.isDestroyed()&&new URL(window.webContents.getURL()).origin===config.server);}catch{return false;}
+}
 async function startFeed(window){
  if(!window||window.isDestroyed()||win!==window)return;
  if(!config.server)return;
- let url='';try{url=new URL(window.webContents.getURL()).origin;}catch{return;}
- if(url!==config.server)return;                    // about:blank, the PIN gate's redirect target
+ if(!connectedDocument(window))return;              // about:blank, the PIN gate, the permission screen
+ const cookie=await sessionCookie();
  // A PAGE LOAD IS NOT A NEW CONNECTION. The socket belongs to this server and this window; only the
  // capture belongs to a document. Replacing the feed on every load minted a new epoch each time and
  // left the dashboard a row per reload (measured 2026-11-06 19:19-19:21: thirteen of them in two
  // minutes, epochs :6 to :13, the webcam released and reopened with each). So a reload of the same
  // origin re-binds the capture and keeps the socket, the epoch and the recording.
- if(feed&&!feed.stopped&&feed.origin===config.server){
+ //
+ // THE SOCKET'S COOKIE IS PART OF THAT IDENTITY. The first document can finish loading before the
+ // PIN gate has set `sec_session`; keeping that socket through the next load leaves the publisher
+ // unauthenticated for the whole connection, and the server closes its upgrade with 1006 (measured
+ // 2026-11-06 in scripts/live-feeds-e2e.cjs). Re-bind only while the session is the same; when it
+ // has arrived or changed, the socket is replaced rather than inherited.
+ if(feed&&!feed.stopped&&feed.origin===config.server&&cookie===feedCookie){
   const host=await feedCaptureWindow();
-  if(!host)return;                               // the document keeps publishing; nothing to re-bind to
+  if(!host||!connectedDocument(window))return;    // the document keeps publishing; nothing to re-bind to
   feedWindow=host;
   const line='the document reloaded; re-binding the feed (epoch '+(feed.epoch||'pending')+')';
   console.log('[live-feed] '+line);feedLog('[live-feed] '+line);
   try{feed.retarget();}catch{}
   return;
  }
- stopFeed('a new document is publishing');
+ stopFeed(feed&&!feed.stopped&&feed.origin===config.server
+  ?'the session changed after the socket was opened'
+  :'a new document is publishing');
  const identity=await device();
  if(!String(identity.id||'').trim()){console.log('[live-feed] no device identity for this install; not publishing');return;}
- const cookie=await sessionCookie();
  if(!cookie)console.log('[live-feed] this window has no signed-in session on '+config.server+' yet; the server will refuse the socket until it does');
  // The camera's window, never the page's: the page reloads, the device does not.
  const host=await feedCaptureWindow();
  if(!host){console.log('[live-feed] no camera window for this connection; not publishing');return;}
+ // The permission screen can replace the page while the device is being opened. That load's
+ // handler already stopped the feed; do not resurrect it for a document that is no longer there.
+ if(!connectedDocument(window))return;
  feedWindow=host;
  feed=new LiveFeed({
   origin:config.server,
@@ -590,12 +611,13 @@ async function startFeed(window){
   log:line=>{const text=String(line).startsWith('[live-feed]')?String(line):'[live-feed] '+String(line);console.log(text);feedLog(text);},
   status:value=>{feedStatus={...feedStatus,...value};},
  });
+ feedCookie=cookie;
  feed.start();
 }
 function stopFeed(reason){
  console.log('[live-feed] stopping: '+(reason||'unnamed'));feedLog('[live-feed] stopping: '+(reason||'unnamed'));
  const current=feed;
- feed=null;feedWindow=null;
+ feed=null;feedWindow=null;feedCookie='';
  answerStates({});
  for(const [,answer] of feedGrabs){try{answer(null);}catch{}}
  feedGrabs.clear();

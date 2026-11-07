@@ -102,6 +102,26 @@ app.whenReady().then(async () => {
     `JSON.stringify((() => { ${expression} })())`, true));
   const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  at('the screen that is already showing is not loaded again');
+  // THE 1.0.24 DEFECT, reproduced without a server: main.cjs answers every `did-finish-load` by
+  // asking whether the permission screen is needed, and the old answer loaded that same file
+  // again. Her document then reloaded until the app was quit (125 loads a second in the client's
+  // own log). This drives the same gate shape against the real loaded window.
+  const { showingFile } = require(path.join(ROOT, 'desktop', 'navigation.cjs'));
+  const screen = path.join(HER, 'permission.html');
+  let reloads = 0;
+  const finished = () => {
+    if (showingFile(window, screen)) return;
+    reloads++;
+    void window.loadFile(screen);
+  };
+  window.webContents.on('did-finish-load', finished);
+  finished(); // the load that brought us here has just finished; the app would call the gate now
+  await settle(600);
+  window.webContents.removeListener('did-finish-load', finished);
+  assert.equal(reloads, 0, `the permission screen reloaded itself ${reloads} times`);
+  ok('a finished load of the screen starts no second load');
+
   at('the copy, and nothing else on the screen');
   const copy = await read(`
     const text = node => node === null ? null : node.textContent.replace(/\\s+/g, ' ').trim();

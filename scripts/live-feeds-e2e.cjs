@@ -138,8 +138,12 @@ async function attach(target) {
   socket.send(JSON.stringify({id, method, params}));
  });
  const evaluate = async expression => {
-  const answer = await rpc('Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true});
-  return answer.exceptionDetails ? null : answer.result?.value;
+  // A navigation destroys the execution context between two polls; that is "not yet", not a
+  // failure of the journey (the permission screen and the page it guards replace each other).
+  try {
+   const answer = await rpc('Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true});
+   return answer.exceptionDetails ? null : answer.result?.value;
+  } catch { return null; }
  };
  const until = async (description, expression, tries = 240) => {
   for (let attempt = 0; attempt < tries; attempt++) {
@@ -200,6 +204,23 @@ async function answerPermissionDialog({allow = true} = {}) {
  const width = Number((/WIDTH=(\d+)/.exec(geometry) || [])[1] || 0);
  const height = Number((/HEIGHT=(\d+)/.exec(geometry) || [])[1] || 0);
  return {answered: true, how: `keyboard (shift+Tab, Return) in ${width}x${height}; tree had no button: ${tree.slice(-200)}`};
+}
+
+/** Answer the app's own camera question the way a person does: its screen when this build has
+ *  one (1.0.24+), otherwise the older native dialog. A screen that reloads itself cannot be
+ *  answered, so a `false` from the click is retried rather than treated as an answer. */
+async function answerCameraQuestion(client, {allow = true} = {}) {
+ const button = allow ? 'permission-allow' : 'permission-deny';
+ const read = async expression => { try { return await client.page.evaluate(expression); } catch { return null; } };
+ for (let attempt = 0; attempt < 80; attempt++) {
+  const href = String((await read('location.href')) || '');
+  if (href.includes('/permission/permission.html')) {
+   const clicked = await read(`(()=>{const node=document.getElementById(${JSON.stringify(button)});if(!node)return false;node.click();return true})()`);
+   if (clicked) return {answered: true, how: `the app's own screen (${allow ? 'Allow' : 'Deny'})`};
+  }
+  await wait(250);
+ }
+ return answerPermissionDialog({allow});
 }
 
 async function startFixture({origin, storage, profiles, token, tls}) {
@@ -340,12 +361,24 @@ async function serverWindow(client, origin) {
    // THE PIN GATE, in the shape a fixture can offer: this route sets the cookie a real sign-in sets,
    // inside the client's own window, and then the document reloads into the connected page.
    await client.page.evaluate(`(()=>{location.href=${JSON.stringify(origin + '/_session?token=' + encodeURIComponent(token))};return true})()`);
-   await client.page.until('the connected page', `document.body && document.body.textContent.includes('The e-app')`);
-   // The publisher starts on this document. Ask, then answer the app's own question.
+   // The screen arrives as soon as the instance's own page finishes loading, and it replaces that
+   // page; so wait for EITHER document rather than assuming the page stays.
+   await client.page.until('the connected page or the app\'s camera question',
+    `document.body && (document.body.textContent.includes('The e-app') || location.href.includes('/permission/permission.html'))`);
    console.log(`${client.name}: connected; waiting for the app's own camera question`);
-   await wait(1500);
-   const answer = await answerPermissionDialog({allow: !DENY});
-   console.log(`${client.name}: permission dialog ${answer.answered ? 'answered: ' + answer.how : 'NOT FOUND — ' + answer.reason}`);
+   const answer = await answerCameraQuestion(client, {allow: !DENY});
+   console.log(`${client.name}: permission ${answer.answered ? 'answered: ' + answer.how : 'NOT FOUND — ' + answer.reason}`);
+   // The screen gives way to the page it was guarding, and the page is the instance's own. This
+   // is also what proves the answer completed: the page load is the last step of finishing it.
+   await client.page.until('the connected page after the permission answer',
+    `location.href.startsWith(${JSON.stringify(origin)}) && document.body && document.body.textContent.includes('The e-app')`);
+   // AN ANSWER THAT WAS ACTUALLY TAKEN, not a click lost in a reload: the relationship this
+   // install remembers for this instance is the app's own record of the answer.
+   const settingsPath = path.join(home, 'config', 'Easter Company', 'e-server-client', 'settings.json');
+   const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+   if (DENY) {
+    assert.equal(settings.mediaPermissions?.[origin], 'denied', 'the screen answer was remembered for this instance');
+   }
    const device = JSON.parse(fs.readFileSync(path.join(home, 'config', 'Easter Company', 'e-server-client', 'device.json'), 'utf8'));
    client.device = device;
    console.log(`${client.name}: this install's device id ${device.id} (${device.name})`);
@@ -415,6 +448,12 @@ async function serverWindow(client, origin) {
   assert.equal(stream.status, 200);
   assert.ok(stream.body.includes(Buffer.from([0xff, 0xd8])), 'the tile draws real JPEG frames over MJPEG');
   console.log(`dashboard: live tile rendered, MJPEG ${stream.body.length} bytes for ${feeds[0].feed_id}`);
+
+  // Hold the connected window open long enough for the recorder to have a measurable segment, the
+  // way a person's window stays open after they answer the question. Without this the journey can
+  // leave on the same frame it granted, and its own duration assertion measures the harness, not
+  // the recorder.
+  await wait(2000);
 
   // ── THE CONNECTION ENDS, AND SO DOES THE RECORDING ─────────────────────────────────────
   // Owen: recording "should continue always, as long as you are connected to the instance" — so

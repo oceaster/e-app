@@ -99,3 +99,13 @@ test('the servers flow asks a server, not the updater, whether an e-server answe
  assert.match(main,/const answer=await probeServer\(normalized\)/);
  assert.equal((main.match(/^function probe\(/gm)||[]).length,1,'exactly one probe(): the updater\'s');
 });
+
+test('the permission screen is never loaded over itself',()=>{
+ // `permissionScreenNeeded` runs from `did-finish-load` and ends by loading that same screen.
+ // The idempotent check is therefore not decoration: without it the screen reloads until the
+ // app is quit (the 1.0.24 defect). Pinned here because no unit test can execute main.cjs.
+ const main=fs.readFileSync(path.join(ROOT,'desktop','main.cjs'),'utf8');
+ assert.match(main,/if\(showingFile\(current,permissionFile\)\)return true;/,
+  'permissionScreenNeeded must return before loadFile when the screen is already showing');
+ assert.match(main,/const \{loadServerPage,showingFile\}=require\('\.\/navigation\.cjs'\)/);
+});
