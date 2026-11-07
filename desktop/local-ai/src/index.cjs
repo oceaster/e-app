@@ -139,7 +139,7 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
   const runtime = new Runtime({
     pidFile: path.join(dataDir, 'p'),
     logFile: path.join(dataDir, 'l', 'l'),
-    imageNames: (cfg.engine && cfg.engine.imageNames) || ['llama-server'],
+    imageNames: (cfg.engine && cfg.engine.imageNames) || ['en'],
     vram: () => probeHardware().then((hw) => hw.gpus),
   });
   let store = null;
@@ -161,7 +161,7 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
   async function getStore() {
     if (store) return store;
     const m = await loadManifest(data);
-    store = new Store({ dir: dataDir, manifest: m, allowInsecureHttp });
+    store = new Store({ dir: dataDir, manifest: m, allowInsecureHttp, ids: cfg.ids });
     store.on('progress', (p) => broadcast('localai:progress', p));
     manifestState = { state: 'ready', reason: null };
     return store;
@@ -300,7 +300,7 @@ function createLocalAI({ app, ipcMain, BrowserWindow, config = {}, manifest, man
     diagnostics: () => ({
       hardware: lastHw,
       manifest: manifestState,
-      engine: store ? { version: store.manifest.engine.version, commit: store.manifest.engine.llamaCommit } : null,
+      engine: store ? { version: store.manifest.engine.version, commit: store.manifest.engine.build } : null,
       ...runtime.diagnostics(),
     }),
     async selfTest() {

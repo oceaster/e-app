@@ -17,8 +17,12 @@ const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const MODULE = path.join(ROOT, 'desktop', 'local-ai');
-const { createLocalAI } = require('../desktop/local-ai/index.cjs');
-const fixtures = require('../desktop/local-ai/fixtures.cjs');
+const SRC = path.join(MODULE, 'src');
+const DEV = path.join(MODULE, 'dev');
+const IDS = require('../desktop/local-ai/src/config.cjs').ids;
+const EXE = process.platform === 'win32' ? IDS.binary.win32 : IDS.binary.unix;
+const { createLocalAI } = require('../desktop/local-ai/src/index.cjs');
+const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
@@ -58,10 +62,10 @@ const options = (dir, extra = {}) => ({
   config: {},
   manifest: {
     engine: {
-      version: '1.0.0', llamaCommit: '43e865ec059a', features: ['dory'],
-      platforms: { [`${process.platform}-${process.arch}-cuda`]: { files: [{ name: 'llama-server', url: 'https://example.invalid/llama-server', sha256: 'a'.repeat(64), size: 10 }] } },
+      version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+      platforms: { [`${process.platform}-${process.arch}-${IDS.backend.cuda}`]: { files: [{ name: EXE, url: 'https://example.invalid/e', sha256: 'a'.repeat(64), size: 10 }] } },
     },
-    models: { Q8_0: { name: 'dory-Q8_0.gguf', url: 'https://example.invalid/m.gguf', sha256: 'b'.repeat(64), size: 1000 } },
+    models: { [`${IDS.model}-q2`]: { name: `${IDS.model}-q2.bin`, url: 'https://example.invalid/m', sha256: 'b'.repeat(64), size: 1000 } },
   },
   wireIpc: true,
   exec: fixtures.stubExec(MACHINE),
@@ -159,9 +163,10 @@ test('an engine started under a trusted origin stops when that window navigates 
   // A REAL start: the fake engine and a model are served over loopback and installed into userData,
   // so this exercises download -> verify -> spawn -> /health -> ready, and then the three lifetime
   // rules the ticket names. It costs about a second and proves the wiring end to end.
+  // Served under opaque names and installed under the opaque binary/model ids the manifest names.
   const files = {
-    'llama-server': fs.readFileSync(path.join(MODULE, 'fake-llama-server.cjs')),
-    'dory-Q4_K_M.gguf': crypto.randomBytes(4096),
+    e: fs.readFileSync(path.join(DEV, 'fake-llama-server.cjs')),
+    m: crypto.randomBytes(4096),
   };
   const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
   const srv = http.createServer((req, res) => {
@@ -175,17 +180,17 @@ test('an engine started under a trusted origin stops when that window navigates 
   const sha256 = '43e865ec059a'.padEnd(64, '0').slice(0, 64);
   const manifest = {
     engine: {
-      version: '1.0.0', llamaCommit: '43e865ec059a', features: ['dory'],
-      platforms: { [`${process.platform}-${process.arch}-cuda`]: { files: [{ name: 'llama-server', url: `${base}/llama-server`, sha256: sha(files['llama-server']), size: files['llama-server'].length }] } },
+      version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+      platforms: { [`${process.platform}-${process.arch}-${IDS.backend.cuda}`]: { files: [{ name: EXE, url: `${base}/e`, sha256: sha(files.e), size: files.e.length }] } },
     },
-    models: { Q4_K_M: { name: 'dory-Q4_K_M.gguf', url: `${base}/dory-Q4_K_M.gguf`, sha256: sha(files['dory-Q4_K_M.gguf']), size: files['dory-Q4_K_M.gguf'].length } },
+    models: { [`${IDS.model}-q4`]: { name: `${IDS.model}-q4.bin`, url: `${base}/m`, sha256: sha(files.m), size: files.m.length } },
   };
   let server = 'https://one.example';
   const electron = fakeElectron({ userData: dir });
   const ai = createLocalAI({
     app: electron.app, ipcMain: electron.ipcMain, BrowserWindow: electron.BrowserWindow,
     trustedOrigins: () => [server, 'https://two.example'], allowInsecureHttp: true, manifest,
-    config: { quant: { cpu: ['Q4_K_M'], t1: ['Q4_K_M'] }, server: { healthIntervalMs: 50 } },
+    config: { quant: { cpu: ['q4'], t1: ['q4'] }, server: { healthIntervalMs: 50 } },
     exec: fixtures.stubExec(fixtures.byId('no-gpu')),
   });
   const sender = () => Object.assign(new EventEmitter(), { isDestroyed: () => false });
@@ -228,7 +233,7 @@ test('an engine started under a trusted origin stops when that window navigates 
 test('main.cjs creates the engine with a LIVE trust list and adopts an orphan at boot', () => {
   const main = read('desktop/main.cjs');
   // The app loads the SHIPPED bundle (one minified file), never the readable sources.
-  assert.match(main, /const \{createLocalAI\}=require\('\.\/local-ai\/bundle\/index\.cjs'\)/);
+  assert.match(main, /const \{createLocalAI\}=require\('\.\/local-ai\/dist\/local-ai\.cjs'\)/);
   assert.match(main, /localAI=createLocalAI\(\{app,ipcMain,BrowserWindow,trustedOrigins:\(\)=>\[config\.server\]\.filter\(Boolean\)\}\)/,
     'trustedOrigins must be a FUNCTION reading config.server, not a snapshot of it');
   assert.match(main, /await localAI\.recover\(\)/, 'a crash may leave an engine holding VRAM: adopt or kill it at boot');
@@ -237,7 +242,7 @@ test('main.cjs creates the engine with a LIVE trust list and adopts an orphan at
 
 test('the preload bridge is ONE self-contained block: only electron, no relative require', () => {
   const preload = read('desktop/preload.cjs');
-  const vendored = fs.readFileSync(path.join(MODULE, 'preload-block.cjs'), 'utf8');
+  const vendored = fs.readFileSync(path.join(MODULE, 'dev', 'preload-block.cjs'), 'utf8');
   assert.ok(preload.includes(vendored.trim()), 'the block shipped in preload.cjs is not the block the module documents');
   assert.ok(!/require\(['"]\.{1,2}\//.test(preload), 'a sandboxed preload cannot resolve a relative require');
   const requires = [...preload.matchAll(/require\((['"])([^'"]+)\1\)/g)].map((m) => m[2]);
@@ -252,7 +257,7 @@ test('the preload bridge is ONE self-contained block: only electron, no relative
 });
 
 test('the module ships no UI of its own, and the app gained no window or page', () => {
-  const files = fs.readdirSync(MODULE);
+  const files = fs.readdirSync(SRC);
   for (const name of files) {
     assert.ok(!/\.(html?|css|mjs|jsx|tsx|svg|png)$/i.test(name), `${name} is a user-visible asset in the engine module`);
   }
@@ -260,17 +265,17 @@ test('the module ships no UI of its own, and the app gained no window or page', 
   const created = (main.match(/new BrowserWindow\(/g) || []).length;
   assert.strictEqual(created, 3, `main.cjs creates ${created} windows; the engine must not add one`);
   assert.ok(!/localAI.*BrowserWindow/.test(main.replace(/localAI=createLocalAI\(\{[^}]*\}\)/, '')));
-  const block = fs.readFileSync(path.join(MODULE, 'preload-block.cjs'), 'utf8');
+  const block = fs.readFileSync(path.join(MODULE, 'dev', 'preload-block.cjs'), 'utf8');
   assert.ok(!/document\.|createElement|appendChild|insertAdjacentHTML/.test(block), 'the bridge must paint nothing');
 });
 
 test('the model is ALWAYS a local path: -m, never -hf, anywhere in the module', () => {
-  for (const name of fs.readdirSync(MODULE).filter((n) => n.endsWith('.cjs'))) {
-    const source = fs.readFileSync(path.join(MODULE, name), 'utf8');
+  for (const name of fs.readdirSync(SRC).filter((n) => n.endsWith('.cjs'))) {
+    const source = fs.readFileSync(path.join(SRC, name), 'utf8');
     const live = source.replace(/^\s*\*.*$/gm, '').replace(/^\s*\/\/.*$/gm, '');
     assert.ok(!/'(-hf|--hf)'/.test(live), `${name} can pass -hf to the engine`);
   }
-  assert.match(read('desktop/local-ai/index.cjs'), /modelArgs: \['-m', storeNow\.modelPath\(plan\.quant\)\]/);
+  assert.match(read('desktop/local-ai/src/index.cjs'), /modelArgs: \['-m', storeNow\.modelPath\(plan\.quant\)\]/);
 });
 
 test('the app test entry reaches these suites', () => {

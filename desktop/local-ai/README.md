@@ -17,7 +17,7 @@ prints the same table for nine synthetic machines. The plan table is OUTPUT, nev
    only `electron`. A sandboxed preload cannot resolve a relative require, so the bridge asks main
    for trust synchronously (`localai:isTrusted`) and exposes `window.localAI` only when the answer is
    yes. It parses nothing and paints nothing.
-3. **Manifest** (served by us): `{engine:{version, llamaCommit, features:["dory"],
+3. **Manifest** (served by us): `{engine:{version, build, features:["dory"],
    platforms:{"win32-x64-cuda":{files:[{name,url,sha256,size}]}, "win32-x64-vulkan":{…},
    "linux-x64-rocm":{…}, "darwin-arm64-metal":{…}, "…-cpu":{…}}}, models:{Q8_0:{name,url,sha256,size}}}`
    Every file is sha256-pinned, names must be basenames, https only, and the engine binary must pass

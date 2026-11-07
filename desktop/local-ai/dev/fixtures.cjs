@@ -234,11 +234,12 @@ function optionsFor(machine, cfg) {
 const byId = (id) => MACHINES.find((m) => m.id === id);
 
 /** The model inventory a manifest would report, with realistic GGUF sizes for a ~4B model. */
+/** Weight sizes keyed by BUILD ID (see config.ids.quant): q4 smallest, q1 widest. */
 const INVENTORY = {
-  Q4_K_M: { bytes: Math.round(2.4 * GiB) },
-  Q5_K_M: { bytes: Math.round(2.8 * GiB) },
-  Q8_0: { bytes: Math.round(3.94 * GiB) },
-  BF16: { bytes: Math.round(7.4 * GiB) },
+  q4: { bytes: Math.round(2.4 * GiB) },
+  q3: { bytes: Math.round(2.8 * GiB) },
+  q2: { bytes: Math.round(3.94 * GiB) },
+  q1: { bytes: Math.round(7.4 * GiB) },
 };
 
 module.exports = { MACHINES, stubExec, optionsFor, byId, INVENTORY, GiB };

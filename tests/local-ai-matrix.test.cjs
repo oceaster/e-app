@@ -8,10 +8,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cfg = require('../desktop/local-ai/config.cjs');
-const { detect } = require('../desktop/local-ai/hardware.cjs');
-const { planAll } = require('../desktop/local-ai/planner.cjs');
-const { MACHINES, optionsFor, stubExec, INVENTORY } = require('../desktop/local-ai/fixtures.cjs');
+const cfg = require('../desktop/local-ai/src/config.cjs');
+const { detect } = require('../desktop/local-ai/src/hardware.cjs');
+const { planAll } = require('../desktop/local-ai/src/planner.cjs');
+const { MACHINES, optionsFor, stubExec, INVENTORY } = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const REQUIRED = ['no-gpu', 'one-8gib-gpu', 'igpu-8gib', 'two-nvidia-gpus', 'amd-no-nvidia-smi', 'apple-silicon', 'laptop-8gib-ram'];
 const SHORTFALL = [
@@ -113,7 +113,7 @@ test('the 8 GiB-RAM laptop is not left with nothing: the CPU floor holds a small
   const hw = await detect({ cfg, platform: machine.platform, arch: machine.arch, os: machine.os, exec: stubExec(machine) });
   const eco = planAll(hw, cfg, INVENTORY)[0];
   assert.strictEqual(eco.ok, true, `the floor refused an 8 GiB laptop: ${eco.reason}`);
-  assert.ok(eco.quant !== 'Q8_0', 'a 3.94 GiB quant does not belong in an 8 GiB machine');
+  assert.ok(eco.quant !== 'q2', 'a 3.94 GiB quant does not belong in an 8 GiB machine');
   assert.ok(eco.ctx >= 4096);
   assert.ok(eco.estimate.weightsGiB + eco.estimate.kvGiB <= eco.estimate.budgetGiB + 0.01);
 });

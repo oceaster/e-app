@@ -17,10 +17,10 @@ const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./v
 // THE LOCAL MODEL ENGINE (Dexter's foundation): measured, planned and run on THIS person's computer.
 // It is created in start() because it needs `app` ready for its userData path; nothing it does is
 // visible in the window yet — the tier control is a design ticket of its own.
-// THE SHIPPED ARTIFACT, NOT THE READABLE SOURCES: desktop/local-ai/bundle/index.cjs is one minified
-// file built from them (desktop/local-ai/build.cjs), and package.json excludes the sources from the
-// packaged app. `node desktop/local-ai/build.cjs --check` fails if the bundle is stale.
-const {createLocalAI}=require('./local-ai/bundle/index.cjs');
+// THE SHIPPED ARTIFACT, NOT THE READABLE SOURCES: desktop/local-ai/dist/local-ai.cjs is ONE minified
+// file built from desktop/local-ai/src/ by scripts/build-local-ai.cjs, and package.json excludes the
+// sources from the packaged app. `npm run build:local-ai -- --check` fails if the dist file is stale.
+const {createLocalAI}=require('./local-ai/dist/local-ai.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');

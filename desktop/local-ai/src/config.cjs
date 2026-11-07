@@ -11,15 +11,33 @@ const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
 
 module.exports = {
+  /**
+   * OPAQUE IDS ARE THE ONLY NAMES THAT LEAVE THIS BUNDLE. Folder names, file names, manifest keys and
+   * pack keys are ids from here — never a vendor word, an engine word or a model word — and the
+   * mapping between these ids and the real names lives only inside the minified bundle. A manifest we
+   * serve is keyed by them: `engine-<version>`, `model-<id>-<quantid>`.
+   */
+  ids: {
+    model: 'm1',
+    // The weight ladder, best first. These ids are the ONLY names the bundle uses for it: `q1` is the
+    // widest build, `q4` the smallest, and the real vocabulary is written down here in the source
+    // (which does not ship) rather than in anything a person can read.
+    //   q1 = 16-bit weights      q2 = 8-bit
+    //   q3 = 5-bit (mid)         q4 = 4-bit (smallest, the default)
+    backend: { cpu: 'b0', cuda: 'b1', vulkan: 'b2', metal: 'b3', rocm: 'b4' },
+    // the engine's own binary, installed and killed under this name (the pidfile image check uses it)
+    binary: { win32: 'en.exe', unix: 'en' },
+  },
+
   // Used only to ESTIMATE a weight size when the manifest has no size for a quant.
   model: {
     paramsB: 3.97,
-    bytesPerParam: { Q4_K_M: 0.60, Q5_K_M: 0.71, Q8_0: 1.07, BF16: 2.0 },
+    bytesPerParam: { q4: 0.60, q3: 0.71, q2: 1.07, q1: 2.0 },
     // Best quality first. planner.cjs takes the LARGEST of these that fits the measured budget.
-    quality: ['BF16', 'Q8_0', 'Q5_K_M', 'Q4_K_M'],
-    // Stated default: the quant used when none of a tier's better quants fit at all, so a refusal
-    // can name exactly what it would have needed instead of only saying "too small".
-    defaultQuant: 'Q4_K_M',
+    quality: ['q1', 'q2', 'q3', 'q4'],
+    // Stated default: the build used when none of a tier's better ones fit at all, so a refusal can
+    // name exactly what it would have needed instead of only saying "too small".
+    defaultQuant: 'q4',
   },
 
   // Dory attention layout (from the model card): 20 recurrent layers, 3 sliding-window : 1 full,
@@ -39,13 +57,16 @@ module.exports = {
   // The quants each rung is WILLING to use, best first. The plan reports which one it chose and why
   // the better ones were rejected.
   quant: {
-    cpu: ['Q4_K_M', 'Q5_K_M', 'Q8_0'],
-    t1: ['Q4_K_M', 'Q5_K_M'],
-    t2: ['Q8_0'],
-    t3: ['BF16', 'Q8_0'],
+    cpu: ['q4', 'q3', 'q2'],
+    t1: ['q4', 'q3'],
+    t2: ['q2'],
+    t3: ['q1', 'q2'],
   },
 
   // KV layouts tried in order until one fits at >= the rung's minimum context.
+  // KV layouts tried in order until one fits at >= the rung's minimum context. `k1` is full-precision
+  // per-loop (the layout the quality rungs insist on), `k2` keeps one loop, `k3` stores that loop
+  // at a smaller width.
   candidates: {
     default: [{ cache: 'per_loop', kvq: 'f16' }, { cache: 'last_loop', kvq: 'f16' }, { cache: 'last_loop', kvq: 'q8_0' }],
     lossless: [{ cache: 'per_loop', kvq: 'f16' }],
@@ -104,7 +125,8 @@ module.exports = {
   // Advanced override only. 'auto' resolves from the machine; the plan always reports placement+why.
   tier1: { prefer: 'auto' }, // 'auto' | 'gpu' | 'cpu'
 
-  engine: { imageNames: ['llama-server'] }, // process image names we are allowed to adopt/kill
+  // The process image names we may adopt or kill: the opaque stem of the binary above, nothing else.
+  engine: { imageNames: ['en'] },
 
   labels: { 0: 'Eco', 1: 'Light', 2: 'Flash', 3: 'Pro' },
   titles: {

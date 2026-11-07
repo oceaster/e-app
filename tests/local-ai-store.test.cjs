@@ -10,13 +10,18 @@ const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 
-const { downloadVerified } = require('../desktop/local-ai/downloader.cjs');
-const { Store, validateManifest } = require('../desktop/local-ai/store.cjs');
+const { downloadVerified } = require('../desktop/local-ai/src/downloader.cjs');
+const { Store, validateManifest } = require('../desktop/local-ai/src/store.cjs');
+const IDS = require('../desktop/local-ai/src/config.cjs').ids;
 
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'lai-store-'));
-const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+// The installed engine binary and the manifest keys are OPAQUE IDS (config.ids): a person who opens
+// their own application-data folder reads `en`, and our manifest is keyed `model-m1-q2`.
+const EXE = process.platform === 'win32' ? IDS.binary.win32 : IDS.binary.unix;
 const PREFIX = `${process.platform}-${process.arch}`;
+const packKey = (backend) => `${PREFIX}-${IDS.backend[backend]}`;
+const modelKey = (quant) => `${IDS.model}-${quant}`;
 
 /** Range-capable file server. `cutFirst`: the first full response is cut off after N bytes. */
 function serve(files, { cutFirst } = {}) {
@@ -36,8 +41,8 @@ function serve(files, { cutFirst } = {}) {
 }
 
 const file = (name, buf, base) => ({ name, url: `${base}/${name}`, sha256: sha(buf), size: buf.length });
-const manifestFor = (files, extra = {}, prefix = PREFIX) => ({
-  engine: { version: '1.0.0', llamaCommit: '43e865ec059a', features: ['dory'], platforms: { [`${prefix}-cuda`]: { files } } },
+const manifestFor = (files, extra = {}, backend = 'cuda') => ({
+  engine: { version: '1.0.0', build: '43e865ec059a', features: ['dory'], platforms: { [packKey(backend)]: { files } } },
   models: {},
   ...extra,
 });
@@ -84,15 +89,18 @@ test('the engine pack a BACKEND needs is named per backend, and a CPU plan may r
     dir: tmp(),
     manifest: {
       engine: {
-        version: '1.0.0', llamaCommit: '43e865ec059a', features: ['dory'],
-        platforms: { [`${PREFIX}-vulkan`]: { files: [exe] } },
+        version: '1.0.0', build: '43e865ec059a', features: ['dory'],
+        platforms: { [packKey('vulkan')]: { files: [exe] } },
       },
       models: {},
     },
   });
-  assert.strictEqual(store.variant('vulkan'), `${PREFIX}-vulkan`);
-  assert.strictEqual(store.variant('cpu'), `${PREFIX}-vulkan`, 'the CPU floor runs the same binary with the devices hidden');
-  assert.throws(() => store.variant('cuda'), /E_PACK: no engine files for .*-cuda/);
+  assert.strictEqual(store.variant('vulkan'), packKey('vulkan'));
+  assert.strictEqual(store.variant('cpu'), packKey('vulkan'), 'the CPU floor runs the same binary with the devices hidden');
+  assert.throws(() => store.variant('cuda'), /E_PACK: no engine files for/);
+  // Nothing in a pack key names a backend: it is an id.
+  assert.match(store.variant('vulkan'), new RegExp(`-${IDS.backend.vulkan}$`));
+  assert.ok(!/cuda|vulkan|metal|rocm/.test(store.variant('vulkan')), 'a backend name reached a folder name');
 });
 
 test('engine pack installs atomically; a tampered binary is refused; the wrong commit is refused', async () => {
@@ -107,7 +115,7 @@ test('engine pack installs atomically; a tampered binary is refused; the wrong c
     assert.ok(info.installed && !fs.existsSync(`${info.dir}.tmp`), 'installation is atomic: .tmp then rename');
     if (process.platform !== 'win32') {
       await store.verifyEngine('cuda'); // hash ok + --version reports the pinned commit
-      const wrong = new Store({ dir, manifest: { ...manifest, engine: { ...manifest.engine, llamaCommit: 'deadbeefcafe' } }, allowInsecureHttp: true });
+      const wrong = new Store({ dir, manifest: { ...manifest, engine: { ...manifest.engine, build: 'deadbeefcafe' } }, allowInsecureHttp: true });
       await assert.rejects(wrong.ensureEngine('cuda').then(() => wrong.verifyEngine('cuda')), /E_ENGINE_BUILD|E_NOT_INSTALLED/);
       fs.writeFileSync(info.exe, Buffer.alloc(exe.length, 65)); // same size, different bytes
       await assert.rejects(store.verifyEngine('cuda'), /E_ENGINE_HASH/);
@@ -115,16 +123,21 @@ test('engine pack installs atomically; a tampered binary is refused; the wrong c
   } finally { srv.close(); }
 });
 
-test('a model install writes its marker, and inventory reports installed + manifest sizes', async () => {
+test('a model install writes its marker; inventory maps opaque manifest ids back to settings', async () => {
   const model = crypto.randomBytes(40000);
   const exe = Buffer.from('x');
-  const { srv, base } = await serve({ 'm.gguf': model, [EXE]: exe });
+  const { srv, base } = await serve({ 'm1-q2.bin': model, [EXE]: exe });
   try {
-    const store = new Store({ dir: tmp(), manifest: manifestFor([file(EXE, exe, base)], { models: { Q8_0: file('m.gguf', model, base) } }), allowInsecureHttp: true });
-    assert.strictEqual(store.inventory().Q8_0.installed, false);
-    assert.strictEqual(store.inventory().Q8_0.bytes, model.length);
-    const installed = await store.ensureModel('Q8_0');
-    assert.ok(store.inventory().Q8_0.installed && fs.existsSync(installed));
+    const store = new Store({
+      dir: tmp(),
+      manifest: manifestFor([file(EXE, exe, base)], { models: { [modelKey('q2')]: file('m1-q2.bin', model, base) } }),
+      allowInsecureHttp: true,
+    });
+    assert.strictEqual(store.inventory().q2.installed, false);
+    assert.strictEqual(store.inventory().q2.bytes, model.length);
+    assert.ok(!/\.gguf$/.test(store.inventory().q2.name), 'a model file must not carry a format-name extension');
+    const installed = await store.ensureModel('q2');
+    assert.ok(store.inventory().q2.installed && fs.existsSync(installed));
     assert.ok(fs.existsSync(`${installed}.ok`), 'the marker is what makes an install trusted');
   } finally { srv.close(); }
 });

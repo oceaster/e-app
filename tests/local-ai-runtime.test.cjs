@@ -5,7 +5,7 @@
 // rule the runtime has is a gate rather than a hope: the half-context retry, the fresh-port retry,
 // the timeout that does not repeat, the kill that actually removes the process and its pidfile, the
 // orphan adopt-or-kill, and never killing a pid whose image is not ours. The fixture runs as `node`,
-// which is why the image-name list here is ['node']: production passes ['llama-server'].
+// which is why the image-name list here is ['node']: production passes the opaque stem ['en'].
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -14,23 +14,24 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const path_ = require('path');
-const ROOT = path_.resolve(__dirname, '..', 'desktop', 'local-ai');
-const cfg0 = require('../desktop/local-ai/config.cjs');
-const { Runtime } = require('../desktop/local-ai/runtime.cjs');
-const proc = require('../desktop/local-ai/proc.cjs');
-const { runSelfTest } = require('../desktop/local-ai/selftest.cjs');
+const ROOT = path_.resolve(__dirname, '..', 'desktop', 'local-ai', 'dev');
+const cfg0 = require('../desktop/local-ai/src/config.cjs');
+const { Runtime } = require('../desktop/local-ai/src/runtime.cjs');
+const proc = require('../desktop/local-ai/src/proc.cjs');
+const { runSelfTest } = require('../desktop/local-ai/src/selftest.cjs');
 
 const cfg = { ...cfg0, server: { ...cfg0.server, startTimeoutMs: 6000, healthIntervalMs: 40 } };
-const IMAGES = ['node']; // the fixture runs under node; production uses ['llama-server']
+const IMAGES = ['node']; // the fixture runs under node; production uses the opaque binary stem ('en')
 
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lai-'));
-  let bin = path.join(dir, 'fake-llama-server.cjs');
+  // The engine is installed and killed under its ID, never its real name (config.ids.binary).
+  let bin = path.join(dir, process.platform === 'win32' ? 'en.exe' : 'en');
   fs.copyFileSync(path.join(ROOT, 'fake-llama-server.cjs'), bin);
-  if (process.platform === 'win32') { fs.writeFileSync(path.join(dir, 'fake.cmd'), `@node "%~dp0fake-llama-server.cjs" %*\r\n`); bin = path.join(dir, 'fake.cmd'); } else fs.chmodSync(bin, 0o755);
+  if (process.platform === 'win32') { fs.writeFileSync(path.join(dir, 'en.cmd'), '@node "%~dp0en.exe" %*\r\n'); bin = path.join(dir, 'en.cmd'); } else fs.chmodSync(bin, 0o755);
   return { dir, bin, pidFile: path.join(dir, 'pid.json'), logFile: path.join(dir, 'engine.log') };
 }
-const mkPlan = (o = {}) => ({ ok: true, tier: 2, label: 't', backend: 'cuda', gpus: [0], quant: 'Q8_0', loops: 2, cache: 'per_loop', kvq: 'f16', ctx: 8192,
+const mkPlan = (o = {}) => ({ ok: true, tier: 2, label: 't', backend: 'cuda', gpus: [0], quant: 'q2', loops: 2, cache: 'per_loop', kvq: 'f16', ctx: 8192,
   threads: 1, priority: 'normal', nkvo: false, tensorSplit: null, estimate: { kvGiB: 0.3 }, ...o });
 const mkRt = (f) => new Runtime({ pidFile: f.pidFile, logFile: f.logFile, imageNames: IMAGES });
 const launch = (f, env = {}, c = cfg) => ({ binaryPath: f.bin, modelArgs: ['-m', 'x.gguf'], cfg: c, env });
@@ -123,7 +124,7 @@ test('orphan recovery never kills a stranger that recycled the pid', async () =>
   const stranger = spawn(process.platform === 'win32' ? 'ping' : 'sleep', process.platform === 'win32' ? ['-n', '30', '127.0.0.1'] : ['30'], { stdio: 'ignore' });
   try {
     proc.writePid(f.pidFile, { pid: stranger.pid, port: 1, apiKey: 'x', plan: {} });
-    const rt = new Runtime({ pidFile: f.pidFile, imageNames: ['llama-server'] });
+    const rt = new Runtime({ pidFile: f.pidFile, imageNames: ['en'] });
     assert.strictEqual((await rt.recover(cfg)).action, 'pid-reused');
     assert.ok(proc.isAlive(stranger.pid)); assert.ok(!fs.existsSync(f.pidFile));
   } finally { stranger.kill(); }

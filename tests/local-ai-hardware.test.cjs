@@ -8,9 +8,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cfg = require('../desktop/local-ai/config.cjs');
-const { detect, runCommand, parsers, classifyBusy, unifiedBudget, backendFor } = require('../desktop/local-ai/hardware.cjs');
-const fixtures = require('../desktop/local-ai/fixtures.cjs');
+const cfg = require('../desktop/local-ai/src/config.cjs');
+const { detect, runCommand, parsers, classifyBusy, unifiedBudget, backendFor } = require('../desktop/local-ai/src/hardware.cjs');
+const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;

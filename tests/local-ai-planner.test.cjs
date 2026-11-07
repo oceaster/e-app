@@ -7,10 +7,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const cfg = require('../desktop/local-ai/config.cjs');
-const { planTier, planAll, buildServerArgs, buildEnv, kvBytes, chooseQuant } = require('../desktop/local-ai/planner.cjs');
-const { detect } = require('../desktop/local-ai/hardware.cjs');
-const fixtures = require('../desktop/local-ai/fixtures.cjs');
+const cfg = require('../desktop/local-ai/src/config.cjs');
+const { planTier, planAll, buildServerArgs, buildEnv, kvBytes, chooseQuant } = require('../desktop/local-ai/src/planner.cjs');
+const { detect } = require('../desktop/local-ai/src/hardware.cjs');
+const fixtures = require('../desktop/local-ai/dev/fixtures.cjs');
 
 const GiB = 1024 ** 3;
 const inv = fixtures.INVENTORY;
@@ -51,7 +51,7 @@ test('the ladder is four DIFFERENT rungs, ordered by capability class', async ()
   const [eco, light, flash, pro] = plans;
   assert.strictEqual(eco.backend, 'cpu');
   assert.ok(light.ctx <= 16384 && light.loops === 1 && light.priority === 'low', 'Light is the cheap rung');
-  assert.strictEqual(flash.quant, 'Q8_0');
+  assert.strictEqual(flash.quant, 'q2');
   assert.strictEqual(pro.loops, 4);
   assert.ok(light.gpus.every((g) => !light.displayGpus.includes(g)), 'Light avoids the display GPU');
 });
@@ -77,16 +77,16 @@ test('each backend gets its own device environment, and Metal gets none', async 
 });
 
 test('the LARGEST quant that fits is chosen, and the plan names the ones it gave up', async () => {
-  // A model whose BF16 build is too big for any card here: Pro must fall to Q8_0 and SAY so.
+  // A model whose q1 build is too big for any card here: Pro must fall to q2 and SAY so.
   const machine = fixtures.byId('two-nvidia-gpus');
   const hw = await detect(fixtures.optionsFor(machine, cfg));
-  const heavy = { ...inv, BF16: { bytes: 40 * GiB } };
+  const heavy = { ...inv, q1: { bytes: 40 * GiB } };
   const pro = planTier(3, hw, cfg, heavy);
   assert.strictEqual(pro.ok, true, pro.reason);
-  assert.strictEqual(pro.quant, 'Q8_0');
-  assert.deepStrictEqual(pro.rejectedQuants, ['BF16'], 'the better quant it could not hold must be named');
-  // And on the largest card Pro does hold BF16 (the quant ladder is measured, not fixed).
-  assert.strictEqual((await planOn('streaming-pc', 3, { commands: fixtures.byId('streaming-pc').commands.map((c) => (c.cmd === 'ps' ? { ...c, stdout: '/sbin/init\n' } : c)) })).quant, 'BF16');
+  assert.strictEqual(pro.quant, 'q2');
+  assert.deepStrictEqual(pro.rejectedQuants, ['q1'], 'the better quant it could not hold must be named');
+  // And on the largest card Pro does hold q1 (the quant ladder is measured, not fixed).
+  assert.strictEqual((await planOn('streaming-pc', 3, { commands: fixtures.byId('streaming-pc').commands.map((c) => (c.cmd === 'ps' ? { ...c, stdout: '/sbin/init\n' } : c)) })).quant, 'q1');
   // And a budget that only fits the default quant with a short context is a REFUSAL, not a guess.
   const tight = chooseQuant(cfg, inv, { allowed: cfg.quant.t3, room: 2 * GiB, loops: 4, candidates: cfg.candidates.pro, minCtx: cfg.ctx.min[3], targetCtx: cfg.ctx.target[3] });
   assert.strictEqual(tight.ok, false);
@@ -147,7 +147,7 @@ test('no plan, and no shipped constant, names a GPU model we happen to own', asy
   const fs = require('node:fs');
   const path = require('node:path');
   for (const file of ['planner.cjs', 'config.cjs']) {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'desktop', 'local-ai', file), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'desktop', 'local-ai', 'src', file), 'utf8');
     assert.ok(!/GeForce|Radeon|RTX \d|Apple M\d/i.test(source), `${file} still carries a GPU model name`);
   }
   // A plan's placement is whatever the PROBES said, so a fixture with no GPU names produces none.

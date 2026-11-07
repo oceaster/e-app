@@ -1,6 +1,6 @@
 'use strict';
 /**
- * build.cjs — THE READABLE SOURCES ARE NOT WHAT SHIPS.
+ * build-local-ai.cjs — THE READABLE SOURCES ARE NOT WHAT SHIPS.
  *
  * Owen, 2026-11-07: "obfuscate the local AI stuff as much as possible … hide as much user touchable
  * code/tech/design". So the packaged app carries ONE file — `bundle/index.cjs` — built here from the
@@ -9,8 +9,12 @@
  * map (a source map would hand the whole thing back). The readable `.cjs` sources are excluded from
  * `build.files` in package.json, so they are not in the asar at all.
  *
- *   node desktop/local-ai/build.cjs           build bundle/index.cjs
- *   node desktop/local-ai/build.cjs --check   exit 1 if the shipped bundle is not what this builds
+ *   node scripts/build-local-ai.cjs           build desktop/local-ai/dist/local-ai.cjs
+ *   node scripts/build-local-ai.cjs --check   exit 1 if the shipped file is not what this builds
+ *
+ * It runs from the npm scripts (`build:local-ai`, and before every pack/dist), and `main.cjs`
+ * requires the result: desktop/local-ai/dist/local-ai.cjs. The readable sources live in
+ * desktop/local-ai/src/ and are excluded from `build.files`, so they are not in the app at all.
  *
  * THE GATE IS NOT THIS FILE'S OPINION. `tests/local-ai-packed.test.cjs` loads the bundle and runs the
  * same synthetic machines through it as through the sources, asserting the two agree; and the build is
@@ -24,8 +28,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const HERE = __dirname;
-const BUNDLE = path.join(HERE, 'bundle', 'index.cjs');
+const ROOT = path.resolve(__dirname, '..');
+const HERE = path.join(ROOT, 'desktop', 'local-ai', 'src');
+const BUNDLE = path.join(ROOT, 'desktop', 'local-ai', 'dist', 'local-ai.cjs');
 
 /** Dependency order: a module may only require one before it. */
 const MODULES = [
@@ -528,7 +533,7 @@ function main() {
   if (check) {
     const shipped = fs.existsSync(BUNDLE) ? fs.readFileSync(BUNDLE, 'utf8') : '';
     if (shipped !== bundle) {
-      console.error('E_BUNDLE: bundle/index.cjs is not what the committed sources build — run `node desktop/local-ai/build.cjs`');
+      console.error('E_BUNDLE: desktop/local-ai/dist/local-ai.cjs is not what the committed sources build — run `npm run build:local-ai`');
       process.exit(1);
     }
     console.log(`bundle is current (${bundle.length} bytes, ${bundle.split('\n').length - 1} newlines)`);
