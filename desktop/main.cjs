@@ -14,6 +14,10 @@ const mediaPermission=require('./media-permission.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
+// THE LOCAL MODEL ENGINE (Dexter's foundation): measured, planned and run on THIS person's computer.
+// It is created in start() because it needs `app` ready for its userData path; nothing it does is
+// visible in the window yet — the tier control is a design ticket of its own.
+const {createLocalAI}=require('./local-ai/index.cjs');
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
@@ -50,7 +54,7 @@ const THEME_CACHE=path.join(HOME,THEME_CACHE_FILE);
 //: settings panel is made on another surface, so the shell asks again when it is looked at - but a
 //: focus is not a reason to ask a service a question it answered a moment ago.
 const THEME_REFRESH_MIN_MS=30000;
-let company=null,windowAccount=null,pendingLink=null;
+let company=null,windowAccount=null,pendingLink=null,localAI=null;
 // ── THIS INSTALL'S OWN IDENTITY, AND ITS CAMERA'S PERMISSION ──────────────────────────────────
 // Owen, 2026-11-06: "Each client connected to an e-server instance MUST access it's web camera and
 // create a stream on the e-server security dashboard ... I can then also login on a secondary
@@ -704,6 +708,9 @@ function setupWindow(){
 }
 function persistent(){return safeStorage.isEncryptionAvailable()&&(!safeStorage.getSelectedStorageBackend||safeStorage.getSelectedStorageBackend()!=='basic_text');}
 async function connect(){
+ // A server switch ends the old connection's engine before anything else happens: a llama-server
+ // started under the previous origin is no longer this window's, and its VRAM is not ours to hold.
+ localAI?.syncTrust();
  if(!company?.authorized()){accountChanged();return;}
  if(win){if(windowAccount===company.key()){if(setup)setup.close();win.show();return;}const previous=win;win=null;previous.destroy();}
  if(!config.server){publish({phase:'setup',title:'Your e-server.',error:''});setupWindow();return;}
@@ -1023,6 +1030,12 @@ async function start(){
  ipcMain.handle('company:cancel',event=>{local(event);company.cancel();});
  ipcMain.handle('company:signout',event=>{local(event);return signOutCompany();});
  await company.restore();
+ // THE ENGINE'S TRUST LIST IS A FUNCTION, NOT A SNAPSHOT: `config.server` is the server this person
+ // connected to, and it changes when they switch servers. Every bridge call re-reads it, and the
+ // engine stops on navigation away from that origin, on window destroy and on quit.
+ localAI=createLocalAI({app,ipcMain,BrowserWindow,trustedOrigins:()=>[config.server].filter(Boolean)});
+ // A previous run may have died holding VRAM: adopt its engine if it is still healthy, kill it if not.
+ await localAI.recover().catch(()=>{});
  ready=true;const link=process.argv.find(v=>v.startsWith('e-server:'));
  if(link){await receiveLink(link);if(!config.server)return;}
  if(await checkUpdate(true))return;
