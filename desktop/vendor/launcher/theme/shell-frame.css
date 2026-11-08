@@ -1,0 +1,109 @@
+/* Shared by local and connected documents. Load AFTER pill CSS.
+   Paint binds to the host's current ec palette; see NOTES. */
+:root {
+  --sf-surface:var(--ec-surface);
+  --sf-panel:var(--ec-panel);
+  --sf-ink:var(--ec-ink);
+  --sf-muted:var(--ec-muted);
+  --sf-line:var(--ec-line);
+  --sf-accent:var(--ec-accent-action);
+  --sf-font:var(--ec-font-body);
+  --sf-zero:0px;
+  --sf-bar:56px;
+  --sf-target:32px;
+  --sf-account:52px;
+  --sf-mark:22px;
+  --sf-orb:24px;
+  --sf-dot:8px;
+  --sf-gap:4px;
+  --sf-cluster-gap:12px;
+  --sf-pad:12px;
+  --sf-line-size:1px;
+  --sf-focus:2px;
+  --sf-radius:8px;
+  --sf-menu:224px;
+  --sf-menu-row:40px;
+  --sf-copy:14px;
+  --sf-copy-leading:1.5;
+  --sf-heading:20px;
+  --sf-heading-leading:1.3;
+  --sf-state-pad:24px;
+  --sf-state-measure:38rem;
+  --sf-full:100%;
+  --sf-view:100dvh;
+  --sf-layer:10;
+  --sf-full-opacity:1;
+}
+:root[data-theme="dark"] { color-scheme:dark; }
+:root[data-theme="light"] { color-scheme:light; }
+body.shell-frame {
+  margin:var(--sf-zero); height:var(--sf-view); overflow:hidden;
+  display:grid; grid-template-rows:var(--sf-bar) minmax(var(--sf-zero),1fr);
+  background:var(--sf-surface); color:var(--sf-ink);
+  font-family:var(--sf-font); font-size:var(--sf-copy); line-height:var(--sf-copy-leading);
+}
+.shell-frame *, .sf-bar, .sf-bar * { box-sizing:border-box; }
+.sf-bar {
+  height:var(--sf-bar); min-width:var(--sf-zero);
+  display:flex; align-items:center; gap:var(--sf-cluster-gap);
+  padding-inline:var(--sf-pad); position:relative; z-index:var(--sf-layer);
+  border-bottom:var(--sf-line-size) solid var(--sf-line);
+  background:var(--sf-panel); color:var(--sf-ink);
+  font-family:var(--sf-font);
+}
+.sf-left,.sf-right,.sf-agents { display:flex; align-items:center; gap:var(--sf-gap); }
+.sf-right { margin-inline-start:auto; }
+.sf-bar .sf-control {
+  display:inline-flex; align-items:center; justify-content:center; flex:none;
+  width:var(--sf-target); min-width:var(--sf-target); height:var(--sf-target);
+  margin:var(--sf-zero); padding:var(--sf-zero); gap:var(--sf-zero);
+  border:var(--sf-line-size) solid var(--sf-line); border-radius:var(--sf-radius);
+  background:var(--sf-panel); color:var(--sf-muted);
+  font:inherit; text-decoration:none; cursor:pointer;
+}
+.sf-bar .sf-account { width:var(--sf-account); min-width:var(--sf-account); color:var(--sf-ink); }
+.sf-bar .sf-control:hover,.sf-menu a:hover { border-color:var(--sf-accent); }
+.sf-bar :is(a,button):focus-visible,.sf-status button:focus-visible,.sf-skip:focus-visible {
+  outline:var(--sf-focus) solid var(--sf-accent); outline-offset:var(--sf-focus);
+}
+.sf-bar .sf-control[aria-current="page"],.sf-menu a[aria-current="page"] {
+  border-color:var(--sf-accent); box-shadow:inset var(--sf-zero) calc(-1 * var(--sf-focus)) var(--sf-zero) var(--sf-accent);
+}
+.sf-bar .sf-control svg { display:block; width:var(--sf-mark); height:var(--sf-mark); flex:none; }
+.sf-bar :is(.agent-pill-word,.agent-pill-count,.processes-pill-label) { display:none; }
+/* Do not override mark colour, core, state attributes or motion from sibling sheets. */
+.sf-bar .processes-pill[data-process-state="running"],
+.sf-bar .processes-pill[data-process-state="idle"],
+.sf-bar .processes-pill[data-process-state="queued"] { color:var(--sf-accent); }
+.sf-orb {
+  display:inline-flex; align-items:center; justify-content:center; flex:none;
+  width:var(--sf-orb); height:var(--sf-target); color:var(--sf-muted);
+}
+.sf-orb-dot { width:var(--sf-dot); height:var(--sf-dot); border:var(--sf-line-size) solid currentColor; border-radius:var(--sf-full); }
+.sf-menu-wrap { position:relative; }
+.sf-menu {
+  position:absolute; inset-block-start:calc(var(--sf-target) + var(--sf-gap));
+  inset-inline-end:var(--sf-zero); width:var(--sf-menu); padding:var(--sf-gap);
+  border:var(--sf-line-size) solid var(--sf-line); border-radius:var(--sf-radius);
+  background:var(--sf-panel); color:var(--sf-ink);
+}
+.sf-menu a {
+  display:flex; align-items:center; min-height:var(--sf-menu-row); padding-inline:var(--sf-pad);
+  border:var(--sf-line-size) solid var(--sf-panel); border-radius:var(--sf-radius);
+  color:inherit; text-decoration:none;
+}
+.sf-content { min-height:var(--sf-zero); min-width:var(--sf-zero); overflow:hidden; position:relative; background:var(--sf-surface); }
+.sf-content iframe { display:block; width:var(--sf-full); height:var(--sf-full); border:var(--sf-zero); background:var(--sf-surface); }
+.sf-status { height:var(--sf-full); overflow:auto; padding:var(--sf-state-pad); }
+.sf-status-inner { max-width:var(--sf-state-measure); }
+.sf-status h1 { margin:var(--sf-zero); font-size:var(--sf-heading); line-height:var(--sf-heading-leading); font-weight:600; }
+.sf-status p { color:var(--sf-muted); margin-block:var(--sf-cluster-gap); }
+.sf-status button {
+  min-height:var(--sf-target); padding-inline:var(--sf-pad);
+  border:var(--sf-line-size) solid var(--sf-line); border-radius:var(--sf-radius);
+  background:var(--sf-panel); color:var(--sf-ink); font:inherit; cursor:pointer;
+}
+.sf-skip { position:fixed; inset-inline-start:var(--sf-pad); inset-block-start:var(--sf-pad); z-index:calc(var(--sf-layer) + 1); padding:var(--sf-gap); background:var(--sf-panel); color:var(--sf-ink); transform:translateY(-200%); }
+.sf-skip:focus { transform:none; }
+.shell-frame [hidden],.sf-bar [hidden] { display:none !important; }
+/* A local shell uses the same grid. Its existing content is the second row. */

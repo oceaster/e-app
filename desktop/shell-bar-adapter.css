@@ -1,0 +1,52 @@
+/* THE HOST'S HALF OF DIANA'S BAR — and the only file in this document allowed to differ from her
+ * handoff.
+ *
+ * desktop/vendor/launcher/theme/shell-frame.css is /home/diana/Documents/handoff/surface-pass/
+ * shell-frame.css, byte for byte (`cmp` clean, held by tests/shell-bar.test.cjs). Her sheet owns the
+ * geometry: one 56px row, 12px side padding, 32px controls, the 52x32 account pill at x=12 y=12, and
+ * `body.shell-frame` as a 56px/1fr grid. What it cannot own is what is true only of THIS document,
+ * and that is all this file is:
+ *
+ * 1. WHERE THE PAGE'S OWN CONTENT GOES. shell.html is the household account page (`class="account"`,
+ *    main.account-main, footer.account-footer) with the bar above it. Her grid is on the body, so
+ *    the page's content is the second grid row — the wrapper that carries `.account` — and that row
+ *    owns its scrolling with the page's own stylesheet, exactly as she asks. The page's `min-height`
+ *    belongs to a document with no bar above it, so it is dropped here; without that the wrapper is
+ *    100dvh tall inside a row that is 100dvh MINUS the bar and the footer is pushed off the bottom.
+ * 2. THE PAGE'S OWN GROUND IS NOT PAINTED OVER. `.account`'s background, its light-mode override and
+ *    every card/panel token stay on the wrapper element, so the sign-in card and the e-server list
+ *    look exactly as they looked before the bar existed. Nothing in this file adds a colour.
+ * 3. THE SKIP LINK STAYS UNDER THE BAR. The page's "Skip to account" is absolutely positioned at the
+ *    viewport's top-left when focused, which is now where the bar is: one rule moves it below the
+ *    row instead of letting the page's own affordance cover the account pill.
+ * 4. THE FACE INSIDE HER PILL SLOT. Her slot is `{{ACCOUNT_PILL_INNER}}`: the existing account
+ *    control's INNER identity markup is copied into it — `.web-account-face` holding
+ *    `.web-account-initial` and `.web-account-picture`, the launcher's own three-step face — and its
+ *    rules live in the launcher site's web.css, which this app does not vendor. These are those
+ *    declarations, copied value for value (site/web.css:25-35, 2026-11-08) and scoped to the pill;
+ *    the tile's teal and cream are the launcher's, not a choice of mine. The mark tile — no account,
+ *    nothing to show a face of — is this app's own icon where the launcher uses its logo file.
+ *    Nothing here moves the pill, changes its size or adds a second control.
+ */
+body.shell-frame > .shell-local {
+  min-height: var(--sf-zero);
+  overflow: auto;
+}
+body.shell-frame .account-skip:focus {
+  inset-block-start: var(--sf-bar);
+}
+
+/* THE FACE, copied from the launcher's own control (site/web.css, three-step precedence:
+   picture, then the head cropped from the Minecraft skin, then the teal letter tile). */
+.sf-account .web-account-face {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: var(--sf-target); height: var(--sf-target);
+  border-radius: 4px; overflow: hidden;
+  background: #536b66; color: #eedbb2;
+  font-size: 20px; font-weight: 700; line-height: 1; text-transform: uppercase;
+}
+.sf-account .web-account-face-mark { background: #536b66 url(icon.png) center/76% no-repeat; }
+.sf-account .web-account-face.has-picture .web-account-initial { visibility: hidden; }
+.sf-account .web-account-face.has-picture.web-account-face-mark { background-image: none; }
+.sf-account .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sf-account .web-account-picture.web-account-head { image-rendering: pixelated; }

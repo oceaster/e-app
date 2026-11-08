@@ -48,6 +48,56 @@ async function action(work){try{await work();}catch(error){problem(error);}final
 const options=createSignInOptions({onSubmit:(id,password)=>{options.clearPassword();return action(()=>bridge.login(id,password));},onMicrosoft:()=>action(()=>bridge.provider('microsoft')),onProvider:provider=>action(()=>bridge.provider(provider)),onProblem:lines=>problem(lines)});
 $('account-root').append(options.node);
 let current={};
+// ── THE BAR'S ACCOUNT PILL ─────────────────────────────────────────────────────────────────────
+// Diana's pre-connection bar (shell-frame.html's second fragment) puts the account control at
+// x=12 y=12 as a 52x32 pill: identity only, with the account's full name as the accessible name
+// and the tooltip. The markup is HERS (desktop/shell.html copies the fragment, including her
+// {{ACCOUNT_PILL_INNER}} slot); this fills it from the account the main process already publishes
+// and gives it the one action an account control has before an instance is connected. It is not a
+// new menu: the bar's real controls arrive with the connected shell (ticket f1bdcd46), and this
+// screen has no instance whose state they could read.
+//
+// THE FACE IS THE LAUNCHER'S, copied as markup into her slot rather than nested as a control:
+// `.web-account-face` holding `.web-account-initial` and `.web-account-picture` — the account's
+// uploaded picture when the account document carries one (a data:image/png URI, which the vendored
+// account client is the only thing allowed to hand this window), else the first letter of the name
+// on the teal tile. Never a remote URL: the document's CSP allows `self` and `data:` and nothing
+// else, and a portrait that cannot be painted must not become a request.
+function drawAccountPill(account){
+ const pill=$('account-pill');if(!pill)return;
+ const name=account&&typeof account.name==='string'?account.name.trim():'';
+ const signedIn=!!account;
+ // Identity, not a label: the full name (with no second line, no badge and no count) in both the
+ // accessible name and the tooltip, exactly as Diana's NOTES require for the compact pill.
+ const label=signedIn?name||'Account':'Account';
+ pill.setAttribute('aria-label',label);pill.title=label;
+ pill.dataset.state=signedIn?'signed-in':'signed-out';
+ const face=pill.querySelector('.web-account-face');
+ const initial=pill.querySelector('.web-account-initial');
+ const picture=pill.querySelector('.web-account-picture');
+ if(!face||!initial||!picture)return;
+ initial.textContent=signedIn?(name||(account.username||'')).slice(0,1):'';
+ const portrait=signedIn&&typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
+ if(portrait){if(picture.getAttribute('src')!==portrait)picture.src=portrait;picture.hidden=false;face.classList.add('has-picture');}
+ else{picture.removeAttribute('src');picture.hidden=true;face.classList.remove('has-picture');}
+ // Signed out there is no face to draw: the tile carries the mark instead (the launcher's own
+ // last resort, in desktop/shell-bar-adapter.css).
+ face.classList.toggle('web-account-face-mark',!signedIn);
+}
+/** What pressing the pill does before an instance is connected: it takes the person to the
+ *  account the window actually shows — the name and Sign out row when signed in, the sign-in
+ *  options when not — and never opens a second account menu of its own. */
+function showAccount(){
+ const row=$('account-status');
+ if(row&&!row.hidden){
+  row.tabIndex=-1;row.focus({preventScroll:false});
+  if(row.scrollIntoView)row.scrollIntoView({block:'nearest'});
+  return;
+ }
+ const first=$('account-root').querySelector('button:not([hidden]),input:not([hidden])');
+ if(first)first.focus();
+}
+$('account-pill').addEventListener('click',showAccount);
 function render(state){
  current=state;
  // THE ACCOUNT'S THEME, in the same publish that carries the account card and the e-server list.
@@ -56,6 +106,9 @@ function render(state){
  // is only the wiring, so a sign-in, a re-read or a save in e-server's settings panel repaints this
  // window in the frame that learns it instead of leaving the OS answer standing.
  if(state.theme)window.easterShellTheme?.paint(state.theme);
+ // The bar's pill is drawn from the same publish that carries the card and the list, so a
+ // sign-in or a sign-out moves the face in the frame that learns it.
+ drawAccountPill(state.account);
  const ready=state.accountReady===true,finish=!!state.account&&!ready,busy=state.accountBusy===true;
  const updating=['checking','downloading','verifying'].includes(state.phase);
  $('version').textContent=state.version;
