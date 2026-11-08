@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
 <title>e-server</title><link rel="stylesheet" href="vendor/launcher/theme/theme.css"><link rel="stylesheet" href="vendor/launcher/account/account.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css"><link rel="stylesheet" href="vendor/launcher/theme/account-control.css"><link rel="stylesheet" href="connections.css"><link rel="stylesheet" href="connections-adapter.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="vendor/launcher/theme/shell-frame.css"><link rel="stylesheet" href="shell-bar-adapter.css"><script src="vendor/launcher/theme/theme-early.js"></script><script src="theme-shell.js"></script><script src="shell.mjs" type="module"></script></head>
-<body class="shell-frame account">
+<body class="shell-frame">
 <!-- THE PRE-CONNECTION BAR, and it is Diana's own fragment
      (/home/diana/Documents/handoff/surface-pass/shell-frame.html): the same 56px row and the
      same account pill at x=12 y=12 that the connected shell will show, with NOTHING on the
@@ -18,17 +18,12 @@
 <button class="sf-control sf-account web-account-face-mark" id="account-pill" type="button" data-action="account" aria-label="Account" title="Account"><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span></button>
 </div>
 </header>
-<!-- THE PAGE IS THE SECOND ROW, AND THE BODY KEEPS THE GROUND. `class="account"` is on BOTH:
-     the body still paints the account page's own ground (account.css's `.account` background,
-     the vendored sheet's radial glow over #0d2029, which tests/theme_shell_electron.mjs reads
-     off `body.backgroundColor` and which a bar sitting above the content must not lose), and
-     the wrapper carries the same class for the flex column the page's main/footer need. The
-     shell's own `body.shell-frame{display:grid;grid-template-rows:56px 1fr}` outranks
-     `.account`'s `display:flex` on specificity, so the two rows survive; the wrapper owns the
-     scroll below the bar (desktop/shell-bar-adapter.css drops the page's 100dvh floor, which
-     belonged to a document with nothing above it). Measured 2026-11-08: with the class only on
-     the wrapper the body painted rgba(16,35,43,.95) and the shell-theme gate read that as the
-     wrong ground — the ground belongs on the body. -->
+<!-- THE PAGE IS THE SECOND ROW. `class="account"` moves from the body to this wrapper and
+     nothing else about it changes: it is still the element that carries the account page's
+     ground, its tokens and every card inside it, so the sign-in card and the e-server list
+     paint exactly as they did. Her sheet makes the row 1fr of the viewport minus the bar, and
+     this wrapper owns the scroll (desktop/shell-bar-adapter.css drops the page's 100dvh
+     floor, which belonged to a document with nothing above it). -->
 <div class="shell-local account" id="shell-local">
 <a class="account-skip" href="#account-root">Skip to account</a>
 <main class="account-main">
