@@ -51,7 +51,12 @@ const HOST_TOKENS=['--app-panel','--app-border','--app-muted','--app-gold'];
 //: The accent family, and the two moods one rule has to cover.
 const ACCENT_TOKENS=['--ec-accent','--ec-accent-action','--ec-accent-hover','--ec-on-accent'];
 //: The site's own markup for the panel, element for element (site/account/index.html).
-const MARKUP=[['<body class="account">',/body\b[^>]*class="account"/],['main.account-main',/class="account-main"/],['div#account-panel',/class="account-panel"[^>]*id="account-panel"/],['p.account-overline',/class="account-overline"/],['h1.account-heading',/class="account-heading"/],['p#account-wait',/class="account-wait"[^>]*id="account-wait"/],['div#account-error',/class="account-error"[^>]*id="account-error"/],['div#account-root',/class="account-body"[^>]*id="account-root"/]];
+// THE ONE CLASS THE CLIENT MOVES. The site paints the page's ground, tokens and flex column on
+// `body.account`; this window's body is Diana's 56px/1fr shell frame (ticket e4ab1146), so the class
+// sits on the wrapper that occupies her second grid row instead - the same element-level rules, one
+// element in. Nothing in the site's sheet selects `body` itself (checked in account.css and
+// launcher-light-adapter.css), which is what makes the move safe.
+const MARKUP=[['div.shell-local.account',/class="shell-local account"[^>]*id="shell-local"/],['main.account-main',/class="account-main"/],['div#account-panel',/class="account-panel"[^>]*id="account-panel"/],['p.account-overline',/class="account-overline"/],['h1.account-heading',/class="account-heading"/],['p#account-wait',/class="account-wait"[^>]*id="account-wait"/],['div#account-error',/class="account-error"[^>]*id="account-error"/],['div#account-root',/class="account-body"[^>]*id="account-root"/]];
 
 function read(file){return fs.readFileSync(file);}
 //: The first byte the copy disagrees with, spoken the way a person can act on: offset, line, and
