@@ -78,7 +78,13 @@
  width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 48px);padding:0;margin:auto;
  border:1px solid var(--es-border);border-radius:20px;background:var(--es-surface);color:var(--es-text);
  overflow:hidden;font:14px/1.5 system-ui,sans-serif;
- box-shadow:0 28px 90px color-mix(in srgb,var(--es-text) 15%,transparent);
+ /* A DROP SHADOW IS DARK IN BOTH PALETTES. This line used to be
+    color-mix(in srgb, var(--es-text) 15%, transparent), and --es-text is the INK — near-white
+    in the dark palette — so the dialog cast a white under-glow the moment dark mode was on
+    (Owen, 2026-11-08: "incorrectly applies a white under glow in dark mode"). A shadow derived
+    from the text colour inverts with the text; --ec-shadow-color does not (#0005 dark,
+    #28345229 light), and it is the token the desktop dialogs in this same file already use. */
+ box-shadow:0 28px 90px var(--ec-shadow-color,#0005);
 }
 .web-user-settings::backdrop{background:var(--modal-scrim);backdrop-filter:blur(var(--modal-blur))}
 .web-user-settings [hidden]{display:none!important}

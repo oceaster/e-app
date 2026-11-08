@@ -2,7 +2,7 @@
 # This is the check that runs everywhere, including CI, where the site checkout does not exist.
 # When the checkout IS present the suite also compares bytes against it and fails on drift.
 # Regenerate after re-vendoring:  shasum -a 256 <copy>  (see desktop/vendor/launcher/README.md)
-# source revision: easter-co-smp.github.io 49c2aff
+# source revision: easter-co-smp.github.io 91ac6fa
 
 1177a665ce0d90d9693407b2b817cf76434c1dd60e0104f5640fde0b18880ac2  desktop/vendor/launcher/account/account.css  (site/account/account.css)
 4f8148c0ce522150c9d1fd4e2437b8c2d7dfbe85cc9e04ee39da74a82d5c8a25  desktop/vendor/launcher/account/microsoft-signin.mjs  (site/account/microsoft-signin.mjs)
@@ -11,5 +11,5 @@
 4ad9d0939faf0645e3053b18da9127895b067c346b4d245a065e090c747bda03  desktop/vendor/launcher/theme/launcher-bindings.css  (site/launcher-bindings.css)
 6496f0dfa1baa8782f69e35703944cd81d38c05a213a380cbb9ea6dbcb0d29bd desktop/vendor/launcher/theme/launcher-light.css  (site/launcher-light.css)
 70875920a761c5bfa1395ccb0d2635e0debae7fe5aea9153d9e52c9ed5e8c625  desktop/vendor/launcher/theme/launcher-light-adapter.css  (site/launcher-light-adapter.css)
-50b445c72c55030e03197068cb90516f0d3c8316b091ffa2eda9ecc54477ada9  desktop/vendor/launcher/theme/account-control.css  (site/account-control.css)
+b3a29cfb8ba8f0126f9f8597260e82498b112257c4493160d791d729cd4668d0  desktop/vendor/launcher/theme/account-control.css  (site/account-control.css)
 f14255005cda3264ec17fd8bdddd5642e6a74c4c93499fb7f59a38133f5d4969  desktop/vendor/launcher/theme/theme-early.js  (site/theme-early.js)
