@@ -21,7 +21,11 @@ const os = require('node:os');
 const assert = require('node:assert/strict');
 
 const ROOT = path.resolve(__dirname, '..');
-const SHELL = path.join(ROOT, 'desktop', 'shell.html');
+// THE DOCUMENT UNDER TEST, and by default the working tree's. SHELL_BAR_SHELL points it at the copy
+// inside a packed app.asar, so the same journey can say "it ships" instead of "it works here":
+//   SHELL_BAR_SHELL=$PWD/release/linux-unpacked/resources/app.asar/desktop/shell.html \
+//     xvfb-run -a npx electron --no-sandbox tests/shell-bar-journey.cjs
+const SHELL = process.env.SHELL_BAR_SHELL || path.join(ROOT, 'desktop', 'shell.html');
 const PRELOAD = path.join(__dirname, 'fixtures', 'shell-bridge.cjs');
 const SHOTS = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-bar-shots-'));
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-bar-home-'));
@@ -179,6 +183,19 @@ async function main() {
   assert.equal(failed.panels.retry, true, 'a failed list still offers Try again');
   assert.equal(failed.bar.height, 56, 'and the bar is unmoved by a failure');
   assert.equal(failed.barNodeIdentity, barId, 'the bar node is the same one');
+
+  // ── a sign-in that failed: the page's own alert region, and the bar still there ─────────────
+  await push({ phase: 'auth', account: null, accountReady: false, servers: { state: 'idle', rows: [] }, accountError: 'Sign-in cancelled.' });
+  const signInFailed = await measure();
+  report.states.signInFailed = signInFailed;
+  report.shots.push(await shot('680x860-sign-in-failed'));
+  assert.equal(signInFailed.bar.height, 56, 'a failed sign-in keeps the bar');
+  assert.equal(signInFailed.barNodeIdentity, barId, 'and the same node');
+  assert.equal(signInFailed.pillLabel, 'Account', 'the pill is the account control again');
+  assert.equal(signInFailed.panels.card, true, 'the sign-in screen is still the screen');
+  assert.equal(await win.webContents.executeJavaScript(`(() => { const e = document.getElementById('account-error'); return { hidden: e.hidden, text: e.textContent.trim() }; })()`, true)
+    .then((alert) => alert.hidden === false && alert.text === 'Sign-in cancelled.'), true,
+    'the page’s own alert region still carries the failure sentence');
 
   // ── the narrow window, where Diana's arithmetic has to hold ────────────────────────────────
   win.setContentSize(360, 500);
