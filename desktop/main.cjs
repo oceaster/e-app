@@ -573,6 +573,14 @@ async function openDeviceFromScreen(){
 /** Answering the screen: remember it, open the device while the screen stays up, then let them in. */
 async function finishPermission(value){
  const current=win;
+ // THE WINDOW'S OWN PHASES (ticket 46c94745). They belong HERE, not beside the constructor: a
+ // listener hung on `current` before its declaration throws a temporal-dead-zone ReferenceError
+ // inside the client's own `client:connect` handler — measured 2026-11-09, the app then never
+ // connected and tests/editor_electron_browser.mjs timed out waiting for its inbox row. A stamp
+ // that breaks the thing it measures is worse than no stamp.
+ current.webContents.on('did-start-loading',()=>boot('did-start-loading'));
+ current.webContents.on('dom-ready',()=>boot('dom-ready'));
+ current.webContents.on('did-finish-load',()=>boot('did-finish-load'));
  if(!current||current.isDestroyed()||!config.server)return;
  const allow=value==='allow';
  mediaGrant={camera:allow,microphone:allow};
@@ -868,9 +876,6 @@ async function connect(){
  const bounds=config.bounds&&[config.bounds.width,config.bounds.height].every(n=>Number.isFinite(n)&&n>=360)?config.bounds:{width:1280,height:900};
  win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
  boot('window-created');
- current.webContents.on('did-start-loading',()=>boot('did-start-loading'));
- current.webContents.on('dom-ready',()=>boot('dom-ready'));
- current.webContents.on('did-finish-load',()=>boot('did-finish-load'));
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
  startIdleLock(current,activeSession,config.server);startBuildWatch(current,activeSession,config.server);
