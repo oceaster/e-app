@@ -13,7 +13,7 @@
 "use strict";
 /* ── her copy, verbatim; the tests read it out of api/shell.py's COPY ───────────────────── */
 var COPY={"opening_heading": "Opening {destination}…", "opening_detail": "Waiting for the page.", "502": ["Page unavailable", "The e-server could not load this page. Try again in a moment."], "403": ["Access denied", "This account does not have permission to open this page."], "404": ["Page not found", "This page is not available at this address."], "timeout": ["Page did not open", "The page has not reported that it is ready. Try again or choose another destination."], "network": ["Page unavailable", "The page could not be loaded. Check your connection and try again."], "signin": ["Sign-in required", "Open Account to sign in again."]};
-var RETRY_LABEL="Try again",SIGNIN_LABEL="Open Account",TIMEOUT_MS=15000;
+var RETRY_LABEL="Try again",SIGNIN_LABEL="Open Account",TIMEOUT_MS=15000,REVEAL_MS=1200;
 var DESTINATIONS=[["agents", "Agents", "/agent/harness"], ["swarm", "Swarm", "/agent/harness/epsilons"], ["processes", "Processes", "/agent/harness/processes"], ["messages", "Messages", "/messages"], ["storage", "File Storage", "/system/file-storage"], ["system", "System", "/system"], ["security", "Security", "/security/monitors"], ["billing", "Billing", "/system/billing"], ["events", "Events", "/system/events"], ["permissions", "Permissions", "/system/permissions"]],MENU_KEYS=["system", "security", "billing", "events", "permissions"],DEFAULT_DESTINATION="system";
 var ASKED=String(new URLSearchParams(location.search).get("route")||"");
 var FIRST_DESTINATION=byKey(ASKED)?ASKED:DEFAULT_DESTINATION;
@@ -38,7 +38,7 @@ function byKey(key){
 function destinations(){return document.querySelectorAll("[data-destination]")}
 
 /* ── the navigation state machine. One token per navigation, never reused ─────────────── */
-var nav={id:0,token:"",route:null,started:0,timer:null,source:"chrome",pending:null};
+var nav={id:0,token:"",route:null,started:0,timer:null,reveal:null,source:"chrome",pending:null};
 
 /* ── THE PARENT HINT, frozen with e-server on 2026-11-09 ────────────────────────────────────
    A framed page posts its verdict to its parent. When the parent is this document its origin is
@@ -125,6 +125,7 @@ function navigate(routeKey,options){
  nav.source=options.source||"chrome";
  nav.pending=routeKey;
  clearTimeout(nav.timer);
+ clearTimeout(nav.reveal);
  /* The OLD document must not masquerade as the new destination: hide it immediately, and show
     the same neutral pane every time. The bar does not change while loading. */
  setStatus(COPY.opening_heading.replace("{destination}",destination[1]),COPY.opening_detail,null);
@@ -151,6 +152,7 @@ function navigate(routeKey,options){
   +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(routeKey)
   +"&parent="+encodeURIComponent(PARENT_HINT);
  nav.timer=setTimeout(function(){timeout()},TIMEOUT_MS);
+ nav.reveal=setTimeout(function(){arrived()},REVEAL_MS);
  if(options.focusTarget)options.focusTarget.focus();
 }
 
@@ -162,6 +164,14 @@ function navigate(routeKey,options){
    token is still revoked on a real timeout, so nothing here can be mistaken for that verdict. */
 function arrived(){
  if(!nav.pending)return;
+ /* THE LOAD IS THE END OF THE WAIT. Stop the verdict timer here too: a shell page whose
+    `shell:ready` is late or absent must not be covered again by the timeout pane after it has
+    already painted (measured 2026-11-09: Security loaded in 183 ms and the pane stayed for
+    ever because only the child message could clear it). A late `ready` still owns the title,
+    the mark and the focus move. */
+ clearTimeout(nav.timer);
+ clearTimeout(nav.reveal);
+ nav.pending=null;
  frame.hidden=false;
  clearStatus();
 }
@@ -177,6 +187,7 @@ function randomToken(){
 function timeout(){
  if(!nav.pending)return;
  /* The timeout REVOKES the token: a late ready cannot replace this pane (her NOTES). */
+ clearTimeout(nav.reveal);
  nav.token="";
  nav.pending=null;
  setStatus(COPY.timeout[0],COPY.timeout[1],{label:RETRY_LABEL,onClick:retryPending});
@@ -189,6 +200,7 @@ function retryPending(){
  navigate(route,{source:"retry"});
 }
 function failed(statusCode){
+ clearTimeout(nav.reveal);
  nav.pending=null;
  nav.token="";
  lastRoute=nav.route;
@@ -213,6 +225,7 @@ function ready(message){
  if(DSH_SURFACES[routeKey])harnessMounted=true;
  nav.pending=null;
  clearTimeout(nav.timer);
+ clearTimeout(nav.reveal);
  nav.route=routeKey;
  var title=String(message.title||"").trim();
  document.title=title?title+" — e-server":"e-server";
@@ -511,6 +524,7 @@ function openSurface(surface){
  nav.id+=1;nav.token=(Date.now().toString(36)+Math.random().toString(36).slice(2));
  nav.route=surface.route;nav.started=Date.now();nav.source="chrome";nav.pending=surface.route;
  clearTimeout(nav.timer);
+ clearTimeout(nav.reveal);
  setStatus(COPY.opening_heading.replace("{destination}",surface.label),COPY.opening_detail,null);
  currentMark(null);
  document.title="";
@@ -520,6 +534,7 @@ function openSurface(surface){
   +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(surface.route)
   +"&parent="+encodeURIComponent(PARENT_HINT);
  nav.timer=setTimeout(function(){timeout()},TIMEOUT_MS);
+ nav.reveal=setTimeout(function(){arrived()},REVEAL_MS);
 }
 
 /* ── first paint: her wait pane, already in the served markup, then the destination the URL

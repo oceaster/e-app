@@ -30,6 +30,12 @@ const DEBUG_MODE=DEBUG.debug;
 const ENGINE_ENTRY=engineEntry({debug:DEBUG_MODE,base:__dirname});
 console.log(`[e-app] mode=${DEBUG_MODE?'debug':'production'} (${DEBUG.source}) engine=${ENGINE_ENTRY.where}`);
 const {createLocalAI,userFailure,detailFor,redact}=require(ENGINE_ENTRY.require);
+// THE TRUST QUESTION IS SYNCHRONOUS AND EVERY PRELOAD ASKS IT. The engine that answers it is
+// created in start(), after `company.restore()`; the setup window is created before that. A
+// `sendSync` with no listener does not fail, it blocks the renderer for ever — measured
+// 2026-11-09: the setup window never reached ready-to-show, so the client looked dead and could
+// not sign in. Answer "not trusted" until the engine replaces this listener.
+ipcMain.on('localai:isTrusted',event=>{event.returnValue=false;});
 // THE LOCAL MODEL ENGINE (Dexter's foundation): measured, planned and run on THIS person's computer.
 // It is created in start() because it needs `app` ready for its userData path; nothing it does is
 // visible in the window yet — the tier control is a design ticket of its own.
@@ -765,7 +771,22 @@ function permissionFrame(event){
 }
 function local(event){if(!localFrame(event)||event.senderFrame.url!==pathToFileURL(shellFile).href)throw Error('This action is only available in e-server setup.');}
 function remote(event){company?.require();if(!config.server||!win||event.sender!==win.webContents||!trusted(event,config.server))throw Error('This request did not come from your e-server.');}
-const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
+/** THE CONNECTED SERVER'S PAGE, framed or not. The Company handoff and sign-out are the two page
+ *  actions that MUST work from the shell's frame now that the chrome is ours; `remote` deliberately
+ *  stays main-frame-only for device/media/build controls. This gate is the server's own origin in
+ *  this window and nothing else. */
+function serverFrame(event){
+ company?.require();
+ if(!config.server||!win||event.sender!==win.webContents)throw Error('This request did not come from your e-server.');
+ let from='';try{from=new URL(String(event.senderFrame&&event.senderFrame.url)).origin;}catch{from='';}
+ if(from!==config.server)throw Error('This request did not come from your e-server.');
+}
+// THE PRELOAD MUST RUN IN THE FRAMED SERVER PAGES, not only in the chrome document. The Company
+// handoff is the page's own script calling `window.eServerClient.bindSession`; with Electron's
+// default the preload runs only in the main frame, so every framed page fell back to the sign-in
+// form (measured 2026-11-09: `bridge: undefined` inside /account). Subframe preloads are isolated
+// and sandboxed, and every bridge handler still checks the frame's origin in the main process.
+const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,nodeIntegrationInSubFrames:true,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
 function setupWindow(){
  if(setup&&!setup.isDestroyed()){setup.show();return setup;}
  setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,webPreferences:preferences(session.fromPartition('setup'))});
@@ -918,6 +939,25 @@ async function connect(){
   if(activeSession)void attachShell(current);
  };
  activeSession.cookies.on('changed',shellCookieListener);
+ // THE PIN COOKIE MUST SURVIVE THE FRAME. The server sets `sec_session` SameSite=Lax; the chrome
+ // is a file:// document, so the framed server pages are cross-site and Chromium refuses to send a
+ // Lax cookie they set (measured 2026-11-09: the cookie existed, the server logged
+ // `session_cookie=False` for every /system request, and the PIN was asked again for ever). A
+ // desktop client's session cookie is deliberately third-party; store it as such, on the way in,
+ // so the page's own handoff/reload already sends it.
+ const normalizeSessionCookie=cookie=>{
+  if(!cookie||cookie.name!=='sec_session'||!cookie.value)return;
+  if(cookie.sameSite==='no_restriction'&&cookie.secure)return;
+  const ses=activeSession;if(!ses)return;
+  void (async()=>{
+   try{
+    // Electron ignores a set over an existing cookie with the same value; remove it first.
+    await ses.cookies.remove(config.server,'sec_session');
+    await ses.cookies.set({url:config.server,name:'sec_session',value:cookie.value,secure:true,httpOnly:true,sameSite:'no_restriction',expirationDate:cookie.expirationDate});
+   }catch{}
+  })();
+ };
+ activeSession.cookies.on('changed',(_event,cookie,_cause,removed)=>{if(!removed)normalizeSessionCookie(cookie);});
  current.once('closed',()=>{if(shellCookieListener&&activeSession)activeSession.cookies.removeListener('changed',shellCookieListener);shellCookieListener=null;});
  current.webContents.on('did-finish-load',async()=>{
   if(win!==current)return;
@@ -1113,8 +1153,8 @@ async function start(){
  // The server page's two bridge actions. `remote(event)` is the existing main-frame-only guard
  // (this exact window, this exact origin): any other renderer gets a refusal, not an answer, and
  // nothing here can be reached from the setup window or from a frame the app did not load.
- ipcMain.handle('client:handoff',(event,next)=>{remote(event);return bindCompanySession(next);});
- ipcMain.handle('client:signout',event=>{remote(event);return endCompanySession();});
+ ipcMain.handle('client:handoff',(event,next)=>{serverFrame(event);return bindCompanySession(next);});
+ ipcMain.handle('client:signout',event=>{serverFrame(event);return endCompanySession();});
  ipcMain.on('client:activity',event=>{try{remote(event);activity=Date.now();idleLock?.activity();}catch{}});
  // ── the live user feed's three doors (desktop/live-feed.cjs, desktop/preload.cjs) ────────────
  // All three are `remote(event)`: only the connected server's own main frame, in this window, may
