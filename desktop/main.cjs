@@ -1140,7 +1140,9 @@ async function start(){
  // are the other half; both are the app's log, and neither is chrome in the window.
  ipcMain.handle('client:feed-status',event=>{remote(event);return feedStatus;});
  ipcMain.on('client:signin-finished',event=>{try{remote(event);externalAuth=false;}catch{}});
+ boot('company-init-start');
  const accounts=await initializeCompany();
+ boot('company-init-done');
  ipcMain.handle('company:login',async(event,identifier,password)=>{local(event);await company.login(identifier,password);await afterCompany();return company.view();});
  ipcMain.handle('company:provider',async(event,provider)=>{local(event);if(!['microsoft','google','steam','discord'].includes(provider))throw Error('Choose a sign-in provider.');await company.signIn(provider);await afterCompany();return company.view();});
  ipcMain.handle('company:providers',event=>{local(event);return accounts.providers();});
@@ -1148,19 +1150,24 @@ async function start(){
  ipcMain.handle('company:cancel',event=>{local(event);company.cancel();});
  ipcMain.handle('company:signout',event=>{local(event);return signOutCompany();});
  await company.restore();
+ boot('company-restored');
  // THE ENGINE'S TRUST LIST IS A FUNCTION, NOT A SNAPSHOT: `config.server` is the server this person
  // connected to, and it changes when they switch servers. Every bridge call re-reads it, and the
  // engine stops on navigation away from that origin, on window destroy and on quit.
  localAI=createLocalAI({app,ipcMain,BrowserWindow,debug:DEBUG_MODE,trustedOrigins:()=>[config.server].filter(Boolean)});
  // A previous run may have died holding VRAM: adopt its engine if it is still healthy, kill it if not.
  await localAI.recover().catch(()=>{});
+ boot('local-ai-recovered');
  ready=true;const link=process.argv.find(v=>v.startsWith('e-server:'));
  if(link){await receiveLink(link);if(!config.server)return;}
+ boot('update-check-start');
  if(await checkUpdate(true))return;
+ boot('update-check-done');
  // A relaunch that a server choice caused opens that server; every other start opens the list.
  const open=config.openOnStart;
  if(open&&open===config.server){delete config.openOnStart;await save();await connect();}
  else if(company?.authorized())await afterCompany();else await connect();
+ boot('first-window-requested');
  schedule();
 }
 app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();
