@@ -67,6 +67,17 @@ function drawAccountPill(account){
  const pill=$('account-pill');if(!pill)return;
  const name=account&&typeof account.name==='string'?account.name.trim():'';
  const signedIn=!!account;
+ // NO PERSON, NO PILL. The pre-connection bar carried the app's mark as a stand-in for a user
+ // when nobody was signed in; it read as a pretend account control (measured 2026-11-09). The
+ // pill exists only for an account, and the sign-in options own the signed-out screen.
+ pill.hidden=!signedIn;
+ if(!signedIn){
+  pill.dataset.state='signed-out';
+  pill.setAttribute('aria-label','Account');pill.title='';
+  const face=pill.querySelector('.web-account-face');
+  if(face)face.classList.remove('web-account-face-mark');
+  return;
+ }
  // Identity, not a label: the full name (with no second line, no badge and no count) in both the
  // accessible name and the tooltip, exactly as Diana's NOTES require for the compact pill.
  const label=signedIn?name||'Account':'Account';

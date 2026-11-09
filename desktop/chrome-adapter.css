@@ -24,3 +24,33 @@
 .sf-account .web-account-face-mark { background: #536b66 url(icon.png) center/76% no-repeat; }
 .sf-account .web-account-face.has-picture .web-account-initial { visibility: hidden; }
 .sf-account .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* THE THREE MARKS, PAINTED BY THE RULES THEY WERE DRAWN FOR. The server used to ship
+   `.harness-*`, `.epsilon-*` and `.zeta-*` with their pages; the chrome does not load those
+   pages' sheets, so the raw SVG defaulted to filled black shapes and the marks looked like
+   blobs (measured 2026-11-09). These are the shipped values: outline at .55, a hidden trace
+   that animates only while running, and a core dot that takes the state. */
+.sf-bar :is(.harness-mark, .epsilon-mark, .zeta-mark) {
+  display: block; width: var(--sf-mark); height: var(--sf-mark);
+  overflow: visible; fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.sf-bar :is(.harness-outline, .epsilon-outline, .zeta-outline) { opacity: .55; }
+.sf-bar :is(.harness-trace, .epsilon-trace, .zeta-trace) { opacity: 0; stroke-width: 2; }
+.sf-bar .harness-trace, .sf-bar .zeta-trace { stroke-dasharray: 12 48; }
+.sf-bar .epsilon-trace { stroke-dasharray: 12 68; }
+.sf-bar :is(.harness-core, .epsilon-core, .zeta-core) {
+  fill: currentColor; stroke: none; opacity: .25;
+}
+.sf-bar .agent-pill[data-state="closed"] .harness-core { opacity: .2; }
+
+/* DISCLOSURES ABOVE THE FRAMED PAGE. The content iframe is its own compositing layer; a
+   dropdown that shares a layer with the bar can be painted under it (measured 2026-11-09:
+   both the Menu and the account menu opened behind the page). The bar is raised above the
+   content, and both disclosures above the bar. */
+.sf-bar { z-index: calc(var(--sf-layer) + 3); }
+.sf-menu { z-index: calc(var(--sf-layer) + 4); }
+.desktop-profile-menu {
+  position: fixed !important;
+  z-index: 2147483000 !important;
+}

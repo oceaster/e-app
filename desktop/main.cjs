@@ -137,7 +137,7 @@ function show(){if(!company?.authorized()){setupWindow();return;}const target=wi
 function mediaDecision(origin){return mediaPermission.decisionFor(config,origin);}
 async function rememberMediaDecision(origin,decision){config=mediaPermission.remember(config,origin,decision);await save().catch(()=>{});}
 function showingPermission(){return showingFile(win,permissionFile);}
-function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);if(showingPermission())win.webContents.send('client:state',state);}
+function publish(next){state={...state,...next,...company?.view(),version:VERSION,theme:themePreference,server:company?.authorized()?config.server||'':''};if(setup&&!setup.isDestroyed())setup.webContents.send('client:state',state);if(win&&!win.isDestroyed()&&(showingPermission()||shellAttach.isShell(win.webContents.getURL(),config.server)))win.webContents.send('client:state',state);}
 function accountChanged(){if(!company?.authorized()){win?.hide();publish({phase:'auth',title:'Sign in to Easter Company.',error:''});setupWindow();}else publish({});}
 function changeServer(){if(!company?.authorized()){setupWindow();return;}void openServers();}
 // ONE SIGN-OUT, BOTH SCOPES (docs/COMPANY_LOGIN.md). The client's OWN half ends FIRST - the
@@ -1088,7 +1088,9 @@ async function start(){
  if(app.isPackaged)app.setAsDefaultProtocolClient('e-server');
  Menu.setApplicationMenu(null);
  try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));tray.on('click',show);}catch{}
- ipcMain.handle('client:state',event=>{local(event);return state;});
+ // THE APP'S OWN FRAMES ASK THIS: the setup shell and the connected chrome (both file://, main
+ // frame). It carries the account view and the server origin, never a token.
+ ipcMain.handle('client:state',event=>{if(!localFrame(event))throw Error('This action is only available in e-server.');return state;});
  // Choosing an e-server, from the list or from anywhere else. One path, so the switch
  // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
  ipcMain.handle('client:connect',(event,value)=>{local(event);company.require();return connectTo(value);});
@@ -1132,7 +1134,9 @@ async function start(){
   // own document, and a palette is not a secret. Anything else still gets ''.
   const permissionDocument=win&&!win.isDestroyed()&&event.sender===win.webContents
    &&showingFile(win,permissionFile);
-  if(!permissionDocument&&(!setup||setup.isDestroyed()||event.sender!==setup.webContents))return;
+  const chromeDocument=win&&!win.isDestroyed()&&event.sender===win.webContents
+   &&shellAttach.isShell(win.webContents.getURL(),config.server);
+  if(!permissionDocument&&!chromeDocument&&(!setup||setup.isDestroyed()||event.sender!==setup.webContents))return;
   event.returnValue=themePreference||'';
  });
  // A window that has the person's attention again asks whether the account document changed (a
@@ -1188,7 +1192,17 @@ async function start(){
  ipcMain.handle('company:providers',event=>{local(event);return accounts.providers();});
  ipcMain.handle('company:finish',async(event,username,password)=>{local(event);await company.finish(username,password);await afterCompany();return company.view();});
  ipcMain.handle('company:cancel',event=>{local(event);company.cancel();});
- ipcMain.handle('company:signout',event=>{local(event);return signOutCompany();});
+ // SIGN OUT IS THE SAME ACTION IN BOTH DOCUMENTS. The setup shell and the connected chrome are
+ // both the app; the chrome's account menu calls this from a file:// main frame, which `local`
+ // (shell.html only) refused. Allow the app's own chrome, and nothing else.
+ ipcMain.handle('company:signout',event=>{
+  let setupFrame=false;
+  try{setupFrame=localFrame(event)&&event.senderFrame.url===pathToFileURL(shellFile).href;}catch{}
+  let chromeFrame=false;
+  try{chromeFrame=!!(win&&!win.isDestroyed()&&event.sender===win.webContents&&event.senderFrame===event.sender.mainFrame&&shellAttach.isShell(win.webContents.getURL(),config.server));}catch{}
+  if(!setupFrame&&!chromeFrame)throw Error('This action is only available in e-server.');
+  return signOutCompany();
+ });
  await company.restore();
  boot('company-restored');
  // THE ENGINE'S TRUST LIST IS A FUNCTION, NOT A SNAPSHOT: `config.server` is the server this person

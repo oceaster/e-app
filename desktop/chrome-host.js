@@ -345,20 +345,55 @@ if(skip)skip.addEventListener("click",function(event){
    (`window.eServerChrome.<action>`); a row whose hook is absent says so in the live region rather
    than dying silently — a visible refusal, never a dead click. */
 var accountMenu=null;
-function accountName(value){
+function accountName(account){
  var slot=document.querySelector(".sf-bar .sf-account");
  if(!slot)return;
- slot.setAttribute("data-account-name",value||"");
+ var person=account&&typeof account==="object"?account:null;
+ var value=String(person?(person.name||person.username||""):(account||"")).trim();
+ // NO PERSON, NO PILL. The bar is painted before the app answers; an empty control with the
+ // app's icon read as a pretend signed-in user. It appears only with a real account.
+ slot.hidden=!value;
+ if(!value){
+  slot.removeAttribute("data-account-name");
+  slot.setAttribute("aria-label","Account");
+  slot.setAttribute("title","Account");
+  return;
+ }
+ slot.setAttribute("data-account-name",value);
+ var face=slot.querySelector(".web-account-face");
  var initial=slot.querySelector(".web-account-initial");
- if(initial)initial.textContent=String(value||"").slice(0,1);
- slot.setAttribute("aria-label",value||"Account");
- slot.setAttribute("title",value||"Account");
+ var picture=slot.querySelector(".web-account-picture");
+ if(initial)initial.textContent=value.slice(0,1);
+ if(picture){
+  var portrait=person&&typeof person.picture==="string"&&person.picture.startsWith("data:image/png;base64,")?person.picture:null;
+  if(portrait&&face){
+   picture.src=portrait;picture.hidden=false;face.classList.add("has-picture");
+  }else{
+   picture.removeAttribute("src");picture.hidden=true;
+   if(face)face.classList.remove("has-picture");
+  }
+ }
+ slot.setAttribute("aria-label",value);
+ slot.setAttribute("title",value);
 }
+window.addEventListener("e-app:account",function(event){accountName(event.detail||null);});
+if(window.__eappAccount)accountName(window.__eappAccount);
 function accountRow(label,action){
  var row=document.createElement("button");
  row.type="button";row.textContent=label;row.setAttribute("data-account-action",action);
  row.onclick=function(){
   closeAccountMenu();
+  // SIGN OUT IS THE APP'S OWN ACTION, not a missing hook: the chrome is the connected document,
+  // and the preload that owns it exposes the app's sign-out there (desktop/preload.cjs).
+  if(action==="signOut"){
+   if(window.eServerSetup&&typeof window.eServerSetup.signOut==="function"){
+    try{return window.eServerSetup.signOut();}catch(error){}
+   }
+   say("Sign out is unavailable right now.");
+   return;
+  }
+  var surface=ROW_SURFACES[action];
+  if(surface&&typeof openSurface==="function"){openSurface(surface);return;}
   var hook=window.eServerChrome&&window.eServerChrome[action];
   if(typeof hook==="function"){try{hook()}catch(error){say(label+" is unavailable right now.")}return;}
   say(label+" is not available in this window yet.");
