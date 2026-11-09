@@ -28,23 +28,24 @@ function fakeWindow(url = 'about:blank') {
   return { destroyed: false, isDestroyed: () => false, webContents: contents };
 }
 
-test('the shell is `${origin}/shell`, and nothing else', () => {
-  assert.equal(attach.SHELL_PATH, '/shell');
-  assert.equal(attach.shellURL(ORIGIN), ORIGIN + '/shell');
-  assert.equal(attach.shellURL('https://instance.example'), 'https://instance.example/shell');
+test('the connected document is the e-app’s OWN chrome, and never an e-server route', () => {
+  const chrome = attach.shellURL(ORIGIN);
+  assert.equal(chrome.startsWith('file://'), true, `the top-level document must be local, measured ${chrome}`);
+  assert.equal(chrome.endsWith('/desktop/chrome.html?origin=' + encodeURIComponent(ORIGIN)), true, chrome);
   assert.throws(() => attach.shellURL('not a url'), /not valid/);
   assert.throws(() => attach.shellURL('ftp://instance.example'), /must be https/);
-  assert.equal(attach.isShell(ORIGIN + '/shell', ORIGIN), true);
-  assert.equal(attach.isShell(ORIGIN + '/shell/', ORIGIN), true);
-  assert.equal(attach.isShell(ORIGIN + '/agents', ORIGIN), false);
-  assert.equal(attach.isShell('https://elsewhere.example/shell', ORIGIN), false);
+  // one chrome serves every instance: the instance travels in the query, and a chrome opened for
+  // ANOTHER instance is not ours.
+  assert.equal(attach.isShell(chrome, ORIGIN), true);
+  assert.equal(attach.isShell(attach.shellURL('https://other.example'), ORIGIN), false);
+  assert.equal(attach.isShell(ORIGIN + '/shell', ORIGIN), false, 'no e-server route is the top document any more');
   assert.equal(attach.isShell('about:blank', ORIGIN), false);
 });
 
 test('the first document is the shell only when a PIN session exists', async () => {
   const window = fakeWindow();
   assert.equal(await attach.startURL({ origin: ORIGIN, cookie: async () => '', window }), ORIGIN + '/');
-  assert.equal(await attach.startURL({ origin: ORIGIN, cookie: async () => 'session', window: fakeWindow() }), ORIGIN + '/shell');
+  assert.equal(await attach.startURL({ origin: ORIGIN, cookie: async () => 'session', window: fakeWindow() }), attach.shellURL(ORIGIN));
 });
 
 test('attach is ONE-SHOT per window: no loop, and no second load after a redirect', async () => {
@@ -58,32 +59,33 @@ test('attach is ONE-SHOT per window: no loop, and no second load after a redirec
 
   // the PIN lands: exactly one shell load
   const win = fakeWindow();
+  const chrome = attach.shellURL(ORIGIN);
   assert.equal(await attach.attach({ window: win, origin: ORIGIN, cookie: async () => 'session', load }), 'loading');
-  assert.deepEqual(loads, [ORIGIN + '/shell']);
+  assert.deepEqual(loads, [chrome]);
   assert.equal(await attach.attach({ window: win, origin: ORIGIN, cookie: async () => 'session', load }), 'already');
-  assert.deepEqual(loads, [ORIGIN + '/shell'], 'a second attach never loads again');
+  assert.deepEqual(loads, [chrome], 'a second attach never loads again');
 
   // a window that was HANDED the shell by startURL counts as attached (the expired-session case)
   const handed = fakeWindow();
   const url = await attach.startURL({ origin: ORIGIN, cookie: async () => 'session', window: handed });
-  assert.equal(url, ORIGIN + '/shell');
+  assert.equal(url, chrome);
   assert.equal(await attach.attach({ window: handed, origin: ORIGIN, cookie: async () => 'session', load }), 'already');
   assert.equal(loads.length, 1, 'and it does not load the shell a second time');
 
   // already on the shell is attached, and it is RECORDED (this is what narrows the policy)
-  const onShell = fakeWindow(ORIGIN + '/shell');
+  const onShell = fakeWindow(chrome);
   assert.equal(await attach.attach({ window: onShell, origin: ORIGIN, cookie: async () => '', load }), 'already');
   assert.equal(attach.topLevelAllowed({ window: onShell, origin: ORIGIN, url: ORIGIN + '/messages' }), false);
 });
 
 test('the connected window keeps one document: same-origin navigation is refused AFTER the attach', async () => {
-  const win = fakeWindow(ORIGIN + '/shell');
+  const win = fakeWindow(attach.shellURL(ORIGIN));
   // BEFORE the attach the server's own gate has to be able to hand over to its app.
   assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: ORIGIN + '/' }), true);
   assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: ORIGIN + '/account' }), true);
   // AFTER it, the shell is the only top-level document.
   await attach.attach({ window: win, origin: ORIGIN, cookie: async () => '', load: async () => {} });
-  assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: ORIGIN + '/shell' }), true, 'the shell itself is allowed (a reload of it is still the shell)');
+  assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: attach.shellURL(ORIGIN) }), true, 'the chrome itself is allowed (a reload of it is still the chrome)');
   assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: ORIGIN + '/agents' }), false);
   assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: ORIGIN + '/messages?x=1' }), false);
   assert.equal(attach.topLevelAllowed({ window: win, origin: ORIGIN, url: 'https://elsewhere.example/login' }), false,

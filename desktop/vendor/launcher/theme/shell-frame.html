@@ -1,0 +1,61 @@
+<!-- CONNECTED BODY. Host expands {{...}} slots server-side, never as untrusted HTML.
+     Set root theme + ec tokens before paint. body class="shell-frame".
+     No template marker may remain in the served document. -->
+<body class="shell-frame" data-connection="connected" data-content-state="loading">
+  <a class="sf-skip" href="#shell-content" data-action="focus-content">Skip to content</a>
+  <header class="sf-bar" aria-label="Application">
+    <div class="sf-left">
+      <button class="sf-control sf-account" type="button" data-action="account" aria-label="Account" title="Account">{{ACCOUNT_PILL_INNER}}</button>
+      <nav class="sf-agents" aria-label="Agent views">
+        <a class="sf-control agent-pill" href="{{AGENTS_URL}}" data-destination="agents" aria-label="Agents — status unavailable" title="Agents — status unavailable">{{EXISTING_DELTA_SVG_AND_STATE_HOOKS}}</a>
+        <a class="sf-control swarm-pill" href="{{SWARM_URL}}" data-destination="swarm" aria-label="Swarm — status unavailable" title="Swarm — status unavailable">{{EXISTING_EPSILON_SVG_AND_STATE_HOOKS}}</a>
+        <a class="sf-control processes-pill" href="{{PROCESSES_URL}}" data-destination="processes" data-process-state="quiet" aria-label="Processes — status unavailable" title="Processes — status unavailable">
+          <svg class="zeta-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="zeta-outline" d="M5 5H19L5 19H19"/>
+            <path class="zeta-trace" pathLength="60" d="M5 5H19L5 19H19"/>
+            <circle class="zeta-core" cx="12" cy="12" r="1.7"/>
+          </svg>
+          <span class="processes-pill-label">Processes</span>
+        </a>
+      </nav>
+    </div>
+    <nav class="sf-right" aria-label="Application views">
+      <a class="sf-control" href="{{MESSAGES_URL}}" data-destination="messages" aria-label="Messages" title="Messages">{{EXISTING_MESSAGES_SVG}}</a>
+      <a class="sf-control" href="{{STORAGE_URL}}" data-destination="storage" aria-label="File Storage" title="File Storage">{{EXISTING_STORAGE_SVG}}</a>
+      <div class="sf-menu-wrap">
+        <button class="sf-control" id="shell-menu-button" type="button" aria-label="Menu" title="Menu" aria-expanded="false" aria-controls="shell-menu" data-action="toggle-menu">{{EXISTING_MENU_SVG}}</button>
+        <div class="sf-menu" id="shell-menu" hidden>
+          <a href="{{SYSTEM_URL}}" data-destination="system">System</a>
+          <a href="{{SECURITY_URL}}" data-destination="security">Security</a>
+          <a href="{{BILLING_URL}}" data-destination="billing">Billing</a>
+          <a href="{{EVENTS_URL}}" data-destination="events">Events</a>
+          <a href="{{PERMISSIONS_URL}}" data-destination="permissions">Permissions</a>
+        </div>
+      </div>
+      <span class="sf-orb" role="img" aria-label="Instance status unavailable" title="Instance status unavailable" data-orb-state="quiet">{{EXISTING_ORB_OR_QUIET_OUTLINE}}</span>
+    </nav>
+  </header>
+  <main class="sf-content" id="shell-content" tabindex="-1" aria-label="Page content" aria-busy="true">
+    <section class="sf-status" id="shell-status" aria-labelledby="shell-status-heading">
+      <div class="sf-status-inner">
+        <h1 id="shell-status-heading" tabindex="-1">Opening {{DESTINATION_NAME}}…</h1>
+        <p id="shell-status-detail">Waiting for the page.</p>
+        <button type="button" data-action="retry-content" hidden>Try again</button>
+      </div>
+    </section>
+    <iframe id="shell-page" name="shell-page" title="Page content" src="about:blank" loading="eager" referrerpolicy="same-origin" hidden></iframe>
+  </main>
+  <!-- Host creates one visually hidden polite announcement region using its existing
+       accessible-utility class; do not announce each poll. -->
+</body>
+
+<!-- PRE-CONNECTION FRAGMENT: insert ONLY this header above unchanged local content.
+     Local body also gets shell-frame; existing content occupies second grid row.
+     The template keeps this alternative inert in the connected document. -->
+<template id="preconnection-bar">
+  <header class="sf-bar" aria-label="Application">
+    <div class="sf-left">
+      <button class="sf-control sf-account" type="button" data-action="account" aria-label="Account" title="Account">{{ACCOUNT_PILL_INNER}}</button>
+    </div>
+  </header>
+</template>

@@ -1,0 +1,26 @@
+/* THE HOST'S HALF OF THE e-app'S OWN CHROME — and the only stylesheet this document adds to
+ * Diana's. Her sheet (desktop/vendor/launcher/theme/shell-frame.css, `cmp` clean) is the design:
+ * the 56px row, the 52x32 pill at 12,12, the 32px controls, the wait pane, the gradient ground.
+ * What is here is only what her sheet cannot know about a document that lives in `app.asar`:
+ *
+ * 1. THE ANNOUNCEMENT LINE the controller appends (`p.sf-live`): visually hidden, because it is
+ *    for a screen reader and a painter must not see it.
+ * 2. THE FACE INSIDE HER PILL SLOT: the existing account control's inner identity markup, whose
+ *    rules live in the launcher site's web.css — not vendored here — copied value for value
+ *    (site/web.css:25-35).
+ * 3. NOTHING ELSE. No colour, no size and no spacing of her bar is restated.
+ */
+.sf-live {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.sf-account .web-account-face {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: var(--sf-target); height: var(--sf-target);
+  border-radius: 4px; overflow: hidden;
+  background: #536b66; color: #eedbb2;
+  font-size: 20px; font-weight: 700; line-height: 1; text-transform: uppercase;
+}
+.sf-account .web-account-face-mark { background: #536b66 url(icon.png) center/76% no-repeat; }
+.sf-account .web-account-face.has-picture .web-account-initial { visibility: hidden; }
+.sf-account .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

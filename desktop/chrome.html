@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- THE e-app OWNS THIS DOCUMENT. Owen, 2026-11-09: "simply remove the top nav bar from e-server,
+     and make sure all it's code and functionality is moved to e-app." It is a file in app.asar, not
+     an e-server route: the bar and the one frame are ours, the pages are the server's.
+     CSP: `frame-src https:` is the one allowance a chrome that frames an instance needs; the code
+     below only ever points the frame at the configured instance origin plus a registry href. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src https: http://127.0.0.1:* http://localhost:*; connect-src 'none'">
+<title>e-server</title>
+<link rel="stylesheet" href="vendor/launcher/theme/theme.css">
+<link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css">
+<link rel="stylesheet" href="vendor/launcher/theme/launcher-light.css">
+<link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css">
+<link rel="stylesheet" href="vendor/launcher/theme/shell-frame.css">
+<link rel="stylesheet" href="chrome-adapter.css">
+<script src="vendor/launcher/theme/theme-early.js"></script>
+<script src="chrome-boot.js" defer></script>
+<script src="chrome-host.js" defer></script>
+</head>
+<body class="shell-frame" data-connection="connected" data-content-state="loading">
+<a class="sf-skip" href="#shell-content" data-action="focus-content">Skip to content</a>
+<header class="sf-bar" id="shell-bar" aria-label="Application">
+ <div class="sf-left">
+  <button class="sf-control sf-account web-account-face-mark" id="shell-account" type="button" data-action="account" aria-label="Account" title="Account" data-account-name=""><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span></button>
+  <nav class="sf-agents" aria-label="Agent views">
+   <a class="sf-control agent-pill" href="/agent/harness" data-destination="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5H19L5 19H19"/></svg></a>
+   <a class="sf-control swarm-pill" href="/agent/harness/epsilons" data-destination="swarm" aria-label="Swarm" title="Swarm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M11 11l2 2"/></svg></a>
+   <a class="sf-control processes-pill" href="/agent/harness/processes" data-destination="processes" data-process-state="quiet" aria-label="Processes" title="Processes"><svg class="zeta-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="zeta-outline" d="M5 5H19L5 19H19"/><path class="zeta-trace" pathLength="60" d="M5 5H19L5 19H19"/><circle class="zeta-core" cx="12" cy="12" r="1.7"/></svg></a>
+  </nav>
+ </div>
+ <nav class="sf-right" aria-label="Application views">
+  <a class="sf-control" id="nav-messages" href="/messages" data-destination="messages" aria-label="Messages" title="Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a7 7 0 0 1-7 7H8l-4 3v-4.2A7 7 0 0 1 9 4h4a7 7 0 0 1 7 7z"/><path d="M8 10h8M8 14h5"/></svg></a>
+  <a class="sf-control" id="nav-storage" href="/system/file-storage" data-destination="storage" aria-label="File Storage" title="File Storage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6l2-3h8l2 3"/><path d="M2 12h20"/></svg></a>
+  <div class="sf-menu-wrap">
+   <button class="sf-control" id="shell-menu-button" type="button" aria-label="Menu" title="Menu" aria-expanded="false" aria-controls="shell-menu" data-action="toggle-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+   <div class="sf-menu" id="shell-menu" hidden>
+          <a href="/system" data-destination="system">System</a>
+          <a href="/security/monitors" data-destination="security">Security</a>
+          <a href="/system/billing" data-destination="billing">Billing</a>
+          <a href="/system/events" data-destination="events">Events</a>
+          <a href="/system/permissions" data-destination="permissions">Permissions</a>
+   </div>
+  </div>
+  <span class="sf-orb" role="img" aria-label="Instance status unavailable" title="Instance status unavailable" data-orb-state="quiet"><span class="sf-orb-dot"></span></span>
+ </nav>
+</header>
+<main class="sf-content" id="shell-content" tabindex="-1" aria-label="Page content" aria-busy="true">
+ <section class="sf-status" id="shell-status" aria-labelledby="shell-status-heading">
+  <div class="sf-status-inner">
+   <h1 id="shell-status-heading" tabindex="-1">Opening</h1>
+   <p id="shell-status-detail">Waiting for the page.</p>
+   <button type="button" data-action="retry-content" hidden>Try again</button>
+  </div>
+ </section>
+ <iframe id="shell-frame" name="shell-frame" title="Page content" src="about:blank" loading="eager" referrerpolicy="same-origin" hidden></iframe>
+</main>
+<p id="shell-announce" class="sf-announce" role="status" aria-live="polite" aria-atomic="true"></p>
+</body>
+</html>

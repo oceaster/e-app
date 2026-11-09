@@ -599,7 +599,15 @@ async function permissionScreenNeeded(current){
  *  permission screen or about:blank. `startFeed` awaits the device and the capture window; the
  *  document can move in that time, and a feed created afterwards would belong to no page at all. */
 function connectedDocument(window){
- try{return !!(window&&!window.isDestroyed()&&new URL(window.webContents.getURL()).origin===config.server);}catch{return false;}
+ try{
+  if(!window||window.isDestroyed())return false;
+  const at=new URL(window.webContents.getURL());
+  // THE CONNECTED DOCUMENT IS THE e-app's OWN CHROME now (ticket a3f30715): a local file carrying
+  // the bar and one frame for the instance. It is still "the connected window" - the frame inside
+  // it is what the feed's socket and the camera answers belong to.
+  if(shellAttach.isShell(at.href,config.server))return true;
+  return at.origin===config.server;
+ }catch{return false;}
 }
 async function startFeed(window){
  if(!window||window.isDestroyed()||win!==window)return;

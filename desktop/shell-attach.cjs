@@ -1,4 +1,6 @@
 'use strict';
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 // ONE DOCUMENT LOAD PER CONNECTION: the client's half of the persistent bar.
 //
 // Owen, 2026-11-08: "the top nav bar should always be present while logged in via e-app ... that top
@@ -29,14 +31,20 @@
 //
 // NOT IN SCOPE: the shell's routes, its ready/error protocol, its mark states — all the server's.
 
-/** The connected document. Frozen contract with ticket f1bdcd46: bar in `#shell-bar`, content in
- *  `<iframe id="shell-frame">`, same-origin, `?route=<registry key>` optional as a deep link. */
+/**
+ * THE CONNECTED DOCUMENT IS LOCAL NOW. Owen, 2026-11-09: "simply remove the top nav bar from
+ * e-server, and make sure all it's code and functionality is moved to e-app." The chrome is
+ * `desktop/chrome.html` — a file in `app.asar`, carrying Diana's bar and the one frame — and the
+ * instance it is attached to travels in its query string, so one document serves any instance.
+ */
+const CHROME_FILE = path.join(__dirname, 'chrome.html');
 const SHELL_PATH = '/shell';
 
 /** The one-shot record, keyed by Electron's webContents: a WeakSet so a closed window leaves nothing. */
 const tried = new WeakSet();
 
-/** `${origin}/shell`, with the origin validated the way the rest of the app validates one. */
+/** The chrome document, attached to `origin`, with the origin validated the way the rest of the
+ *  app validates one. A `file://` URL: the top-level document must never be an e-server route. */
 function shellURL(origin) {
   let url;
   try {
@@ -45,24 +53,25 @@ function shellURL(origin) {
     throw Error('The e-server address is not valid.');
   }
   if (!/^https?:$/.test(url.protocol)) throw Error('The e-server address must be https.');
-  return url.origin + SHELL_PATH;
+  return pathToFileURL(CHROME_FILE).href + '?origin=' + encodeURIComponent(url.origin);
 }
 
-/** Is this document the shell for that origin? (The only top-level document a connected window keeps.) */
+/** Is this document the chrome for that origin? (The only top-level document a connected window
+ *  keeps.) A chrome opened for ANOTHER instance is not ours. */
 function isShell(value, origin) {
-  let url;
-  try {
-    url = new URL(String(value));
-  } catch {
-    return false;
-  }
+  const asked = String(value || '');
+  if (!asked.startsWith(pathToFileURL(CHROME_FILE).href)) return false;
   let at;
   try {
     at = new URL(String(origin)).origin;
   } catch {
     return false;
   }
-  return url.origin === at && url.pathname.replace(/\/+$/, '') === SHELL_PATH;
+  try {
+    return new URL(asked).searchParams.get('origin') === at;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -127,6 +136,9 @@ function topLevelAllowed({ window, origin, url }) {
   } catch {
     return false;
   }
+  // THE CHROME IS A FILE, so its "origin" is not the server's: it may be navigated to itself and
+  // nothing else.
+  if (target.protocol === 'file:') return isShell(target.href, origin);
   if (target.origin !== at) return false;
   if (isShell(target.href, origin)) return true;
   const contents = window && !window.isDestroyed() ? window.webContents : null;
