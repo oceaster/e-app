@@ -861,6 +861,18 @@ async function connect(){
   try{ if(new URL(String(url)).origin===config.server)return event.preventDefault(); }catch{}
   event.preventDefault();void openExternal(url);
  });
+ // A SERVER WITHOUT THE SHELL IS NOT A BROKEN CLIENT. `/shell` arrives with ticket f1bdcd46, and a
+ // client release can reach an instance that has not deployed it yet: a 404 there is answered by the
+ // server's own root, which is what this window showed before the shell existed. One fallback per
+ // window, so a 404 loop is impossible - and the shell path stays the normal one.
+ const shellFallbackTried=new WeakSet();
+ current.webContents.on('did-navigate',(event,url,httpResponseCode)=>{
+  if(httpResponseCode!==404||win!==current||current.isDestroyed())return;
+  if(!shellAttach.isShell(url,config.server))return;
+  if(shellFallbackTried.has(current))return;
+  shellFallbackTried.add(current);
+  void loadServerPage(current,config.server+'/').catch(()=>{});
+ });
  current.webContents.on('did-fail-load',(_,code,message,url,mainFrame)=>{if(mainFrame&&code!==-3){publish({phase:'offline',title:'Connection unavailable',message:'Connect to your private network or VPN, then try again.',error:message});setupWindow();current.hide();}});
  current.webContents.on('render-process-gone',()=>{stopFeed('the renderer went away');publish({phase:'offline',title:'Your e-server view stopped',message:'Reconnect to restore the server view.',error:''});setupWindow();current.hide();});
  current.once('ready-to-show',()=>{if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});

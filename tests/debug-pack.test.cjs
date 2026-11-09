@@ -68,7 +68,10 @@ function asarFile(file, wanted) {
   const buffer = fs.readFileSync(file);
   const headerSize = buffer.readUInt32LE(12);
   const header = JSON.parse(buffer.slice(16, 16 + headerSize).toString('utf8'));
-  const base = 16 + headerSize;
+  // THE HEADER STRING IS PADDED TO A 4-BYTE BOUNDARY (measured 2026-11-09 on a real archive: a
+  // headerSize of 13514 put the data at 13532, not 13530), so the data base is 16 + headerSize
+  // rounded up. Derived from the archive itself: the last entry must end at the file's end.
+  const base = 16 + headerSize + ((4 - (headerSize % 4)) % 4);
   let node = header;
   for (const part of wanted.split('/').filter(Boolean)) {
     node = node.files && node.files[part];

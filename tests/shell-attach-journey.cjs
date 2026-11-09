@@ -24,7 +24,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..');
+// THE CODE UNDER TEST, and by default the working tree's. SHELL_ATTACH_ROOT points it at a packed
+// app.asar, so the same journey can say "it ships":
+//   SHELL_ATTACH_ROOT=$PWD/release/linux-unpacked/resources/app.asar \
+//     xvfb-run -a npx electron --no-sandbox tests/shell-attach-journey.cjs
+const ROOT = process.env.SHELL_ATTACH_ROOT || path.resolve(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'desktop', 'vendor', 'launcher', 'theme');
 const SHEETS = {
   // Diana's bar sheet, plus the household theme and its bridge: without the palette every
@@ -70,12 +74,20 @@ const GATE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
 <body><h1 id="page">This e-server asks for its PIN</h1></body></html>`;
 
 let expiredShell = false;
+let missingShell = false;
 
 function fakeInstance() {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1');
     const send = (body, type = 'text/html; charset=utf-8') => { response.writeHead(200, { 'content-type': type }); response.end(body); };
     if (SHEETS[url.pathname]) { response.writeHead(200, { 'content-type': 'text/css; charset=utf-8' }); response.end(SHEETS[url.pathname]); return; }
+    if (url.pathname === '/shell' && missingShell) {
+      // AN INSTANCE OLDER THAN THE SHELL: the route answers 404 and the client must fall back to the
+      // server's own root rather than showing a person somebody's error page.
+      response.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+      response.end('<!doctype html><h1>Not Found</h1>');
+      return;
+    }
     if (url.pathname === '/shell') {
       // AN EXPIRED SESSION IS A SERVER-SIDE REDIRECT, not a client decision — the case the client's
       // navigation policy has to survive without framing an external login page.
@@ -279,19 +291,46 @@ async function expiredSession({ origin, report, ses, win }) {
   expiredShell = false;
 }
 
+/** Scenario 4: an instance that does not serve the shell yet — one fallback to its own root. */
+async function missingShellRoute({ origin, report, ses, win }) {
+  missingShell = true;
+  await ses.cookies.set({ url: origin, name: 'sec_session', value: 'journey-session', httpOnly: true });
+  const cookie = async () => { const rows = await ses.cookies.get({ name: 'sec_session', url: origin }); return rows && rows[0] ? rows[0].value : ''; };
+  const committed = [];
+  win.webContents.on('did-navigate', (_e, url) => committed.push(url.replace(origin, '')));
+  // THE SAME RULE main.cjs INSTALLS, proved against a real 404.
+  let fellBack = false;
+  win.webContents.on('did-navigate', (event, url, code) => {
+    if (code !== 404 || fellBack) return;
+    if (!shellAttach.isShell(url, origin)) return;
+    fellBack = true;
+    void loadServerPage(win, origin + '/');
+  });
+  await loadServerPage(win, await shellAttach.startURL({ origin, cookie, window: win }));
+  await waitFor(async () => win.webContents.executeJavaScript("location.pathname === '/'", true), { label: 'the fallback to the root' });
+  await settle(300);
+  report.missingShell = { fellBack, committed, landed: await win.webContents.executeJavaScript('location.pathname', true) };
+  assert.equal(fellBack, true, 'a 404 on /shell falls back to the server’s own root');
+  assert.equal(report.missingShell.landed, '/', 'and the person gets the page the window showed before the shell existed');
+  assert.deepEqual(committed, ['/shell', '/'], `one fallback, not a loop: ${committed.join(', ')}`);
+  win.destroy();
+  missingShell = false;
+}
+
 async function main() {
   await app.whenReady();
   const server = await fakeInstance();
   const origin = 'http://127.0.0.1:' + server.address().port;
   const report = { origin };
   // Created before anything loads: see the note above `makeWindow`.
-  const rooms = ['a', 'b', 'c'].map((name) => {
+  const rooms = ['a', 'b', 'c', 'd'].map((name) => {
     const ses = session.fromPartition('shell-attach-' + name + '-' + Date.now());
     return { ses, win: makeWindow(ses) };
   });
   await attachedJourney({ origin, report, ...rooms[0] });
   await gateThenShell({ origin, report, ...rooms[1] });
   await expiredSession({ origin, report, ...rooms[2] });
+  await missingShellRoute({ origin, report, ...rooms[3] });
   server.close();
   console.log(JSON.stringify(report, null, 1));
   fs.rmSync(home, { recursive: true, force: true });

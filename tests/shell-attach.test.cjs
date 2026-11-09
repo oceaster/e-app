@@ -105,6 +105,10 @@ test('main.cjs wires the module that was proved, in the three places that exist'
   assert.match(source, /if\(shellAttach\.topLevelAllowed\(\{window:current,origin:config\.server,url\}\)\)return;/);
   assert.match(source, /current\.webContents\.on\('will-attach-webview',event=>event\.preventDefault\(\)\);/,
     'the webview denial is untouched: the shell is an iframe, not a webview');
+  // a server without the shell is answered by its own root, ONCE
+  assert.match(source, /if\(httpResponseCode!==404\|\|win!==current\|\|current\.isDestroyed\(\)\)return;/);
+  assert.match(source, /if\(!shellAttach\.isShell\(url,config\.server\)\)return;/);
+  assert.ok(source.includes("void loadServerPage(current,config.server+'/').catch(()=>{});"), 'the fallback loads the server’s own root');
   // the listener is removed with the window, so a switch of server starts clean
   assert.match(source, /current\.once\('closed',\(\)=>\{if\(shellCookieListener&&activeSession\)activeSession\.cookies\.removeListener\('changed',shellCookieListener\);shellCookieListener=null;\}\);/);
 });
