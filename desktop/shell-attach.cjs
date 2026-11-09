@@ -38,7 +38,6 @@ const { pathToFileURL } = require('node:url');
  * instance it is attached to travels in its query string, so one document serves any instance.
  */
 const CHROME_FILE = path.join(__dirname, 'chrome.html');
-const SHELL_PATH = '/shell';
 
 /** The one-shot record, keyed by Electron's webContents: a WeakSet so a closed window leaves nothing. */
 const tried = new WeakSet();
@@ -161,4 +160,4 @@ function reset(window) {
   } catch {}
 }
 
-module.exports = { SHELL_PATH, shellURL, isShell, attach, startURL, topLevelAllowed, reset };
+module.exports = { shellURL, isShell, attach, startURL, topLevelAllowed, reset };

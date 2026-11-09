@@ -3,10 +3,11 @@
 //
 // ticket 2ce8df20, stage 2 of Owen's persistent top nav: once connected, the window shows
 // `${instance}/shell` ONCE and every navigation after that happens inside `<iframe id="shell-frame">`.
-// The MEASURED half is tests/shell-attach-journey.cjs (a real Electron window, a loopback instance
-// serving the frozen contract, and a count of top-level navigations). This file holds what a journey
-// cannot: that the client's wiring is the wiring that was proved, that the client adds no second
-// source of truth for the bar, and that its hardening is unchanged.
+// The MEASURED half is tests/chrome-journey.cjs (a real Electron window, a loopback instance serving
+// the frozen contract, and a count of top-level navigations across every destination). This file holds
+// what a journey cannot: that the client's wiring is the wiring that was proved, that the client adds
+// no second source of truth for the bar, and that its hardening is unchanged. The old
+// tests/shell-attach-journey.cjs is DELETED with the `${instance}/shell` document it measured.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -16,7 +17,6 @@ const { execFileSync } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const MAIN = path.join(ROOT, 'desktop', 'main.cjs');
 const MODULE = path.join(ROOT, 'desktop', 'shell-attach.cjs');
-const JOURNEY = path.join(ROOT, 'tests', 'shell-attach-journey.cjs');
 const read = (file) => fs.readFileSync(file, 'utf8');
 const attach = require(MODULE);
 
@@ -146,14 +146,3 @@ test('the client’s hardening is unchanged, and the shell is same-origin', () =
   assert.match(html, /default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'/);
 });
 
-test('the journey that measures all of this is committable and parses', () => {
-  assert.ok(fs.existsSync(JOURNEY));
-  // A CLAIMED GATE IS NOT A RUN.
-  execFileSync(process.execPath, ['--check', JOURNEY], { stdio: 'pipe' });
-  const journey = read(JOURNEY);
-  for (const claim of ['exactly one top-level load', 'the shell loaded once', 'must be the SAME node',
-    'a same-origin top-level navigation must be refused after the attach', 'never loaded again']) {
-    assert.ok(journey.includes(claim), `the journey must still assert: ${claim}`);
-  }
-  assert.equal(fs.readdirSync(__dirname).includes('shell-attach-journey.test.cjs'), false, 'it runs under Electron, not node --test');
-});
