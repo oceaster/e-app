@@ -59,6 +59,18 @@ const icon=path.join(__dirname,'icon.png'),shellFile=path.join(__dirname,'shell.
 const ground=()=>resolveTheme(themePreference,nativeTheme.shouldUseDarkColors)==='dark'?'#0d2029':'#eef2f9';
 const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
+// ── THE LAUNCH TIMELINE (ticket 46c94745) ────────────────────────────────────────────────────
+// Owen, 2026-11-09: "e-app sits on a blank grey screen for a long time every time when starting
+// up." Nobody had measured it, so every guess about the cause was a guess. These stamps are the
+// measurement: one line per launch, in the app's own log, so a journey can read them instead of
+// reading a stopwatch. `t` is milliseconds since this process started — the number the person
+// actually waits — and each line names the phase it marks. Nothing here changes behaviour: a
+// stamp that changed the thing it measures would be the only lie in the file.
+const bootAt=Date.now()-Math.round(process.uptime()*1000);
+const boot=(phase,extra='')=>console.log('[e-app] boot t='+(Date.now()-bootAt)+' '+phase+(extra?' '+extra:''));
+boot('process', 'pid='+process.pid);
+app.once('ready', ()=>boot('ready'));
+
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
 //: The PIN-cookie listener that attaches the connected window to the instance's shell (one per connection).
 let shellCookieListener=null;
@@ -749,6 +761,7 @@ const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'
 function setupWindow(){
  if(setup&&!setup.isDestroyed()){setup.show();return setup;}
  setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,webPreferences:preferences(session.fromPartition('setup'))});
+ boot('setup-window-created');
  setup.setMenu(null);setup.setMenuBarVisibility(false);
  setup.loadFile(shellFile);setup.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  // EVERY DOCUMENT GETS THE CURRENT STATE ONCE IT HAS LOADED.
@@ -854,6 +867,10 @@ async function connect(){
  });
  const bounds=config.bounds&&[config.bounds.width,config.bounds.height].every(n=>Number.isFinite(n)&&n>=360)?config.bounds:{width:1280,height:900};
  win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
+ boot('window-created');
+ current.webContents.on('did-start-loading',()=>boot('did-start-loading'));
+ current.webContents.on('dom-ready',()=>boot('dom-ready'));
+ current.webContents.on('did-finish-load',()=>boot('did-finish-load'));
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
  startIdleLock(current,activeSession,config.server);startBuildWatch(current,activeSession,config.server);
@@ -883,7 +900,7 @@ async function connect(){
  });
  current.webContents.on('did-fail-load',(_,code,message,url,mainFrame)=>{if(mainFrame&&code!==-3){publish({phase:'offline',title:'Connection unavailable',message:'Connect to your private network or VPN, then try again.',error:message});setupWindow();current.hide();}});
  current.webContents.on('render-process-gone',()=>{stopFeed('the renderer went away');publish({phase:'offline',title:'Your e-server view stopped',message:'Reconnect to restore the server view.',error:''});setupWindow();current.hide();});
- current.once('ready-to-show',()=>{if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});
+ current.once('ready-to-show',()=>{boot('ready-to-show');if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});
  current.webContents.on('before-input-event',(event,input)=>{if(input.type==='keyDown'&&(input.control||input.meta)&&input.key===','){event.preventDefault();changeServer();}});
  current.on('close',event=>{if(!quitting&&tray){event.preventDefault();current.hide();}});
  // EVERY DOCUMENT OF THE CONNECTED WINDOW IS ONE PUBLISHING SESSION: started when it finishes
