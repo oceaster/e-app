@@ -40,6 +40,15 @@ function destinations(){return document.querySelectorAll("[data-destination]")}
 /* ── the navigation state machine. One token per navigation, never reused ─────────────── */
 var nav={id:0,token:"",route:null,started:0,timer:null,source:"chrome",pending:null};
 
+/* ── THE PARENT HINT, frozen with e-server on 2026-11-09 ────────────────────────────────────
+   A framed page posts its verdict to its parent. When the parent is this document its origin is
+   OPAQUE (`file://`), so an exact targetOrigin matches nothing: the child is told which origin to
+   aim at, and `null` is the literal spelling of "opaque parent" (§1 of the agreed contract). The
+   child validates this against `^(null|[a-z][a-z0-9+.-]*://[^/?#\s]+)$`; anything else is no
+   hint, which is the old same-origin behaviour — never `'*'` by accident.
+   The hint travels on EVERY frame URL, appended where the marker is appended. */
+var PARENT_HINT=/^[a-z][a-z0-9+.-]*:\/\/[^\/?#\s]+$/i.test(location.origin)?location.origin:"null";
+
 function setStatus(heading,detail,verb){
  statusHeading.textContent=heading;
  statusDetail.textContent=detail;
@@ -121,10 +130,26 @@ function navigate(routeKey,options){
  setStatus(COPY.opening_heading.replace("{destination}",destination[1]),COPY.opening_detail,null);
  currentMark(null);
  document.title="";
+ /* THE THREE AGENT DESTINATIONS ARE ONE DOCUMENT with three faces. Once it is mounted, choosing
+    another of them posts `dsh:open` and costs no load at all — which is what keeps a tour of the
+    ten destinations at ZERO top-level loads and, for these three, no second frame load either. */
+ if(harnessMounted&&DSH_SURFACES[routeKey]){
+  setStatus("", "", null);
+  clearStatus();
+  frame.hidden=false;
+  currentMark(routeKey);
+  document.title=destination[1];
+  dshOpen(DSH_SURFACES[routeKey]);
+  say(destination[1]+" opened.");
+  nav.pending=null;
+  clearTimeout(nav.timer);
+  return;
+ }
  var glue=destination[2].indexOf("?")===-1?"?":"&";
  frame.hidden=true;
  frame.src=SERVER_ORIGIN+destination[2]+glue+"shell=1&nav="+encodeURIComponent(nav.id)
-  +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(routeKey);
+  +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(routeKey)
+  +"&parent="+encodeURIComponent(PARENT_HINT);
  nav.timer=setTimeout(function(){timeout()},TIMEOUT_MS);
  if(options.focusTarget)options.focusTarget.focus();
 }
@@ -180,6 +205,8 @@ function failed(statusCode){
 function ready(message){
  var routeKey=String(message.routeKey||"");
  if(!byKey(routeKey)){failed(404);return;}
+ // the harness has certified itself: its other faces now cost a message, never a load
+ if(DSH_SURFACES[routeKey])harnessMounted=true;
  nav.pending=null;
  clearTimeout(nav.timer);
  nav.route=routeKey;
@@ -365,6 +392,20 @@ function paintOrb(state,text){
  orb.setAttribute("title",text);
 }
 (function quietOrb(){paintOrb("quiet","Instance status unavailable")})();
+
+/* ── THE HARNESS INTENT, chrome → frame, and it is STRICT (§4 of the frozen contract) ──────
+   The three agent destinations are one document with three faces; switching between them posts
+   `dsh:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
+   one value this document knows exactly — never `'*'`. The page acknowledges with `dsh:ready`
+   carrying our token; a page that never acknowledges simply keeps its current face, which is the
+   honest outcome rather than a reload loop. */
+var DSH_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
+var harnessMounted=false;
+function dshOpen(surface){
+ if(!frame.contentWindow)return;
+ var intent={type:"dsh:open",surface:surface,conversation:null,token:nav.token};
+ try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load: nothing to tell */}
+}
 
 /* ── first paint: her wait pane, already in the served markup, then the destination the URL
    asked for (or her default, when it asked for none) ────────────────────────────────────── */

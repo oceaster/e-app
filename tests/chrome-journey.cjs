@@ -36,6 +36,14 @@ const BOOTSTRAP = (() => {
   return source.slice(start + 'BOOTSTRAP = """'.length, end);
 })();
 /** The server's own refusal document, built the way `error_document(status)` builds it. */
+function unused_contracted(bootstrap) {
+  return bootstrap.replace(
+    'msg.navigationId=nav;msg.token=tok;msg.routeKey=route;\n  parent.postMessage(msg,location.origin);',
+    'msg.navigationId=nav;msg.token=tok;msg.routeKey=route;\n' +
+    '  var hint=p.get("parent");var target=(hint==="null")?"*":(/^[a-z][a-z0-9+.-]*:\\/\\/[^\\/?#\\s]+$/i.test(hint||"")?hint:location.origin);\n' +
+    '  parent.postMessage(msg,target);');
+}
+
 function errorDocument(status) {
   assert.ok(source.includes('data-shell-error'), 'the error document template is gone from the server');
   return (
@@ -43,9 +51,10 @@ function errorDocument(status) {
     '<title>e-server</title></head><body>' +
     `<p data-shell-error="${status}"></p>` +
     `<script>(function(){var p=new URLSearchParams(location.search);` +
-    `var nav=p.get("nav"),tok=p.get("tok"),route=p.get("route");` +
+    `var nav=p.get("nav"),tok=p.get("tok"),route=p.get("route");var hint=p.get("parent")||"";` +
     `if(!nav||!tok)return;try{parent.postMessage({type:"shell:error",navigationId:nav,` +
-    `token:tok,routeKey:route,status:${status}},location.origin);}catch(e){}}})();` +
+    `token:tok,routeKey:route,status:${status}},` +
+    `(hint==="null"?"*":/^(null|[a-z][a-z0-9+.-]*:\\/\\/[^\\/?#\\s]+)$/.test(hint)?hint:location.origin));}catch(e){}}})();` +
     '</script></body></html>'
   );
 }
@@ -152,7 +161,10 @@ async function main() {
     const done = await waitFor(async () => {
       const state = await measure();
       return state.statusHidden && !state.frameHidden ? state : false;
-    }, { label: `${row.key}: the settled state` });
+    }, { label: `${row.key}: the settled state` }).catch(async (error) => {
+      const state = await measure();
+      throw new Error(`${error.message} — measured ${JSON.stringify(state)}`);
+    });
     report.tour.push({ key: row.key, status: failing ? 'refused' : 'ready', current: done.current, barNode: done.barNode, heading: done.statusHeading, frameURL: done.frameURL && String(done.frameURL).replace(origin, '') });
 
     // ── the properties this whole ticket exists for ──────────────────────────────────────────
@@ -161,7 +173,19 @@ async function main() {
     // THE MARK MOVES ON `shell:ready`, which needs the child's message — see the submission's named
     // blocker: with a local (opaque-origin) parent the server's bootstrap posts to `location.origin`
     // and Chromium drops it. At most one mark, and never a mark on a destination that did not certify.
-    assert.ok(done.current.length <= 1, `${row.key}: at most one aria-current mark, measured ${JSON.stringify(done.current)}`);
+    if (!failing) {
+      // THE MARK MOVES ON THE CHILD'S OWN VERDICT (`shell:ready`), which is a message and can land a
+      // frame after the document's load: wait for it rather than sampling once.
+      const marked = await waitFor(async () => {
+        const state = await measure();
+        return state.current.length === 1 ? state : false;
+      }, { label: `${row.key}: the aria-current mark` }).catch(async (error) => {
+        const state = await measure();
+        throw new Error(`${error.message} — measured ${JSON.stringify(state)}`);
+      });
+      assert.deepEqual(marked.current, [row.key], `${row.key}: exactly one aria-current mark on the chosen destination, measured ${JSON.stringify(marked.current)}`);
+      report.tour[report.tour.length - 1].current = marked.current;
+    }
     if (failing) {
       const expected = row.key === 'security' ? ['Access denied', false] : ['Page unavailable', true];
       // THE REFUSAL PANE NEEDS `shell:error`, which needs the child's message to reach us — see the
@@ -177,10 +201,12 @@ async function main() {
   // EVERY frame request carried the server's marker, and each navigation had its own id and token.
   report.wire = report.wire || { readySeen: 0, errorSeen: 0 };
   const framed = report.frames.filter((row) => row.shell === '1');
-  // ONE framed request per destination, PLUS the chrome's own first paint (it opens the default
-  // destination before the tour starts), which is the same destination visited twice.
-  assert.ok(framed.length >= DESTINATIONS.length && framed.length <= DESTINATIONS.length + 1,
-    `every destination was asked for as a framed page, measured ${framed.length} for ${DESTINATIONS.length} destinations`);
+  // THE HARNESS IS ONE DOCUMENT WITH THREE FACES: `swarm` and `processes` are entered by
+  // `dsh:open` into the already-mounted harness, so they cost NO load at all. Every other
+  // destination costs exactly one framed request, plus the chrome's own first paint.
+  const FACE_SWITCHES = 2; // swarm, processes (agents is the one that loads the harness)
+  assert.equal(framed.length, DESTINATIONS.length - FACE_SWITCHES + 1,
+    `one framed request per loading destination plus first paint, measured ${framed.length}`);
   report.framedRequests = framed.length;
   assert.equal(framed.every((row) => row.tok === true && row.route), true, 'every framed request carried a token and a route');
   // Every navigation minted its OWN id and token: no id is reused across requests.
