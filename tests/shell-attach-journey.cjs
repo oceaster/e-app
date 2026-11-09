@@ -96,6 +96,13 @@ function fakeInstance() {
       return;
     }
     if (url.pathname === '/account') { send(bare('Your account')); return; }
+    if (url.pathname === '/broken') {
+      // A FAILURE INSIDE THE FRAME IS THE SHELL'S, NOT THE CLIENT'S: the client must keep the window,
+      // the bar and its identity, and must not bounce the person back to its own screens.
+      response.writeHead(502, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(bare('Page unavailable'));
+      return;
+    }
     if (url.pathname === '/') {
       // The server's own PIN gate: answering it is what sets the session cookie, exactly as the real
       // one does when a person types their PIN.
@@ -191,6 +198,16 @@ async function attachedJourney({ origin, report, ses, win }) {
     assert.equal(seen.content.heading, name, `the frame shows ${name}`);
   }
   report.visited = visited;
+
+  // ── a failing destination inside the frame does not touch the window ───────────────────────
+  await win.webContents.executeJavaScript("document.getElementById('shell-frame').src = '/broken'", true);
+  await settle(700);
+  const failedFrame = await win.webContents.executeJavaScript(MEASURE, true);
+  report.failedFrame = { url: failedFrame.url, barNodeId: failedFrame.barNodeId, frames: failedFrame.frames };
+  assert.equal(failedFrame.url, '/shell', 'a 502 inside the frame leaves the window on the shell');
+  assert.equal(failedFrame.barNodeId, barId, 'and the bar is still the same node');
+  assert.equal(failedFrame.frames, 1, 'and there is still exactly one frame');
+  assert.equal(committed.length, 1, 'and it added no top-level load');
   report.navigations = { started: started.slice(), committed: committed.slice() };
 
   // ── the policy: a page-initiated top-level navigation away from the shell is refused ───────
