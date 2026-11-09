@@ -53,8 +53,13 @@ test('the host difference is ONE adapter, and it holds no geometry of its own', 
   // future edit cannot quietly move the bar, the pill or the padding from here.
   assert.equal(/--sf-[a-z-]+\s*:/.test(css.replace(/var\(--sf-[a-z-]+\)/g, '')), false,
     'the adapter may READ her tokens and must never declare one');
-  assert.match(css, /body\.shell-frame\s*>\s*\.shell-local\s*\{[^}]*min-height:\s*var\(--sf-zero\)/, 'the page is the second grid row, with no viewport floor of its own');
-  assert.match(css, /overflow:\s*auto/, 'and it owns its scrolling');
+  // THE BAR IS A ROW, NOT A RE-WRAP (ticket d470ba67): the body is the site's account page, and the
+  // adapter adds the row above it. Her sheet's own `body.shell-frame` grid is NOT applied, because
+  // that class would also repaint the page's ground.
+  assert.match(css, /body\.account\s*\{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*var\(--sf-bar\) minmax\(var\(--sf-zero\),\s*1fr\) auto/,
+    'the bar is the document\'s first row and the page is the rows below it');
+  assert.match(css, /body\.account > main\.account-main\s*\{[^}]*min-height:\s*var\(--sf-zero\);[^}]*overflow:\s*auto/,
+    'the page owns the scrolling in its own row');
   assert.match(css, /\.sf-account \.web-account-face\s*\{/, 'the face inside her pill slot is painted here');
   // No colour is invented: the only literals are the launcher's own face tile values.
   const literals = (css.match(/#[0-9a-f]{3,8}\b/gi) || []).map((value) => value.toLowerCase());
@@ -64,8 +69,10 @@ test('the host difference is ONE adapter, and it holds no geometry of its own', 
 
 test('the document carries Diana’s pre-connection fragment and nothing on the right', () => {
   const html = read(SHELL);
-  // Body class, and the bar as the document's first element.
-  assert.match(html, /<body class="shell-frame">/, 'the local document is the shell frame');
+  // THE BODY IS THE SITE'S ACCOUNT PAGE (Owen, 2026-11-09: "use the same thing since it already
+  // exists and works and is approved"), and the bar is its first row.
+  assert.match(html, /<body class="account">/, 'the local document is the site’s account page');
+  assert.equal(/shell-local/.test(html), false, 'no wrapper between the body and the card: the page paints itself');
   const body = html.slice(html.indexOf('>', html.indexOf('<body')) + 1);
   const firstElement = body.match(/<(?!\/|!)([a-z0-9-]+)/i)[1].toLowerCase();
   assert.equal(firstElement, 'header', `the bar must be the first thing in the document, found <${firstElement}>`);
@@ -83,9 +90,9 @@ test('the document carries Diana’s pre-connection fragment and nothing on the 
   for (const forbidden of ['sf-right', 'sf-orb', 'sf-menu', 'sf-menu-wrap', 'sf-agents', 'agent-pill', 'swarm-pill', 'processes-pill', 'sf-skip', 'shell-page', 'sf-status']) {
     assert.equal(html.includes(forbidden), false, `the pre-connection bar must not contain ${forbidden}`);
   }
-  // The page's own content is the second row, and the sheet order is hers last.
-  assert.match(html, /<div class="shell-local account" id="shell-local">[\s\S]*<main class="account-main">/, 'the page content is the wrapper, unchanged inside');
-  assert.match(html, /<footer class="account-footer">[\s\S]*<\/div>\s*<\/body>/, 'and the page footer closes inside it');
+  // The page's own elements follow the bar directly, exactly as the site's document has them.
+  assert.match(html, /<a class="account-skip" href="#account-root">Skip to account<\/a>\s*<main class="account-main">/, 'the page’s own skip link and main follow the bar');
+  assert.match(html, /<footer class="account-footer">[\s\S]*<\/body>/, 'and the page footer closes the document');
   const order = ['vendor/launcher/theme/account-control.css', 'shell.css', 'vendor/launcher/theme/shell-frame.css', 'shell-bar-adapter.css']
     .map((href) => html.indexOf(href));
   assert.deepEqual(order.every((at) => at > 0), true, 'all four sheets must be linked');

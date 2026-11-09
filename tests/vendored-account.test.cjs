@@ -51,12 +51,12 @@ const HOST_TOKENS=['--app-panel','--app-border','--app-muted','--app-gold'];
 //: The accent family, and the two moods one rule has to cover.
 const ACCENT_TOKENS=['--ec-accent','--ec-accent-action','--ec-accent-hover','--ec-on-accent'];
 //: The site's own markup for the panel, element for element (site/account/index.html).
-// THE ONE CLASS THE CLIENT MOVES. The site paints the page's ground, tokens and flex column on
-// `body.account`; this window's body is Diana's 56px/1fr shell frame (ticket e4ab1146), so the class
-// sits on the wrapper that occupies her second grid row instead - the same element-level rules, one
-// element in. Nothing in the site's sheet selects `body` itself (checked in account.css and
-// launcher-light-adapter.css), which is what makes the move safe.
-const MARKUP=[['div.shell-local.account',/class="shell-local account"[^>]*id="shell-local"/],['main.account-main',/class="account-main"/],['div#account-panel',/class="account-panel"[^>]*id="account-panel"/],['p.account-overline',/class="account-overline"/],['h1.account-heading',/class="account-heading"/],['p#account-wait',/class="account-wait"[^>]*id="account-wait"/],['div#account-error',/class="account-error"[^>]*id="account-error"/],['div#account-root',/class="account-body"[^>]*id="account-root"/]];
+// THE CLASS STAYS WHERE THE SITE PUTS IT. Ticket e4ab1146 moved `class="account"` off the body onto a
+// wrapper to make room for Diana's bar, and the owner saw the result on 2026-11-09: "the e-app login
+// screen style changed but I did not ask for this, it's much more ugly and junior now". It is back on
+// the body (ticket d470ba67), and the bar is a ROW of the page's own document rather than a frame
+// around it - so this check is the site's own body class again, not a client shape.
+const MARKUP=[['<body class="account">',/body\b[^>]*class="account"/],['main.account-main',/class="account-main"/],['div#account-panel',/class="account-panel"[^>]*id="account-panel"/],['p.account-overline',/class="account-overline"/],['h1.account-heading',/class="account-heading"/],['p#account-wait',/class="account-wait"[^>]*id="account-wait"/],['div#account-error',/class="account-error"[^>]*id="account-error"/],['div#account-root',/class="account-body"[^>]*id="account-root"/]];
 
 function read(file){return fs.readFileSync(file);}
 //: The first byte the copy disagrees with, spoken the way a person can act on: offset, line, and

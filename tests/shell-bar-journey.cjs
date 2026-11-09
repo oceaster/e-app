@@ -47,7 +47,7 @@ const MEASURE = `(() => {
   const bar = document.querySelector('.sf-bar');
   const pill = document.getElementById('account-pill');
   const face = pill && pill.querySelector('.web-account-face');
-  const local = document.getElementById('shell-local');
+  const local = document.querySelector('main.account-main');
   const right = bar ? bar.querySelector('.sf-right') : null;
   const rect = node => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }; };
   const focusables = [...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
@@ -76,6 +76,7 @@ const MEASURE = `(() => {
     barFocusables,
     barChildCount: bar ? bar.children.length : 0,
     local: rect(local),
+    panelGround: (() => { const p = document.querySelector('.account-panel'); return p ? getComputedStyle(p).backgroundColor : null; })(),
     localScroll: local ? { clientHeight: local.clientHeight, scrollHeight: local.scrollHeight, overflowY: getComputedStyle(local).overflowY } : null,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     documentScroll: { innerHeight: window.innerHeight, bodyScroll: document.body.scrollHeight },
@@ -121,7 +122,8 @@ async function main() {
   const signedOut = await measure();
   report.states.signedOut = signedOut;
   report.shots.push(await shot('680x860-signed-out'));
-  assert.equal(signedOut.bodyClass.includes('shell-frame'), true, 'the document is the shell frame');
+  // THE BODY IS THE SITE'S ACCOUNT PAGE, and the bar is its first row (ticket d470ba67).
+  assert.equal(signedOut.bodyClass.trim(), 'account', `the document is the site’s account page, measured class="${signedOut.bodyClass}"`);
   assert.ok(signedOut.bar, 'the bar must be present while signed out');
   assert.equal(signedOut.bar.height, 56, `bar height must be Diana's 56px, measured ${signedOut.bar && signedOut.bar.height}`);
   assert.deepEqual(signedOut.pill, { x: 12, y: 12, width: 52, height: 32 }, `the account pill must be 52x32 at x=12 y=12, measured ${JSON.stringify(signedOut.pill)}`);
@@ -132,7 +134,7 @@ async function main() {
   assert.deepEqual(signedOut.barFocusables, ['account-pill'], `the only focusable thing in the bar is the account pill, found ${JSON.stringify(signedOut.barFocusables)}`);
   assert.ok(signedOut.panels.card, 'the sign-in card is still the screen');
   assert.equal(signedOut.local.y, 56, `the page content starts at the bar's own edge, measured y=${signedOut.local && signedOut.local.y}`);
-  assert.equal(signedOut.localScroll.overflowY, 'auto', 'the content wrapper owns its scrolling');
+  assert.equal(signedOut.localScroll.overflowY, 'auto', 'the page owns its scrolling in its own row');
   assert.equal(signedOut.pillLabel, 'Account', 'signed out, the pill is just the account control');
 
   const barId = await win.webContents.executeJavaScript(`(() => { const bar = document.querySelector('.sf-bar'); bar.__journeyId = 'bar-' + Date.now(); return bar.__journeyId; })()`, true);
@@ -154,7 +156,7 @@ async function main() {
   assert.equal(signedIn.panels.accountRow, true, 'the account row this window already had is unchanged');
   assert.equal(signedIn.rightCluster, false, 'still nothing on the right');
   assert.deepEqual(signedIn.barFocusables, ['account-pill'], 'still the account pill is the bar’s only control');
-  assert.equal(signedIn.localScroll.overflowY, 'auto', 'the list scrolls in its own row, not the document');
+  assert.equal(signedIn.localScroll.overflowY, 'auto', 'the list scrolls in the page’s row, not the document');
   assert.equal(signedIn.documentScroll.bodyScroll <= signedIn.viewport.height + 1, true,
     `the document itself must not grow taller than the window (body ${signedIn.documentScroll.bodyScroll} vs ${signedIn.viewport.height})`);
 
