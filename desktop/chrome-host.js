@@ -139,7 +139,7 @@ function navigate(routeKey,options){
   frame.hidden=false;
   currentMark(routeKey);
   document.title=destination[1];
-  dshOpen(DSH_SURFACES[routeKey]);
+  dshOpen(DSH_SURFACES[routeKey],routeKey);
   say(destination[1]+" opened.");
   nav.pending=null;
   clearTimeout(nav.timer);
@@ -239,6 +239,7 @@ window.addEventListener("message",function(event){
  var data=event.data;
  if(!data||typeof data!=="object")return;
  if(String(data.token||"")!==nav.token||String(data.navigationId||"")!==String(nav.id))return;
+ if(data.type==="dsh:ready"||data.type==="dsh:route"||String(data.type||"").indexOf("dsh:")===0){dshAcknowledged();return;}
  if(data.type==="shell:ready")ready(data);
  else if(data.type==="shell:error")failed(parseInt(data.status,10)||0);
  else if(data.type==="shell:navigate"){
@@ -318,14 +319,76 @@ if(skip)skip.addEventListener("click",function(event){
  statusHeading.focus();
 });
 
-/* ── the account control: the vendored module's own menu, opened by her slot ──────────── */
-function openAccount(){
- var pills=document.querySelectorAll(".sf-bar .sf-account .web-account-nav");
- for(var i=0;i<pills.length;i++){if(!pills[i].disabled){pills[i].click();return;}}
- // The server's seed is disabled by design and account-host.mjs has not swapped it yet. Its own
- // destination is the account page, and that is the honest answer rather than a dead click.
- if(window.eServerChrome&&typeof window.eServerChrome.account==="function"){try{window.eServerChrome.account()}catch(error){}}else{slot.focus&&slot.focus()}return;
+/* ── the account menu: the four rows, in the site's own menu rules ─────────────────────── */
+/* Owen's menu (2026-10-22): display name, then My Profile / Linked Accounts / Settings /
+   Sign out. The markup and every style here are the site's own
+   (`desktop/vendor/launcher/theme/account-control.css`, vendored; the module itself is vendored
+   beside it as `desktop/vendor/launcher/account-control.mjs`), so the panel is the approved one.
+   What each row DOES belongs to the e-app: it calls a hook the window's preload provides
+   (`window.eServerChrome.<action>`); a row whose hook is absent says so in the live region rather
+   than dying silently — a visible refusal, never a dead click. */
+var accountMenu=null;
+function accountName(value){
+ var slot=document.querySelector(".sf-bar .sf-account");
+ if(!slot)return;
+ slot.setAttribute("data-account-name",value||"");
+ var initial=slot.querySelector(".web-account-initial");
+ if(initial)initial.textContent=String(value||"").slice(0,1);
+ slot.setAttribute("aria-label",value||"Account");
+ slot.setAttribute("title",value||"Account");
 }
+function accountRow(label,action){
+ var row=document.createElement("button");
+ row.type="button";row.textContent=label;row.setAttribute("data-account-action",action);
+ row.onclick=function(){
+  closeAccountMenu();
+  var hook=window.eServerChrome&&window.eServerChrome[action];
+  if(typeof hook==="function"){try{hook()}catch(error){say(label+" is unavailable right now.")}return;}
+  say(label+" is not available in this window yet.");
+ };
+ return row;
+}
+function buildAccountMenu(){
+ var menu=document.createElement("div");
+ menu.className="desktop-profile-menu";menu.id="chrome-account-menu";menu.hidden=true;
+ var slot=document.querySelector(".sf-bar .sf-account");
+ var who=slot?slot.getAttribute("data-account-name")||"":"";
+ var identity=document.createElement("div");identity.className="web-account-identity";
+ var name=document.createElement("span");name.className="web-account-identity-name";
+ name.textContent=who||"Easter Company account";
+ identity.appendChild(name);
+ var rule=document.createElement("hr");rule.className="web-account-menu-rule";
+ menu.appendChild(identity);menu.appendChild(rule);
+ menu.appendChild(accountRow("My Profile","profile"));
+ menu.appendChild(accountRow("Linked Accounts","accounts"));
+ menu.appendChild(accountRow("Settings","settings"));
+ menu.appendChild(accountRow("Sign out","signOut"));
+ document.body.appendChild(menu);
+ return menu;
+}
+function closeAccountMenu(){if(accountMenu)accountMenu.hidden=true;}
+function openAccount(){
+ if(!accountMenu)accountMenu=buildAccountMenu();
+ if(!accountMenu.hidden){closeAccountMenu();return;}
+ var slot=document.querySelector(".sf-bar .sf-account");
+ if(!slot)return;
+ var box=slot.getBoundingClientRect();
+ accountMenu.hidden=false;
+ accountMenu.style.left=Math.round(box.left)+"px";
+ accountMenu.style.top=Math.round(box.bottom+4)+"px";
+}
+
+var accountSlot=document.querySelector(".sf-bar .sf-account");
+if(accountSlot)accountSlot.addEventListener("click",function(event){event.preventDefault();openAccount();});
+document.addEventListener("pointerdown",function(event){
+ if(!accountMenu||accountMenu.hidden)return;
+ if(accountMenu.contains(event.target))return;
+ if(accountSlot&&accountSlot.contains(event.target))return;
+ closeAccountMenu();
+});
+document.addEventListener("keydown",function(event){
+ if(event.key==="Escape"&&accountMenu&&!accountMenu.hidden){closeAccountMenu();if(accountSlot)accountSlot.focus();}
+});
 
 /* ── the pill's NAME, which the clipping above hides from the accessibility tree ───────── */
 /* Her NOTES: "Account is a 52x32px compact pill (identity/avatar only; full account name in
@@ -400,11 +463,26 @@ function paintOrb(state,text){
    carrying our token; a page that never acknowledges simply keeps its current face, which is the
    honest outcome rather than a reload loop. */
 var DSH_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
-var harnessMounted=false;
-function dshOpen(surface){
- if(!frame.contentWindow)return;
- var intent={type:"dsh:open",surface:surface,conversation:null,token:nav.token};
- try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load: nothing to tell */}
+var harnessMounted=false,dshWait=null,dshToken="";
+/** The harness page forwards this into its app frame; the app acknowledges EVERY accepted message
+ *  (e-server 626d269fcc). If nothing comes back inside the bound, the honest floor is ONE load. */
+var DSH_ACK_MS=1500;
+function dshOpen(surface,fallbackKey){
+ if(!frame.contentWindow){if(fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}return;}
+ dshToken=(Date.now().toString(36)+Math.random().toString(36).slice(2));
+ var intent={type:"dsh:open",surface:surface,conversation:null,token:dshToken};
+ clearTimeout(dshWait);
+ // NO ACKNOWLEDGEMENT INSIDE THE BOUND → ONE REAL LOAD. The intent is a message, not a promise:
+ // a page that does not answer leaves the person on the face they were shown, so the fallback is
+ // the same single load this controller would have done without the protocol.
+ dshWait=setTimeout(function(){dshWait=null;// only if the person is still waiting on THIS one
+  if(fallbackKey&&nav.pending===fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}},DSH_ACK_MS);
+ try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load */}
+}
+/** Any accepted `dsh:` message from the harness means the intent arrived: cancel the fallback. */
+function dshAcknowledged(){
+ if(!dshWait)return;
+ clearTimeout(dshWait);dshWait=null;harnessMounted=true;
 }
 
 /* ── first paint: her wait pane, already in the served markup, then the destination the URL

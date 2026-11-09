@@ -87,7 +87,12 @@ function instance() {
     if (url.pathname === '/security/monitors') return refusal(403);
     if (url.pathname === '/system/events') return refusal(502);
     const found = DESTINATIONS.find((row) => row.href === url.pathname);
-    const body = bare(found ? `${found.label} page` : 'Page') + BOOTSTRAP;
+    // THE HARNESS PAGE ACKNOWLEDGES `dsh:open` (e-server 626d269fcc: every accepted message is
+    // answered). The fixture answers as that page does, so the chrome's ack window is exercised.
+    const ack = found && found.key === 'agents'
+      ? `<script>addEventListener('message',function(event){var d=event.data||{};if(String(d.type||'').indexOf('dsh:')!==0)return;parent.postMessage({type:'dsh:ready',token:d.token},'*');});</script>`
+      : '';
+    const body = bare(found ? `${found.label} page` : 'Page') + BOOTSTRAP + ack;
     // ONE SLOW DESTINATION, so the wait pane is observable rather than raced: a page that answers
     // instantly clears the pane before a person (or this journey) could see it, which is correct.
     const delay = url.pathname === '/system/file-storage' ? 700 : 0;
@@ -178,7 +183,7 @@ async function main() {
       // frame after the document's load: wait for it rather than sampling once.
       const marked = await waitFor(async () => {
         const state = await measure();
-        return state.current.length === 1 ? state : false;
+        return state.current.length === 1 && state.current[0] === row.key ? state : false;
       }, { label: `${row.key}: the aria-current mark` }).catch(async (error) => {
         const state = await measure();
         throw new Error(`${error.message} — measured ${JSON.stringify(state)}`);
@@ -211,6 +216,22 @@ async function main() {
   assert.equal(framed.every((row) => row.tok === true && row.route), true, 'every framed request carried a token and a route');
   // Every navigation minted its OWN id and token: no id is reused across requests.
   assert.equal(new Set(framed.map((row) => row.nav)).size, framed.length, 'each navigation used its own navigation id');
+
+  // ── the account menu: the four rows the owner named, opened from the pill ────────────────
+  const menu = await win.webContents.executeJavaScript(`(() => {
+    const pill = document.getElementById('shell-account');
+    pill.click();
+    const panel = document.getElementById('chrome-account-menu');
+    return panel ? { hidden: panel.hidden, rows: [...panel.querySelectorAll('[data-account-action]')].map((row) => row.textContent), cls: panel.className } : null;
+  })()`, true);
+  report.accountMenu = menu;
+  assert.ok(menu, 'pressing the account pill opens a menu');
+  assert.equal(menu.hidden, false, 'and it is open after the press');
+  assert.deepEqual(menu.rows, ['My Profile', 'Linked Accounts', 'Settings', 'Sign out'], `the four rows, in Owen's order, measured ${JSON.stringify(menu.rows)}`);
+  assert.match(menu.cls, /desktop-profile-menu/, 'in the site’s own menu rules');
+  await win.webContents.executeJavaScript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))", true);
+  const closed = await win.webContents.executeJavaScript("document.getElementById('chrome-account-menu').hidden", true);
+  assert.equal(closed, true, 'Escape closes it');
 
   // ── both palettes, and the narrow window ─────────────────────────────────────────────────
   for (const theme of ['dark', 'light']) {

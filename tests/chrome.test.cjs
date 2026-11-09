@@ -17,8 +17,9 @@ test('Diana’s bar markup and her sheet are the e-server copies, byte for byte'
   for (const [mine, theirs] of [
     ['desktop/vendor/launcher/theme/shell-frame.html', 'api/profile_assets/shell-frame.html'],
     ['desktop/vendor/launcher/theme/shell-frame.css', 'api/profile_assets/shell-frame.css'],
+    ['desktop/vendor/launcher/account-control.mjs', '../easter-co-smp.github.io/site/account-control.mjs'],
   ]) {
-    const source = path.join(E_SERVER, theirs);
+    const source = theirs.startsWith('../') ? path.join(ROOT, theirs) : path.join(E_SERVER, theirs);
     assert.ok(fs.existsSync(source), `the source is missing: ${source}`);
     assert.equal(read(mine).equals(fs.readFileSync(source)), true, `${mine} has drifted from ${theirs} — re-vendor it, never edit the copy`);
   }
@@ -50,12 +51,28 @@ test('the frozen parent contract: one hint, and the three checks before a messag
   assert.match(HOST, /if\(String\(data\.token\|\|""\)!==nav\.token\|\|String\(data\.navigationId\|\|""\)!==String\(nav\.id\)\)return;/);
   assert.equal(/event\.origin!==location\.origin/.test(HOST), false, 'the chrome must never compare against its own (opaque) origin');
   // §4 chrome → frame is strict: the instance origin, never '*'
-  assert.match(HOST, /function dshOpen\(surface\)\{/);
+  assert.match(HOST, /function dshOpen\(surface,fallbackKey\)\{/);
   assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
   assert.equal(/postMessage\([^)]*,'\*'\)/.test(HOST), false, 'the chrome never posts with a wildcard');
   // and the trusted verifier the ported controller keeps
   assert.match(HOST, /arrived\(\)|function arrived\(\)/);
   assert.match(HOST, /TIMEOUT_MS/);
+});
+
+test('the account menu opens the owner’s four rows, in the site’s own menu rules', () => {
+  for (const row of ['My Profile', 'Linked Accounts', 'Settings', 'Sign out']) {
+    assert.ok(HOST.includes(`accountRow("${row}"`), `the menu carries ${row}`);
+  }
+  assert.match(HOST, /menu\.className="desktop-profile-menu"/, 'the site’s own menu class');
+  assert.match(CHROME, /vendor\/launcher\/theme\/account-control\.css/, 'and the site’s own sheet is linked');
+  assert.match(HOST, /document\.addEventListener\("keydown"/, 'Escape closes it');
+});
+
+test('the harness hop: strict targetOrigin, one acknowledgement window, one honest fallback', () => {
+  assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
+  assert.match(HOST, /var DSH_ACK_MS=1500;/);
+  assert.match(HOST, /dshAcknowledged/);
+  assert.match(HOST, /nav\.pending===fallbackKey/, 'the fallback cannot clobber a newer navigation');
 });
 
 test('the controller is the server’s, ported — not a second design', () => {
