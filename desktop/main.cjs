@@ -7,6 +7,7 @@ const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {loadServerPage,showingFile}=require('./navigation.cjs');
+const shellAttach=require('./shell-attach.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
 const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
@@ -59,6 +60,8 @@ const ground=()=>resolveTheme(themePreference,nativeTheme.shouldUseDarkColors)==
 const installer='https://github.com/oceaster/e-app/releases/latest';
 let config={},win=null,setup=null,tray=null,quitting=false,ready=false,pollTimer=null,auth=null,externalAuth=false;
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
+//: The PIN-cookie listener that attaches the connected window to the instance's shell (one per connection).
+let shellCookieListener=null;
 let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers',servers:{state:'idle',rows:[],error:'',limit:0,fallback:''}};
 // The account-scoped list of e-servers (desktop/connections.cjs). `accountsOrigin` is the one
 // author of the API address - the vendored account client - and is read at initializeCompany.
@@ -317,7 +320,7 @@ function startIdleLock(current,ses,origin){
     }
    };
    ses.cookies.on('changed',idleCookieListener);
-   await loadServerPage(current,origin+'/');
+   await loadServerPage(current,await startURL());
   },
   disconnect:async()=>{
    if(win!==current)return;
@@ -493,6 +496,24 @@ async function sessionCookie(){
   return rows&&rows[0]?String(rows[0].value||''):'';
  }catch{return '';}
 }
+// ── ONE DOCUMENT LOAD PER CONNECTION (ticket 2ce8df20) ──────────────────────────────────────────
+// The connected window shows the instance's own `/shell` — the server's document, with its bar in
+// `#shell-bar` and its content in `<iframe id="shell-frame">` — and every navigation after that
+// happens inside that frame. The decision lives in desktop/shell-attach.cjs; this is only the wiring:
+// the FIRST load of a connection, the moment the PIN cookie arrives (the server's gate handing over),
+// and nothing else. There is no poll here and no copy of the bar's state: the bar inside the shell is
+// the server document's own.
+const attachedTo=new WeakSet();
+async function attachShell(current){
+ if(!current||current.isDestroyed()||win!==current||!config.server)return;
+ try{
+  const state=await shellAttach.attach({window:current,origin:config.server,cookie:sessionCookie,load:loadServerPage});
+  if(state==='loading')attachedTo.add(current);
+ }catch(error){explain('Could not open your e-server dashboard',error);}
+}
+/** The document a connection opens with: the shell when this window already holds the PIN session,
+ *  the server's own gate when it does not (the PIN is the SERVER's question). */
+const startURL=()=>shellAttach.startURL({origin:config.server,cookie:sessionCookie});
 function tellFeed(window,channel,...args){try{if(window&&!window.isDestroyed())window.send(channel,...args);}catch{}}
 /** Resolve the one pending camera question with an answer (or with nothing, when it is dropped). */
 function answerStates(states){
@@ -556,7 +577,7 @@ async function finishPermission(value){
  if(!answered)mediaGrant={camera:false,microphone:false};
  permissionState={state:answered?'allowed':'denied',blurred:false};
  publish({permission:permissionState});
- if(!current.isDestroyed())await loadServerPage(current,config.server+'/').catch(()=>{});
+ if(!current.isDestroyed())await loadServerPage(current,await startURL()).catch(()=>{});
 }
 /** True when this document must give way to the permission screen (and it has been shown). */
 async function permissionScreenNeeded(current){
@@ -830,7 +851,16 @@ async function connect(){
  startIdleLock(current,activeSession,config.server);startBuildWatch(current,activeSession,config.server);
  current.webContents.setWindowOpenHandler(({url})=>{void openExternal(url);return {action:'deny'};});
  current.webContents.on('will-attach-webview',event=>event.preventDefault());
- current.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===config.server)return;}catch{}event.preventDefault();void openExternal(url);});
+ // THE CONNECTED WINDOW KEEPS ONE DOCUMENT (ticket 2ce8df20). Before the shell is attached a
+ // same-origin top-level navigation is the server's own business (its PIN gate handing over to its
+ // app); after it, the shell is the only top-level document and every destination is the frame's.
+ // A foreign origin was always refused here and opened in the OS browser - that is unchanged, so an
+ // authentication-expiry redirect can never silently frame somebody else's login page.
+ current.webContents.on('will-navigate',(event,url)=>{
+  if(shellAttach.topLevelAllowed({window:current,origin:config.server,url}))return;
+  try{ if(new URL(String(url)).origin===config.server)return event.preventDefault(); }catch{}
+  event.preventDefault();void openExternal(url);
+ });
  current.webContents.on('did-fail-load',(_,code,message,url,mainFrame)=>{if(mainFrame&&code!==-3){publish({phase:'offline',title:'Connection unavailable',message:'Connect to your private network or VPN, then try again.',error:message});setupWindow();current.hide();}});
  current.webContents.on('render-process-gone',()=>{stopFeed('the renderer went away');publish({phase:'offline',title:'Your e-server view stopped',message:'Reconnect to restore the server view.',error:''});setupWindow();current.hide();});
  current.once('ready-to-show',()=>{if(!company.authorized()){current.hide();return;}if(setup)setup.close();if(!process.argv.includes('--hidden-to-tray'))current.show();});
@@ -838,11 +868,23 @@ async function connect(){
  current.on('close',event=>{if(!quitting&&tray){event.preventDefault();current.hide();}});
  // EVERY DOCUMENT OF THE CONNECTED WINDOW IS ONE PUBLISHING SESSION: started when it finishes
  // loading, ended before the next one starts, so a reload is a new socket and a new epoch.
+ // THE PIN ARRIVING IS THE HANDOVER. The server's own gate sets `sec_session` when the person
+ // answers it, and that cookie is the one fact this client needs to know it may open the shell. One
+ // listener per connection, removed with the window.
+ shellCookieListener=(_event,cookie,_cause,removed)=>{
+  if(removed||!cookie||cookie.name!=='sec_session'||!cookie.value)return;
+  if(activeSession)void attachShell(current);
+ };
+ activeSession.cookies.on('changed',shellCookieListener);
+ current.once('closed',()=>{if(shellCookieListener&&activeSession)activeSession.cookies.removeListener('changed',shellCookieListener);shellCookieListener=null;});
  current.webContents.on('did-finish-load',async()=>{
   if(win!==current)return;
   // THE PERMISSION SCREEN COMES BEFORE THE INSTANCE (Owen, 2026-11-06), and only the first time
   // this device meets this e-server.
   if(await permissionScreenNeeded(current))return;
+  // AND THE SHELL IS THE INSTANCE: a document that is not it, with a session in hand, is the
+  // server's gate having let this person through.
+  await attachShell(current);
   await startFeed(current);
  });
  current.webContents.on('did-start-navigation',(event,navigationURL,isInPlace,isMainFrame)=>{
@@ -864,7 +906,9 @@ async function connect(){
   if(result.response===1)event.preventDefault();else{quitting=false;restartOnClosed=false;pendingServer=null;}
  });
  if(!remembered&&!fixture)current.webContents.once('did-finish-load',()=>dialog.showMessageBox(current,{message:'A secure keyring is unavailable.',detail:'Your sign-in will last for this app session only. Enable your operating system keyring to remember it.',buttons:['OK']}));
- await loadServerPage(current,config.server+'/');
+ // FIRST DOCUMENT: the shell when this window already holds the PIN session, the server's gate when
+ // it does not. Either way ONE top-level load, and every navigation after it is in the shell's frame.
+ await loadServerPage(current,await startURL());
 }
 async function openExternal(value){try{const url=externalURL(value);await shell.openExternal(url);return true;}catch{return false;}}
 async function ask(route,{method='GET',body}={}){
