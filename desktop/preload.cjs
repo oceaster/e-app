@@ -121,6 +121,27 @@ if(location.protocol==='file:'){
   ipcRenderer.on('client:state',(_event,next)=>{paintTheme(next);paint(next);});
   ipcRenderer.invoke('client:permission-state').then(next=>{paintTheme(next);paint(next);}).catch(()=>{});
  }
+ // ── THE CHROME'S ACCOUNT ROWS (ticket d3152e08) ──────────────────────────────────────────
+ // The e-app's own chrome (`desktop/chrome.html`) draws the bar, and its pill opens the owner's
+ // four rows: My Profile / Linked Accounts / Settings / Sign out. The rows call these four hooks,
+ // and each one opens a surface that ALREADY EXISTS — nothing new is drawn here:
+ //   * profile and accounts open the e-server's own account document inside the chrome's frame
+ //     (the surface the client's sign-in screen mounts, `site/account/index.html`, served by the
+ //     instance), for the section each names;
+ //   * settings opens the instance's own settings page in the same frame;
+ //   * sign out is the app's existing sign-out call, so the window returns to the connect
+ //     document exactly as it does from the tray menu and the page's own menu.
+ // The three frame destinations cross as a MESSAGE to the chrome's controller, because that is
+ // what owns the frame and its navigation state (and what keeps a nav from loading this document).
+ // The sign-out crosses as the app's own IPC, unchanged. contextIsolation stays on, the renderer
+ // never sees the Company session, and the CSP of the chrome is not widened for any of it.
+ contextBridge.exposeInMainWorld('eServerChrome',{
+  profile:()=>window.postMessage({type:'e-app:chrome-row',surface:'profile'},'*'),
+  accounts:()=>window.postMessage({type:'e-app:chrome-row',surface:'accounts'},'*'),
+  settings:()=>window.postMessage({type:'e-app:chrome-row',surface:'settings'},'*'),
+  signOut:()=>ipcRenderer.invoke('company:signout')
+ });
+
 }else{
  contextBridge.exposeInMainWorld('eServerClient',{
   openExternal:value=>ipcRenderer.invoke('client:external',value),microsoft:()=>ipcRenderer.invoke('client:microsoft'),
@@ -443,3 +464,4 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
   });
 })();
 // ===== end local-ai bridge ==================================================================
+

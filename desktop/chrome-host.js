@@ -204,7 +204,11 @@ function failed(statusCode){
 }
 function ready(message){
  var routeKey=String(message.routeKey||"");
- if(!byKey(routeKey)){failed(404);return;}
+ // THE ACCOUNT ROWS' SURFACES ARE NOT DESTINATIONS IN THE BAR, but they are registry-routed
+ // pages the frame can be showing, so their route keys are known here too.
+ var rowSurface=null;
+ for(var rowKey in ROW_SURFACES){if(ROW_SURFACES[rowKey].route===routeKey)rowSurface=ROW_SURFACES[rowKey];}
+ if(!byKey(routeKey)&&!rowSurface){failed(404);return;}
  // the harness has certified itself: its other faces now cost a message, never a load
  if(DSH_SURFACES[routeKey])harnessMounted=true;
  nav.pending=null;
@@ -483,6 +487,39 @@ function dshOpen(surface,fallbackKey){
 function dshAcknowledged(){
  if(!dshWait)return;
  clearTimeout(dshWait);dshWait=null;harnessMounted=true;
+}
+
+/* ── THE ACCOUNT ROWS' SURFACES, and every one of them already exists ────────────────────
+   The pill's menu is hers; what a row opens is the app's. These are the INSTANCE's own account
+   and settings documents — the same `site/account/index.html` the client's sign-in screen mounts,
+   served by the instance — loaded in the frame this chrome owns, with the same marker, the same
+   token and the same validation as any destination. Nothing new is drawn, and the top document
+   never navigates: a row is a frame navigation like every other. */
+var ROW_SURFACES={
+ profile:{href:"/account",label:"My Profile",route:"account"},
+ accounts:{href:"/account",label:"Linked Accounts",route:"account-linked"},
+ settings:{href:"/system",label:"Settings",route:"settings"}
+};
+window.addEventListener("message",function(event){
+ var data=event.data;
+ if(!data||typeof data!=="object"||data.type!=="e-app:chrome-row")return;
+ var surface=ROW_SURFACES[String(data.surface||"")];
+ if(!surface)return;
+ openSurface(surface);
+});
+function openSurface(surface){
+ nav.id+=1;nav.token=(Date.now().toString(36)+Math.random().toString(36).slice(2));
+ nav.route=surface.route;nav.started=Date.now();nav.source="chrome";nav.pending=surface.route;
+ clearTimeout(nav.timer);
+ setStatus(COPY.opening_heading.replace("{destination}",surface.label),COPY.opening_detail,null);
+ currentMark(null);
+ document.title="";
+ var glue=surface.href.indexOf("?")===-1?"?":"&";
+ frame.hidden=true;
+ frame.src=SERVER_ORIGIN+surface.href+glue+"shell=1&nav="+encodeURIComponent(nav.id)
+  +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(surface.route)
+  +"&parent="+encodeURIComponent(PARENT_HINT);
+ nav.timer=setTimeout(function(){timeout()},TIMEOUT_MS);
 }
 
 /* ── first paint: her wait pane, already in the served markup, then the destination the URL

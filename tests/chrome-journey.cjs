@@ -14,7 +14,7 @@
 // fixture cannot drift from the server it is standing in for.
 //
 //   xvfb-run -a npx electron --no-sandbox tests/chrome-journey.cjs
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -84,9 +84,12 @@ function instance() {
     seen.push({ path: url.pathname, query: Object.fromEntries(url.searchParams) });
     const bare = (title) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title></head><body><h1>${title}</h1><p>content</p></body></html>`;
     const refusal = (status) => { response.writeHead(status, { 'content-type': 'text/html; charset=utf-8' }); response.end(errorDocument(status)); };
+    // THE ACCOUNT AND SETTINGS SURFACES the pill's rows open (the instance's own documents).
+    if (url.pathname === '/account') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end(bare('Easter Company account') + BOOTSTRAP); return; }
+    if (url.pathname === '/system' && url.searchParams.get('route') === 'settings') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end(bare('User settings') + BOOTSTRAP); return; }
     if (url.pathname === '/security/monitors') return refusal(403);
     if (url.pathname === '/system/events') return refusal(502);
-    const found = DESTINATIONS.find((row) => row.href === url.pathname);
+    const found = DESTINATIONS.find((row) => row.href === url.pathname && (!url.searchParams.get('route') || url.searchParams.get('route') === row.key));
     // THE HARNESS PAGE ACKNOWLEDGES `dsh:open` (e-server 626d269fcc: every accepted message is
     // answered). The fixture answers as that page does, so the chrome's ack window is exercised.
     const ack = found && found.key === 'agents'
@@ -126,9 +129,19 @@ const MEASURE = `(() => {
 async function main() {
   await app.whenReady();
   const { server, seen, origin } = await instance();
+  // THE REAL PRELOAD, so `window.eServerChrome` is the app's own bridge and not a stub. The three
+  // channels it reads at load are answered here as the app answers them; the sign-out channel is
+  // recorded so the journey can prove the row reached the app's own sign-out call.
+  let signedOut = false;
+  ipcMain.on('theme:cached', (event) => { event.returnValue = 'dark'; });
+  ipcMain.handle('client:permission-state', () => ({}));
+  ipcMain.handle('company:signout', () => { signedOut = true; return null; });
   const win = new BrowserWindow({
     width: 680, height: 860, show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false, webSecurity: true },
+    webPreferences: {
+      preload: path.join(ROOT, 'desktop', 'preload.cjs'),
+      nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false, webSecurity: true,
+    },
   });
   const started = [];
   win.webContents.on('did-start-navigation', (_event, url, inPlace, main) => { if (main && !inPlace) started.push(url); });
@@ -232,6 +245,41 @@ async function main() {
   await win.webContents.executeJavaScript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))", true);
   const closed = await win.webContents.executeJavaScript("document.getElementById('chrome-account-menu').hidden", true);
   assert.equal(closed, true, 'Escape closes it');
+
+  // ── EVERY ROW OPENS A REAL SURFACE ────────────────────────────────────────────────────────
+  assert.equal(await win.webContents.executeJavaScript("typeof window.eServerChrome==='object' && typeof window.eServerChrome.profile==='function'", true), true,
+    'the four hooks exist in the window before a row can be pressed');
+  const rows = [
+    ['profile', '/account', 'account', 'My Profile'],
+    ['accounts', '/account', 'account-linked', 'Linked Accounts'],
+    ['settings', '/system', 'settings', 'Settings'],
+  ];
+  report.rows = [];
+  for (const [hook, expectedPath, expectedRoute, label] of rows) {
+    const before = await measure();
+    const askedFrom = seen.length;
+    await win.webContents.executeJavaScript(`(() => { document.getElementById('shell-account').click(); document.querySelector('[data-account-action="${hook}"]').click(); return 1; })()`, true);
+    // THE FRAME IS CROSS-ORIGIN, so the surface is proved where it can be read: the INSTANCE's own
+    // request log. A framed request for the surface's path, with the marker and its route.
+    const opened = await waitFor(async () => {
+      const state = await measure();
+      const asked = seen.slice(askedFrom).find((row) => row.path === expectedPath && row.query.shell === '1' && row.query.route === expectedRoute && row.query.tok);
+      return state.statusHidden && !state.frameHidden && asked ? { state, asked } : false;
+    }, { label: `${label}: the surface requested in the frame` }).catch(async (error) => {
+      const state = await measure();
+      throw new Error(`${error.message} — measured ${JSON.stringify(state)} — requests ${JSON.stringify(seen.map((r) => r.path + '?' + new URLSearchParams(r.query)))}`);
+    });
+    assert.equal(String(opened.asked.query.shell), '1', `${label}: the surface is a framed page, not a top-level load`);
+    const top = opened.state;
+    assert.equal(top.top, before.top, `${label}: the chrome document did NOT navigate`);
+    assert.equal(top.barNode, before.barNode, `${label}: and the bar is the same node`);
+    report.rows.push({ hook, asked: opened.asked.path + '?' + new URLSearchParams(opened.asked.query).toString().replace(/tok=[^&]+/, 'tok=…'), top: top.top });
+  }
+  // SIGN OUT: the app's own sign-out channel, not a second mechanism.
+  await win.webContents.executeJavaScript(`(() => { document.getElementById('shell-account').click(); document.querySelector('[data-account-action="signOut"]').click(); return 1; })()`, true);
+  await waitFor(async () => signedOut, { label: 'the app’s sign-out call' });
+  report.signedOut = signedOut;
+  assert.equal(signedOut, true, 'the Sign out row calls the app’s existing sign-out');
 
   // ── both palettes, and the narrow window ─────────────────────────────────────────────────
   for (const theme of ['dark', 'light']) {
