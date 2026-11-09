@@ -75,21 +75,43 @@ test('the harness hop: strict targetOrigin, one acknowledgement window, one hone
   assert.match(HOST, /nav\.pending===fallbackKey/, 'the fallback cannot clobber a newer navigation');
 });
 
-test('the controller is the server’s, ported — not a second design', () => {
-  const source = fs.readFileSync(path.join(E_SERVER, 'api/shell.py'), 'utf8');
-  const block = /DESTINATIONS = \(([\s\S]*?)\n\)/.exec(source)[1];
-  const rows = [...block.matchAll(/\("([^"]+)", "([^"]+)", "([^"]+)"\)/g)];
-  assert.equal(rows.length, 10, 'ten destinations');
+test('the controller is the app’s OWN — the destinations and her copy live here now', () => {
+  // THE HANDOVER, ASSERTED IN BOTH DIRECTIONS. Ticket 1b924f2f moved the bar's host half out of
+  // e-server and into this app: `api/shell.py` lost `DESTINATIONS`, `COPY`, the wait panes and the
+  // `/shell` document, and `desktop/chrome-host.js` became the one author of what a destination is.
+  // This test used to read those constants OUT of the server's file — so the day the server deleted
+  // them it died with `Cannot read properties of null`, which is a gate reading a file whose subject
+  // had moved rather than a product defect. The subject is now this app, and the server is asserted
+  // to have GIVEN IT UP: a reintroduction there is the second design this test exists to refuse.
+  const rows = [...HOST.matchAll(/\["([a-z-]+)", "([^"]+)", "([^"]+)"\]/g)];
+  assert.equal(rows.length, 10, `ten destinations, one per row: ${JSON.stringify(rows.map(r => r[1]))}`);
+  assert.match(HOST, /var DESTINATIONS=\[/, 'the controller declares the table itself');
   for (const [, key, label, href] of rows) {
-    assert.ok(HOST.includes(`["${key}","${label}","${href}"]`) || HOST.includes(`"${key}", "${label}", "${href}"`),
-      `the ported controller still carries ${key} → ${href}`);
     assert.ok(CHROME.includes(`data-destination="${key}"`) && CHROME.includes(`href="${href}"`),
       `the chrome markup still carries ${key} → ${href}`);
+    assert.ok(label && href.startsWith('/'), `${key} carries a label and an absolute path`);
   }
-  const copy = (/COPY = (\{[\s\S]*?\n\})/.exec(source) || [null, ''])[1];
-  for (const line of copy.split('\n')) {
-    const m = /^\s*"([^"]+)": \(?"([^"]+)"/.exec(line);
-    if (m) assert.ok(HOST.includes(m[2]), `her copy is carried verbatim: ${m[2]}`);
+  // The keys are unique and the hub is one of them: two rows naming one page is two designs again.
+  assert.equal(new Set(rows.map(([, key]) => key)).size, rows.length, 'the destination keys are unique');
+  assert.ok(rows.some(([, key, , href]) => key === 'system' && href === '/system'), 'the hub is a destination');
+  // HER COPY, still carried verbatim (the menus and the wait panes say what she wrote).
+  for (const sentence of ['Opening {destination}…', 'Waiting for the page.',
+                          'Page did not open', 'Sign-in required']) {
+    assert.ok(HOST.includes(sentence), `her copy is carried verbatim: ${sentence}`);
   }
-  assert.match(HOST, /READY|TIMEOUT_MS=15000|var COPY=/);
+  // AND THE SERVER HAS GIVEN IT UP. Read only if the checkout is present (this suite also runs on a
+  // machine that has no e-server), and then fail on a reintroduction by name.
+  const serverShell = path.join(E_SERVER, 'api/shell.py');
+  if (fs.existsSync(serverShell)) {
+    const source = fs.readFileSync(serverShell, 'utf8');
+    for (const gone of ['DESTINATIONS', 'MENU_DESTINATIONS', 'DEFAULT_DESTINATION', 'HOST_SCRIPT']) {
+      assert.equal(new RegExp(`^${gone}\\s*=`, 'm').test(source), false,
+        `e-server's api/shell.py still defines ${gone}: the bar's host half moved to this app (ticket 1b924f2f)`);
+    }
+    // The CHILD contract stays behind, because a framed page still needs it.
+    for (const kept of ['MARKER', 'NAV_PARAM', 'TOKEN_PARAM', 'ROUTE_PARAM']) {
+      assert.equal(new RegExp(`^${kept}\\s*=`, 'm').test(source), true,
+        `e-server keeps the child contract: ${kept} must still be defined`);
+    }
+  }
 });
