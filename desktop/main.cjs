@@ -320,7 +320,7 @@ function startIdleLock(current,ses,origin){
     }
    };
    ses.cookies.on('changed',idleCookieListener);
-   await loadServerPage(current,await startURL());
+   await loadServerPage(current,await startURL(current));
   },
   disconnect:async()=>{
    if(win!==current)return;
@@ -513,7 +513,7 @@ async function attachShell(current){
 }
 /** The document a connection opens with: the shell when this window already holds the PIN session,
  *  the server's own gate when it does not (the PIN is the SERVER's question). */
-const startURL=()=>shellAttach.startURL({origin:config.server,cookie:sessionCookie});
+const startURL=current=>shellAttach.startURL({origin:config.server,cookie:sessionCookie,window:current});
 function tellFeed(window,channel,...args){try{if(window&&!window.isDestroyed())window.send(channel,...args);}catch{}}
 /** Resolve the one pending camera question with an answer (or with nothing, when it is dropped). */
 function answerStates(states){
@@ -577,7 +577,7 @@ async function finishPermission(value){
  if(!answered)mediaGrant={camera:false,microphone:false};
  permissionState={state:answered?'allowed':'denied',blurred:false};
  publish({permission:permissionState});
- if(!current.isDestroyed())await loadServerPage(current,await startURL()).catch(()=>{});
+ if(!current.isDestroyed())await loadServerPage(current,await startURL(current)).catch(()=>{});
 }
 /** True when this document must give way to the permission screen (and it has been shown). */
 async function permissionScreenNeeded(current){
@@ -908,7 +908,7 @@ async function connect(){
  if(!remembered&&!fixture)current.webContents.once('did-finish-load',()=>dialog.showMessageBox(current,{message:'A secure keyring is unavailable.',detail:'Your sign-in will last for this app session only. Enable your operating system keyring to remember it.',buttons:['OK']}));
  // FIRST DOCUMENT: the shell when this window already holds the PIN session, the server's gate when
  // it does not. Either way ONE top-level load, and every navigation after it is in the shell's frame.
- await loadServerPage(current,await startURL());
+ await loadServerPage(current,await startURL(current));
 }
 async function openExternal(value){try{const url=externalURL(value);await shell.openExternal(url);return true;}catch{return false;}}
 async function ask(route,{method='GET',body}={}){

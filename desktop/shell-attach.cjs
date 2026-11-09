@@ -76,7 +76,14 @@ async function attach({ window, origin, cookie, load }) {
   if (!window || window.isDestroyed()) return 'waiting';
   const contents = window.webContents;
   if (!contents || contents.isDestroyed()) return 'waiting';
-  if (isShell(safeURL(contents), origin)) return 'already';
+  // ALREADY ON THE SHELL IS ATTACHED — and it must be RECORDED, because a window that opened
+  // straight onto the shell (the remembered-session path) is exactly the window whose top-level
+  // navigation policy has to be narrowed. Without this line that window stayed permissive and a
+  // same-origin `location.href` reloaded it: measured 2026-11-09 by the journey's policy case.
+  if (isShell(safeURL(contents), origin)) {
+    tried.add(contents);
+    return 'already';
+  }
   if (tried.has(contents)) return 'already';
   const session = await cookie();
   if (!session) return 'waiting';
@@ -85,10 +92,21 @@ async function attach({ window, origin, cookie, load }) {
   return 'loading';
 }
 
-/** The URL a connected window should load first: the shell when there is a session, else the gate. */
-async function startURL({ origin, cookie }) {
+/**
+ * The URL a connected window should load first: the shell when there is a session, else the gate.
+ * A window that is GIVEN the shell here is recorded as having tried it — because it has: the load is
+ * about to happen. Without this, a server that answers `/shell` with its own sign-in page would have
+ * the client load `/shell` a second time from `did-finish-load` (measured 2026-11-09 by the
+ * journey's expired-session case), which is a second top-level load for one connection.
+ */
+async function startURL({ origin, cookie, window }) {
   const session = await cookie();
-  return session ? shellURL(origin) : String(origin).replace(/\/+$/, '') + '/';
+  if (!session) return String(origin).replace(/\/+$/, '') + '/';
+  try {
+    const contents = window && !window.isDestroyed() && window.webContents;
+    if (contents) tried.add(contents);
+  } catch {}
+  return shellURL(origin);
 }
 
 /**
