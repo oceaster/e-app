@@ -36,9 +36,10 @@ STILL OWED, in the order it blocks the feature:
 3. **The period-end teardown is recorded, not performed.** `DELETE` sets
    `cancel_at_period_end` on the subscription and records `deletion.scheduledFor`; no worker
    deletes the instance at that instant because the hosting plane is not deployed.
-4. **One owned instance per account** is the cloud rule today. The menu's create button is always
-   present, so a second create is refused with `account_owns_an_instance` until that rule is
-   relaxed (it is a uniqueness claim in `records.INSTANCE_OWNER_CLAIM`).
+4. **No cap on plans per account** (Owen, 2026-11-09). The cloud's one-instance claim and its
+   `account_owns_an_instance` refusal are deleted, so the menu's create action is honest for an
+   account that already owns an instance; several owned instances are listed together. The
+   deploy and the owner-index migration are still owed (see the cloud repo's TODO.md).
 5. **The legacy bar's visual parity** is Diana's vendored sheet, byte for byte, and the chrome
    already draws it; the server's `/shell` route is gone and `/shell` answers 404. What is still
    worth measuring is the connected chrome against the pre-removal server bar on a real instance,

@@ -35,6 +35,13 @@ const INSTANCES = [
     deletion: { scheduledFor: null },
   },
   {
+    id: 'studio', displayName: 'Studio', domain: 'studio.instance.easter.company',
+    origin: 'https://studio.instance.easter.company', role: 'owner', owned: true, state: 'active',
+    plan: { key: 'professional', name: 'Professional', includedTokensBillions: 10 },
+    billing: { status: 'pending', cancelAtPeriodEnd: false, currentPeriodEnd: null },
+    deletion: { scheduledFor: null },
+  },
+  {
     id: 'workshop', displayName: 'Workshop', domain: 'workshop.instance.easter.company',
     origin: 'https://workshop.instance.easter.company', role: 'member', owned: false, state: 'active',
     plan: { key: 'personal', name: 'Personal', includedTokensBillions: 1 },
@@ -130,12 +137,13 @@ async function main() {
   report.shots.push(await shot('680x900-instance-menu'));
   assert.equal(menu.state, 'ready', 'the menu is a ready list');
   assert.equal(menu.heading, 'Your e-servers.', 'the first screen is the account’s e-servers');
-  assert.equal(menu.rows.length, 4, `three instances and one address-only row, measured ${JSON.stringify(menu.rows.map(r => r.name))}`);
+  assert.equal(menu.rows.length, 5, `four instances and one address-only row, measured ${JSON.stringify(menu.rows.map(r => r.name))}`);
   assert.deepEqual(menu.rows[0], { name: 'Cy', domain: 'cy.instance.easter.company', role: 'Owner', actions: ['Rename', 'Delete'], connect: true }, 'the owned instance: display name, domain, and only the owner actions');
-  assert.deepEqual(menu.rows[1], { name: 'Workshop', domain: 'workshop.instance.easter.company', role: 'Member', actions: ['Leave'], connect: true }, 'the member instance offers Leave and no owner action');
-  assert.deepEqual(menu.rows[2], { name: 'Legacy', domain: 'No domain yet', role: 'Member', actions: ['Leave'], connect: true }, 'an instance that predates domains says so, rather than inventing an address');
-  assert.equal(await run(`document.querySelectorAll('#server-list .server-row')[2].querySelector('.server-connect').disabled`), true, 'and its Connect is disabled: there is nowhere to go');
-  assert.deepEqual(menu.rows[3], { name: 'legacy', domain: 'legacy.example:8443', role: '', actions: ['Remove'], connect: true }, 'an address the instance service does not know keeps Remove');
+  assert.deepEqual(menu.rows[1], { name: 'Studio', domain: 'studio.instance.easter.company', role: 'Owner', actions: ['Rename', 'Delete'], connect: true }, 'a SECOND owned instance is a normal row with the owner actions (no cap)');
+  assert.deepEqual(menu.rows[2], { name: 'Workshop', domain: 'workshop.instance.easter.company', role: 'Member', actions: ['Leave'], connect: true }, 'the member instance offers Leave and no owner action');
+  assert.deepEqual(menu.rows[3], { name: 'Legacy', domain: 'No domain yet', role: 'Member', actions: ['Leave'], connect: true }, 'an instance that predates domains says so, rather than inventing an address');
+  assert.equal(await run(`document.querySelectorAll('#server-list .server-row')[3].querySelector('.server-connect').disabled`), true, 'and its Connect is disabled: there is nowhere to go');
+  assert.deepEqual(menu.rows[4], { name: 'legacy', domain: 'legacy.example:8443', role: '', actions: ['Remove'], connect: true }, 'an address the instance service does not know keeps Remove');
   assert.match(menu.create, /Create a new e-server/i, 'the create action is on the menu');
   assert.match(menu.add, /Add an existing e-server/i, 'so is the existing add action');
 
@@ -165,7 +173,7 @@ async function main() {
 
   // ── leave: the member's one action ─────────────────────────────────────────────────────────
   await push(BASE);
-  await run(`document.querySelectorAll('#server-list .server-row')[1].querySelector('.server-leave').click()`);
+  await run(`document.querySelectorAll('#server-list .server-row')[2].querySelector('.server-leave').click()`);
   await settle(300);
   const afterLeave = await calls();
   assert.deepEqual(afterLeave.find(call => call[0] === 'leaveInstance'), ['leaveInstance', 'workshop'], 'the page asked to leave that instance');
