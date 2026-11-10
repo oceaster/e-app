@@ -14,7 +14,9 @@ HTTPS origin and removed again. The server you open asks for its PIN. Private ne
 access, the PIN and your Easter Company account are still required. No server address, PIN,
 Company token or backend source is bundled into releases.
 
-`npm ci`, `npm test`, `npm start`. `npm run dist:linux` builds AppImage, DEB and
+`npm ci`, `npm test`, `npm start`. `npm run test:instances` drives the instance menu in a
+real Electron window (use `xvfb-run` on Linux), and `npm run test:servers` does the same for the
+e-server list. `npm run dist:linux` builds AppImage, DEB and
 pacman; `npm run dist:windows` builds an NSIS installer on Windows. `npm run pack:debug` builds a support-only
 debug pack in `release-debug/` (readable engine sources beside the asar, boots in debug mode
 with no flag); it is never a release input. The release
