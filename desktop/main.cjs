@@ -7,6 +7,7 @@ const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
 const {Instances}=require('./instances.cjs');
+const {createInstancePoller}=require('./instances-poll.cjs');
 const {loadServerPage,showingFile}=require('./navigation.cjs');
 const shellAttach=require('./shell-attach.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
@@ -251,14 +252,21 @@ function instancesClient(){
  return new Instances({origin:accountsOrigin,development,credential:companyToken});
 }
 function serveInstances(next){state={...state,instances:{...state.instances,...next}};publish({});}
+//: One poll for the whole window, started by a pending row and stopped when none is left.
+const instancePoller=createInstancePoller({refresh:()=>{void refreshInstances();}});
 function servePlans(next){state={...state,plans:{...state.plans,...next}};publish({});}
 async function refreshInstances(){
  serveInstances({state:'loading',error:''});
  try{
   const answer=await bounded(instancesClient().list(),SERVER_LIST_WATCHDOG_MS,'Your instances');
   serveInstances({state:answer.instances.length?'ready':'empty',rows:answer.instances,error:'',available:true});
+  // A JUST-PAID INSTANCE ACTIVATES ON THE SERVICE'S WORD, which arrives at the webhook, not at
+  // the browser that paid. While any row is `pending`, keep reading on a bounded interval; the
+  // poller stops itself the moment none is, and every observation comes from this same read.
+  instancePoller.observe(state.instances.rows);
   return {ok:true};
  }catch(error){
+  instancePoller.observe([]);
   if(error.code==='instances_unavailable'){
    serveInstances({state:'empty',rows:[],error:'',available:false});
    return {ok:false,error:error.message,available:false};
@@ -1367,7 +1375,7 @@ async function start(){
  boot('first-window-requested');
  schedule();
 }
-app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);auth?.abort();company?.cancel();
+app.on('before-quit',()=>{quitting=true;clearTimeout(pollTimer);instancePoller.stop();auth?.abort();company?.cancel();
  // the camera window is `show:false` and would otherwise keep the app's window count above zero
  try{if(captureWindow&&!captureWindow.isDestroyed())captureWindow.destroy();}catch{}
  captureWindow=null;captureReady=null;stopFeed('the app is quitting');});

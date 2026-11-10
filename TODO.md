@@ -24,8 +24,8 @@ glass) and `tests/instances.test.cjs` (the transport); `npm test` green.
 STILL OWED, in the order it blocks the feature:
 
 1. **The cloud routes are DEPLOYED (2026-11-09).** `EasterServerCloudStack` is
-   UPDATE_COMPLETE with 19 routes; all six instance-menu routes answer 401 `invalid_session`
-   unauthenticated, so they are live. The owner-index migration has run (account 3 ->
+   UPDATE_COMPLETE with **20** routes (the subscription webhook is the twentieth); all six
+   instance-menu routes answer 401 `invalid_session` unauthenticated, so they are live. The owner-index migration has run (account 3 ->
    `easter-server`). The client's "not available yet" sentence is now the fallback for a
    service that is down, not the normal state.
 2. **The test catalogue is CONFIGURED** from easter.company's plan carousel: Personal
@@ -34,9 +34,17 @@ STILL OWED, in the order it blocks the feature:
    subscription Checkout Session was opened and expired against the real test key. Business is
    deliberately unset (custom/contact plan). The production switch is a catalogue in
    `production` mode plus `EASTER_STRIPE_MODE=production`; no app change.
-3. **The period-end teardown is recorded, not performed.** `DELETE` sets
-   `cancel_at_period_end` on the subscription and records `deletion.scheduledFor`; no worker
-   deletes the instance at that instant because the hosting plane is not deployed.
+3. **The billing lifecycle is LIVE, and the client follows it (1.0.29, 2026-11-09).** The
+   cloud webhook activates a paid instance (measured: a test-card Checkout moved a real row
+   `pending -> active` in about five seconds), and the hourly cloud reaper purges an instance
+   once its recorded deadline arrives. The client polls while any row is `pending`
+   (`desktop/instances-poll.cjs`, bounded to 10 minutes, stops when none is) so the menu
+   flips to the plan without a manual refresh, and `DELETE` still records
+   `cancel_at_period_end` + `deletion.scheduledFor`. **One external blocker:** the current
+   Stripe key is agent-tagged, so Stripe pauses the cancellation call for human approval; a
+   non-agent key (or approving the request in the Dashboard) is required before the live
+   delete step completes. The hosting plane still does not provision a running e-server, so
+   an "active" instance is a record + plan, not a deployed box.
 4. **No cap on plans per account** (Owen, 2026-11-09). The cloud's one-instance claim and its
    `account_owns_an_instance` refusal are deleted, so the menu's create action is honest for an
    account that already owns an instance; several owned instances are listed together.
