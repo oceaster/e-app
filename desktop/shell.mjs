@@ -472,6 +472,10 @@ function drawRename(state){
 $('server-add').onclick=()=>{problem('');$('add-problem').textContent='';void bridge.view('add');};
 $('add-cancel').onclick=()=>{void bridge.view('servers');};
 $('servers-retry').onclick=()=>action(()=>bridge.refresh());
+// THE REMEMBERED SERVER IS THE ERROR STATE'S WAY THROUGH. This handler was dropped once
+// during the instance-menu rewrite; the button kept its label and did nothing, and only a
+// real client journey (tests/editor_electron_browser.mjs) noticed.
+$('servers-fallback').onclick=()=>action(()=>bridge.connect(current.servers?.fallback||''));
 $('instances-retry').onclick=()=>action(async()=>{await bridge.instances();say('');});
 $('plan-retry').onclick=()=>action(async()=>{await bridge.plans();});
 $('instance-create').onclick=()=>{problem('');$('create-problem').textContent='';$('create-wait').hidden=true;void bridge.view('create');};

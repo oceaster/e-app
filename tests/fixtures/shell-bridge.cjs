@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('eServerSetup', {
   login: async (identifier, password) => { calls.push(['login', identifier, password]); return { ok: true }; },
   provider: async () => {}, finish: async () => {}, cancelAccount: async () => {},
   signOut: async () => {}, view: async (value) => { calls.push(['view', value]); current = { ...current, view: value }; for (const listener of listeners) listener(current); return current; },
-  refresh: async () => {}, connect: async () => {},
+  refresh: async () => {}, connect: async (origin) => { calls.push(['connect', origin]); return { ok: true }; },
   addServer: async () => ({ ok: false, error: 'fixture' }), removeServer: async () => {}, retry: async () => {},
   download: async () => {},
   // THE INSTANCE MENU. Each call is recorded so a journey can assert WHAT the page asked the

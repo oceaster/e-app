@@ -147,6 +147,12 @@ async function main() {
   assert.match(menu.create, /Create a new e-server/i, 'the create action is on the menu');
   assert.match(menu.add, /Add an existing e-server/i, 'so is the existing add action');
 
+  // ── the list error state's fallback still connects: the button that was silently dropped ──
+  await push({ ...BASE, servers: { state: 'error', rows: [], error: 'Your e-servers did not load.', fallback: 'https://remembered.example' } });
+  await run(`document.getElementById('servers-fallback').click()`);
+  await settle(200);
+  assert.deepEqual((await calls()).find(call => call[0] === 'connect'), ['connect', 'https://remembered.example'], 'the remembered-server button asks the main process to connect');
+
   // ── rename: the page opens with the current name, and sends the new one ─────────────────────
   await run(`document.querySelectorAll('#server-list .server-row')[0].querySelector('.server-rename').click()`);
   await settle();

@@ -162,6 +162,12 @@ test('hello is first, names a stable device id, and asks the server for an epoch
   assert.equal(connection.hello.device_name, 'Desk machine');
   await until(() => connection.epoch, 'the welcome');
   assert.equal(connection.epoch, 'device-7f3a:1', 'the epoch is the server\'s, minted per socket');
+  // THE LOG LINE IS WRITTEN AFTER THE WELCOME IS HANDLED, so it is a SECOND precondition, not
+  // a fact that follows from `connection.epoch`: under a loaded suite the epoch was assigned
+  // and this assertion ran before the publisher's log callback (measured 2026-11-09 in a full
+  // `npm test`; isolated runs passed). Wait for the line, then assert it.
+  await until(() => /publishing u3-device-7f3a-1 as Desk machine \(epoch device-7f3a:1\)/.test(log.join('\n')),
+    'the publishing log line');
   assert.match(log.join('\n'), /publishing u3-device-7f3a-1 as Desk machine \(epoch device-7f3a:1\)/);
  } finally { feed.stop(); await server.close(); }
 });

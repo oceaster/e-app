@@ -48,6 +48,9 @@ test('the renderer names the six calls and draws every part of a row', () => {
   assert.match(SHELL, /const ready=plans\.loaded&&plans\.configured/, 'the create action needs a configured catalogue');
   // The signed-out mood is one body attribute, set from the account the main process publishes.
   assert.match(SHELL, /document\.body\.dataset\.accountState=signedIn\?'signed-in':'signed-out'/, 'the bar mood is the account state');
+  // THE ERROR STATE'S WAY THROUGH. This handler was dropped once in a rewrite and the
+  // button kept its label while doing nothing; a static gate is cheap and the journey clicks it.
+  assert.match(SHELL, /\$\('servers-fallback'\)\.onclick=/, 'the remembered-server fallback is wired');
 });
 
 test('the preload exposes the instance calls and nothing secret', () => {

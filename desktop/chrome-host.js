@@ -574,5 +574,16 @@ function openSurface(surface){
 
 /* ── first paint: her wait pane, already in the served markup, then the destination the URL
    asked for (or her default, when it asked for none) ────────────────────────────────────── */
-navigate(FIRST_DESTINATION,{source:"chrome"});
+/* THE BAR PAINTS BEFORE THE INSTANCE IS ASKED FOR. The first frame starts on the DOCUMENT'S
+   OWN load event, not before it. A destination such as /system carries live media, and an
+   iframe started before the parent's load event holds the parent open with it: measured
+   2026-11-09, the chrome document never reached "complete" while that stream was pending, so
+   the window's own load was tied to a media stream and automation could not resolve its
+   frames. The wait pane is already in the markup; the frame is asked for a tick later, and
+   from then on the page's load state is the instance page's own. */
+function firstDestination(){
+ navigate(FIRST_DESTINATION,{source:"chrome"});
+}
+if(document.readyState==="complete"){setTimeout(firstDestination,0);}
+else{window.addEventListener("load",firstDestination,{once:true});}
 })();
