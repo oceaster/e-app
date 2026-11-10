@@ -25,24 +25,130 @@
 .sf-account .web-account-face.has-picture .web-account-initial { visibility: hidden; }
 .sf-account .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
-/* THE THREE MARKS, PAINTED BY THE RULES THEY WERE DRAWN FOR. The server used to ship
-   `.harness-*`, `.epsilon-*` and `.zeta-*` with their pages; the chrome does not load those
-   pages' sheets, so the raw SVG defaulted to filled black shapes and the marks looked like
-   blobs (measured 2026-11-09). These are the shipped values: outline at .55, a hidden trace
-   that animates only while running, and a core dot that takes the state. */
-.sf-bar :is(.harness-mark, .epsilon-mark, .zeta-mark) {
+/* THE THREE MARKS, PAINTED BY THE RULES THEY WERE DRAWN FOR. The server used to ship these with
+   its pages; the chrome does not load those pages' sheets, so the raw SVG defaulted to filled
+   shapes (measured 2026-11-09). These are the legacy rules, value for value, recovered from
+   api/page_utils.py's HARNESS_CSS and api/worker_nav.py's epsilon block at e-server
+   e3a4e7151d^ (the commit that deleted the bar's host half), plus
+   api/profile_assets/processes-pill.css for Zeta. THE PILL CLASSES DIFFER ONLY IN NAME: the
+   server's `.harness-button` / `.epsilon-button` are this document's `.agent-pill` /
+   `.swarm-pill`, and `.processes-pill` is unchanged.
+
+   AT REST the marks are exactly the bar the legacy server drew: Delta's outline at .55 with its
+   core dot at .55 and a 2px glow, Epsilon's orbit hidden, Zeta's core hidden and its outline at
+   .25 (quiet). The state rules are ported whole even though the chrome does not yet poll for a
+   state, so a state painted later looks the way it always did. */
+
+/* ── Delta: the Agents pill ─────────────────────────────────────────────────────────────── */
+.sf-bar .harness-mark {
   display: block; width: var(--sf-mark); height: var(--sf-mark);
   overflow: visible; fill: none; stroke: currentColor;
   stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
 }
-.sf-bar :is(.harness-outline, .epsilon-outline, .zeta-outline) { opacity: .55; }
-.sf-bar :is(.harness-trace, .epsilon-trace, .zeta-trace) { opacity: 0; stroke-width: 2; }
-.sf-bar .harness-trace, .sf-bar .zeta-trace { stroke-dasharray: 12 48; }
-.sf-bar .epsilon-trace { stroke-dasharray: 12 68; }
-.sf-bar :is(.harness-core, .epsilon-core, .zeta-core) {
-  fill: currentColor; stroke: none; opacity: .25;
+.sf-bar .harness-outline { opacity: .55; }
+.sf-bar .harness-trace { opacity: 0; stroke-width: 2; stroke-dasharray: 12 48; }
+.sf-bar .harness-core {
+  stroke: none; fill: currentColor; opacity: .55;
+  transform-origin: 12px 15px; filter: drop-shadow(0 0 2px currentColor);
+}
+.sf-bar .agent-pill[data-state="running"] { color: var(--sf-accent); }
+.sf-bar .agent-pill[data-state="running"] .harness-trace { opacity: 1; }
+.sf-bar .agent-pill[data-state="running"] .harness-core { opacity: 1; }
+.sf-bar .agent-pill[data-state="idle"] { color: var(--sf-accent); }
+.sf-bar .agent-pill[data-state="idle"] .harness-outline { opacity: .85; }
+.sf-bar .agent-pill[data-state="idle"] .harness-core {
+  opacity: 1; fill: #e8ddff;
+  filter: drop-shadow(0 0 2px currentColor) drop-shadow(0 0 4px var(--sf-accent));
 }
 .sf-bar .agent-pill[data-state="closed"] .harness-core { opacity: .2; }
+
+/* ── Epsilon: the Swarm pill ────────────────────────────────────────────────────────────── */
+.sf-bar .epsilon-mark {
+  display: block; width: var(--sf-mark); height: var(--sf-mark);
+  overflow: visible; fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.sf-bar .epsilon-outline { opacity: .55; }
+.sf-bar .epsilon-trace { opacity: 0; stroke-width: 2; stroke-dasharray: 12 68; }
+.sf-bar .epsilon-core {
+  fill: currentColor; stroke: none; opacity: .25;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+.sf-bar .epsilon-orbit { fill: currentColor; stroke: none; opacity: 0; transform-origin: 12px 12px; }
+.sf-bar .swarm-pill[data-state="running"],
+.sf-bar .swarm-pill[data-state="idle"] { color: var(--sf-accent); }
+.sf-bar .swarm-pill[data-state="running"] .epsilon-trace,
+.sf-bar .swarm-pill[data-state="running"] .epsilon-orbit { opacity: 1; }
+.sf-bar .swarm-pill[data-state="running"] .epsilon-core,
+.sf-bar .swarm-pill[data-state="idle"] .epsilon-core { opacity: 1; }
+.sf-bar .swarm-pill[data-state="idle"] .epsilon-core { fill: #e8ddff; }
+.sf-bar .swarm-pill[data-state="queued"] { color: #e3b341; }
+.sf-bar .swarm-pill[data-state="queued"] .epsilon-core { opacity: 1; }
+
+/* ── Zeta: the Processes pill ───────────────────────────────────────────────────────────── */
+.sf-bar .zeta-mark {
+  display: block; width: var(--sf-mark); height: var(--sf-mark);
+  overflow: visible; fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  transform-origin: center;
+}
+.sf-bar .zeta-outline { opacity: .55; }
+.sf-bar .zeta-trace { stroke-dasharray: 12 48; opacity: 0; }
+.sf-bar .zeta-core {
+  fill: currentColor; stroke: none; opacity: 0;
+  transform-box: view-box; transform-origin: 12px 12px;
+}
+.sf-bar .processes-pill[data-process-state="running"],
+.sf-bar .processes-pill[data-process-state="idle"],
+.sf-bar .processes-pill[data-process-state="queued"] { color: var(--sf-accent); }
+.sf-bar .processes-pill[data-process-state="running"] .zeta-core { opacity: 1; }
+.sf-bar .processes-pill[data-process-state="idle"] .zeta-core {
+  fill: none; stroke: currentColor; stroke-width: 1.6; opacity: 1;
+}
+.sf-bar .processes-pill[data-process-state="queued"] .zeta-core { opacity: .65; }
+.sf-bar .processes-pill[data-process-state="quiet"] .zeta-outline { opacity: .25; }
+
+/* THE MOTION IS PART OF THE MARK, not a decoration added here: the same keyframes, the same
+   durations, and the same reduced-motion fence the legacy sheets used. */
+@media (prefers-reduced-motion: no-preference) {
+  .sf-bar .agent-pill[data-state="running"] .harness-trace { animation: delta-trace 1.5s linear infinite; }
+  .sf-bar .agent-pill[data-state="running"] .harness-core { animation: delta-orbit 2.4s linear infinite; }
+  .sf-bar .agent-pill[data-state="idle"] .harness-mark { animation: delta-breathe 3.6s ease-in-out infinite; }
+  .sf-bar .agent-pill[data-state="closed"] .harness-outline { animation: delta-rest 8s ease-in-out infinite; }
+
+  .sf-bar .swarm-pill[data-state="running"] .epsilon-trace { animation: epsilon-trace 1.8s linear infinite; }
+  .sf-bar .swarm-pill[data-state="running"] .epsilon-orbit { animation: epsilon-orbit 3.2s linear infinite; }
+  .sf-bar .swarm-pill[data-state="idle"] .epsilon-mark { animation: epsilon-breathe 4s ease-in-out infinite; }
+  .sf-bar .swarm-pill[data-state="queued"] .epsilon-core { animation: epsilon-breathe 2s ease-in-out infinite; }
+  .sf-bar .swarm-pill[data-state="closed"] .epsilon-outline { animation: epsilon-breathe 8s ease-in-out infinite; }
+
+  .sf-bar .processes-pill[data-process-state="running"] .zeta-trace { opacity: 1; animation: zeta-travel 1.65s linear infinite; }
+  .sf-bar .processes-pill[data-process-state="running"] .zeta-core { animation: zeta-shuttle 2.8s ease-in-out infinite; }
+  .sf-bar .processes-pill[data-process-state="idle"] .zeta-mark { animation: zeta-idle 3.8s ease-in-out infinite; }
+  .sf-bar .processes-pill[data-process-state="queued"] .zeta-core { animation: zeta-queued 2s ease-in-out infinite; }
+  .sf-bar .processes-pill[data-process-state="quiet"] .zeta-outline { animation: zeta-quiet 8s ease-in-out infinite; }
+}
+@keyframes delta-trace { to { stroke-dashoffset: -60; } }
+@keyframes delta-orbit {
+  0%, 100% { transform: perspective(70px) translate3d(-10px, 0, 0) scale(.85); opacity: .85; }
+  12.5% { transform: perspective(70px) translate3d(-7.1px, -5px, -5px) scale(.7); opacity: .6; }
+  25% { transform: perspective(70px) translate3d(0, -7px, -7px) scale(.6); opacity: .4; }
+  37.5% { transform: perspective(70px) translate3d(7.1px, -5px, -5px) scale(.7); opacity: .6; }
+  50% { transform: perspective(70px) translate3d(10px, 0, 0) scale(.85); opacity: .85; }
+  62.5% { transform: perspective(70px) translate3d(7.1px, 5px, 5px) scale(1.05); opacity: 1; }
+  75% { transform: perspective(70px) translate3d(0, 7px, 7px) scale(1.2); opacity: 1; }
+  87.5% { transform: perspective(70px) translate3d(-7.1px, 5px, 5px) scale(1.05); opacity: 1; }
+}
+@keyframes delta-breathe { 0%, 100% { opacity: .6; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.04); } }
+@keyframes delta-rest { 0%, 100% { opacity: .35; } 50% { opacity: .6; } }
+@keyframes epsilon-trace { to { stroke-dashoffset: -80; } }
+@keyframes epsilon-orbit { to { transform: rotate(360deg); } }
+@keyframes epsilon-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes zeta-travel { to { stroke-dashoffset: -60; } }
+@keyframes zeta-shuttle { 0%, 100% { transform: translate(5px, -5px); } 50% { transform: translate(-5px, 5px); } }
+@keyframes zeta-idle { 0%, 100% { opacity: .6; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.04); } }
+@keyframes zeta-queued { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+@keyframes zeta-quiet { 0%, 100% { opacity: .2; } 50% { opacity: .35; } }
 
 /* DISCLOSURES ABOVE THE FRAMED PAGE. The content iframe is its own compositing layer; a
    dropdown that shares a layer with the bar can be painted under it (measured 2026-11-09:

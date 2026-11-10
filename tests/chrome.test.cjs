@@ -40,6 +40,33 @@ test('the chrome document is boxed: its own CSP, and the connected window’s sa
   assert.match(MAIN, /current\.webContents\.on\('will-attach-webview',event=>event\.preventDefault\(\)\);/);
 });
 
+test('the three marks are painted by the legacy rules, not by the SVG defaults', () => {
+  // The bar's marks used to be styled by the server's own sheets; the chrome owns the bar now,
+  // so those rules had to MOVE here, value for value. Without them Epsilon's orbit dots paint as
+  // three little rings at rest and Delta's core loses its .55 opacity and its glow: a different
+  // bar from the one Owen asked to look exactly the same.
+  const ADAPTER = fs.readFileSync(path.join(ROOT, 'desktop/chrome-adapter.css'), 'utf8');
+  // Delta
+  assert.match(ADAPTER, /\.sf-bar \.harness-outline \{ opacity: \.55; \}/);
+  assert.match(ADAPTER, /\.sf-bar \.harness-core \{[^}]*opacity: \.55;[^}]*filter: drop-shadow\(0 0 2px currentColor\)/);
+  // Epsilon: the orbit is INVISIBLE at rest and its core glows - the two rules that were missing.
+  assert.match(ADAPTER, /\.sf-bar \.epsilon-orbit \{ fill: currentColor; stroke: none; opacity: 0;/);
+  assert.match(ADAPTER, /\.sf-bar \.epsilon-core \{[^}]*filter: drop-shadow\(0 0 3px currentColor\)/);
+  // Zeta: hidden at rest, quiet at .25, and the idle/running/queued states the legacy sheet had.
+  assert.match(ADAPTER, /\.sf-bar \.zeta-core \{[^}]*opacity: 0;/);
+  assert.match(ADAPTER, /\[data-process-state="quiet"\] \.zeta-outline \{ opacity: \.25; \}/);
+  for (const state of ['running', 'idle', 'queued', 'closed']) {
+    assert.ok(ADAPTER.includes(`data-state="${state}"`), `Delta/Epsilon keep their ${state} rule`);
+  }
+  // The motion is part of the mark: the legacy keyframes and the reduced-motion fence.
+  for (const keyframe of ['delta-trace', 'delta-orbit', 'delta-breathe', 'delta-rest',
+    'epsilon-trace', 'epsilon-orbit', 'epsilon-breathe', 'zeta-travel', 'zeta-shuttle',
+    'zeta-idle', 'zeta-queued', 'zeta-quiet']) {
+    assert.ok(ADAPTER.includes(`@keyframes ${keyframe}`), `the chrome carries @keyframes ${keyframe}`);
+  }
+  assert.match(ADAPTER, /@media \(prefers-reduced-motion: no-preference\)/);
+});
+
 test('the frozen parent contract: one hint, and the three checks before a message is believed', () => {
   // §1 the chrome appends exactly one parameter, on every framed URL
   assert.match(HOST, /\+"&parent="\+encodeURIComponent\(PARENT_HINT\)/);
