@@ -17,7 +17,8 @@
     "pack:debug": "npm run build:local-ai && node scripts/pack-debug.cjs",
     "dist:linux": "npm run build:local-ai && electron-builder --linux AppImage deb pacman --x64 --publish never",
     "dist:windows": "npm run build:local-ai && electron-builder --win nsis --x64 --publish never",
-    "test:servers": "electron --no-sandbox scripts/shell-servers.cjs"
+    "test:servers": "electron --no-sandbox scripts/shell-servers.cjs",
+    "test:instances": "electron --no-sandbox tests/instance-menu-journey.cjs"
   },
   "devDependencies": {
     "electron": "44.7.2",

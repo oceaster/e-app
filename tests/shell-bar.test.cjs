@@ -71,7 +71,7 @@ test('the document carries Diana’s pre-connection fragment and nothing on the 
   const html = read(SHELL);
   // THE BODY IS THE SITE'S ACCOUNT PAGE (Owen, 2026-11-09: "use the same thing since it already
   // exists and works and is approved"), and the bar is its first row.
-  assert.match(html, /<body class="account">/, 'the local document is the site’s account page');
+  assert.match(html, /<body class="account" data-account-state="signed-out">/, 'the local document is the site’s account page, and it starts in the signed-out glass mood');
   assert.equal(/shell-local/.test(html), false, 'no wrapper between the body and the card: the page paints itself');
   const body = html.slice(html.indexOf('>', html.indexOf('<body')) + 1);
   const firstElement = body.match(/<(?!\/|!)([a-z0-9-]+)/i)[1].toLowerCase();

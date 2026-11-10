@@ -137,7 +137,12 @@ test('the client invents no second source of truth and no bar of its own', () =>
 
 test('the client’s hardening is unchanged, and the shell is same-origin', () => {
   const source = read(MAIN);
-  assert.match(source, /const preferences=\(ses\)=>\(\{session:ses,preload:path\.join\(__dirname,'preload\.cjs'\),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false\}\);/);
+  // Every window this app creates still has NO node integration, context isolation, the
+  // sandbox, web security, no <webview> and no insecure content. `nodeIntegrationInSubFrames`
+  // is the one addition and it does not add Node to a frame: it runs this app's own preload in
+  // the instance pages the chrome frames, which is how the server's own handoff/sign-out reach
+  // the main process at all (measured 2026-11-09: `bridge: undefined` inside /account).
+  assert.match(source, /const preferences=\(ses\)=>\(\{session:ses,preload:path\.join\(__dirname,'preload\.cjs'\),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,nodeIntegrationInSubFrames:true,allowRunningInsecureContent:false\}\);/);
   assert.match(source, /current\.webContents\.setWindowOpenHandler\(\(\{url\}\)=>\{void openExternal\(url\);return \{action:'deny'\};\}\);/);
   // The shell is fetched from the SAME origin the window is already on, so no new origin, permission
   // or preload surface is created for it: the permission handlers still name `config.server`.

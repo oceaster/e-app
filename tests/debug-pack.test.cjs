@@ -93,6 +93,11 @@ function bootMode(unpackedDir, { timeoutMs = 60000 } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'e-app-boot-'));
   const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config') };
   delete env.E_APP_DEBUG; // the pack's marker is what must decide, not this shell
+  // A SHELL THAT IS ITSELF RUNNING UNDER ELECTRON MUST NOT HAND THAT MODE TO THE PACK. Some
+  // harnesses export ELECTRON_RUN_AS_NODE for their own tooling; inherited, it makes the packed
+  // binary run as plain Node and refuse --no-sandbox, so this measured gate would report the
+  // environment instead of the product (measured 2026-11-09: "bad option: --no-sandbox").
+  delete env.ELECTRON_RUN_AS_NODE;
   return new Promise((resolve, reject) => {
     const child = spawn('xvfb-run', ['-a', binary, '--no-sandbox'], { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';

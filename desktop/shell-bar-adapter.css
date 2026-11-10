@@ -42,6 +42,29 @@ body.account .account-skip:focus {
   inset-block-start: var(--sf-bar);
 }
 
+/* THE SIGNED-OUT BAR IS GLASS. Owen, 2026-11-09: "top nav bar should be glassy when no user is
+ * signed in". The state is the account's own and arrives as one body attribute from
+ * desktop/shell.mjs, so this is the only place the mood is painted and there is no second
+ * opinion about who is signed in. Her tokens still own the geometry and the ink; only the
+ * surface changes: a translucent panel over a blurred ground, with the rule beneath it fading
+ * at the two ends so the row reads as a sheet of glass rather than a second card.
+ *
+ * `color-mix` and `backdrop-filter` are the whole effect and neither declares a --sf-* token
+ * (shell-bar-adapter.css is held to that rule). A browser without backdrop-filter keeps the
+ * opaque panel via the @supports fallback below, which is the old look and never a blank row. */
+body.account[data-account-state="signed-out"] .sf-bar {
+  background: color-mix(in srgb, var(--sf-panel) 58%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  border-bottom-color: color-mix(in srgb, var(--sf-line) 55%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sf-ink) 10%, transparent);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body.account[data-account-state="signed-out"] .sf-bar {
+    background: var(--sf-panel);
+  }
+}
+
 /* THE FACE, copied from the launcher's own control (site/web.css, three-step precedence:
    picture, then the head cropped from the Minecraft skin, then the teal letter tile). */
 .sf-account .web-account-face {

@@ -22,3 +22,129 @@
  background: var(--ec-accent-hover);
  border-color: var(--ec-accent-hover);
 }
+
+/* THE INSTANCE MENU (Owen, 2026-11-09). Diana's sheet owns every row, field and action it
+ * already had; what follows is only what an instance adds to one: a role word, a domain line,
+ * and the owner/member actions beside Connect. Household tokens only, no colour of this file's
+ * own, and the row stays her two-column grid — the actions are the `auto` cell. */
+#client-servers .server-actions {
+ display: flex;
+ flex-wrap: wrap;
+ justify-content: flex-end;
+ gap: 2px;
+ max-width: 15rem;
+}
+#client-servers .server-actions button {
+ min-height: 44px;
+ padding: 8px;
+ border: 1px solid transparent;
+ border-radius: 6px;
+ background: var(--ec-panel);
+ color: var(--ec-muted-panel);
+ font-size: 12px;
+ text-decoration: underline;
+ text-underline-offset: 3px;
+}
+#client-servers .server-actions button:hover {
+ color: var(--ec-ink);
+ background: var(--ec-panel-soft);
+}
+#client-servers .server-actions .server-remove:hover {
+ color: var(--ec-danger);
+ background: var(--ec-danger-bg);
+}
+#client-servers .server-role {
+ font-size: 11px;
+ font-weight: 600;
+ letter-spacing: .04em;
+ text-transform: uppercase;
+ color: var(--ec-muted-panel);
+ margin-top: 5px;
+}
+#client-servers .server-role[data-role="owner"] { color: var(--ec-accent-action); }
+#client-servers .server-billing {
+ font-size: 11px;
+ font-weight: 400;
+ color: var(--ec-muted-panel);
+ margin-top: 5px;
+}
+#client-servers .instance-note {
+ margin: 0 0 12px;
+ padding: 10px 12px;
+ border-left: 2px solid var(--ec-control-line);
+ color: var(--ec-muted-panel);
+}
+#client-servers #instances-error {
+ padding: 10px 12px;
+ margin-bottom: 12px;
+ background: var(--ec-danger-bg);
+ color: var(--ec-danger);
+ border-left: 2px solid var(--ec-danger);
+ border-radius: 2px;
+}
+#client-servers #instances-error p { margin: 0 0 6px; }
+#client-servers .plan-fieldset {
+ margin: 0;
+ padding: 0;
+ border: 0;
+ display: grid;
+ gap: 8px;
+}
+#client-servers .plan-fieldset legend {
+ font-size: 13px;
+ font-weight: 600;
+ color: var(--ec-ink);
+ padding: 0;
+ margin-bottom: 8px;
+}
+#client-servers .plan-list {
+ display: grid;
+ gap: 8px;
+}
+#client-servers .plan-option {
+ display: grid;
+ grid-template-columns: auto minmax(0, 1fr) auto;
+ gap: 10px;
+ align-items: center;
+ padding: 12px;
+ border: 1px solid var(--ec-control-line);
+ border-radius: 6px;
+ background: var(--ec-panel);
+ color: var(--ec-ink);
+ cursor: pointer;
+}
+#client-servers .plan-option:has(input:checked) {
+ border-color: var(--ec-accent-action);
+ box-shadow: inset 0 0 0 1px var(--ec-accent-action);
+}
+#client-servers .plan-option input {
+ width: 18px;
+ min-height: 18px;
+ height: 18px;
+ margin: 0;
+ accent-color: var(--ec-accent-action);
+}
+#client-servers .plan-name { font-weight: 600; }
+#client-servers .plan-copy { display: block; font-size: 12px; color: var(--ec-muted-panel); }
+#client-servers .plan-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#client-servers .create-summary {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 6px 14px;
+ padding: 12px;
+ border: 1px solid var(--ec-line);
+ border-radius: 6px;
+ color: var(--ec-muted-panel);
+ font-size: 13px;
+}
+#client-servers .create-summary span:first-child { color: var(--ec-ink); font-weight: 600; }
+#client-servers #create-instance,
+#client-servers #rename-instance { margin: 0; display: grid; gap: 16px; }
+#client-servers #create-instance[data-busy="true"] #create-submit { opacity: .6; }
+#client-servers #create-problem,
+#client-servers #rename-problem { color: var(--ec-danger); font-size: 13px; }
+#client-servers #create-problem:empty,
+#client-servers #rename-problem:empty { display: none; }
+@media (max-width: 520px) {
+ #client-servers .server-actions { max-width: none; grid-column: 1 / -1; justify-content: flex-start; }
+}

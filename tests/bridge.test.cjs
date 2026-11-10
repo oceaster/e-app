@@ -164,11 +164,20 @@ test('the bridge hands a renderer no token, and the server page',async()=>{
  assert.match(server,/bindSession:next=>ipcRenderer\.invoke\('client:handoff',next\)/);
  assert.match(server,/signOut:\(\)=>ipcRenderer\.invoke\('client:signout'\)/);
  assert.doesNotMatch(server,/company:signout/);
- // Both main-process handlers sit behind the existing main-frame guard, and neither can answer
- // a frame that is not the connected server's main frame.
+ // Both main-process handlers sit behind a guard, and that guard is the connected server's
+ // own origin: the chrome is a file:// document framing the instance, so the handoff is called
+ // FROM the framed page and `serverFrame` is the gate that admits exactly that frame. `remote`
+ // (main-frame only) is still the gate for device/media/build controls; neither handler can
+ // answer a request from any other origin.
  const main=fs.readFileSync(path.join(__dirname,'..','desktop','main.cjs'),'utf8');
- assert.match(main,/ipcMain\.handle\('client:handoff',\(event,next\)=>\{remote\(event\);return bindCompanySession\(next\);\}\)/);
- assert.match(main,/ipcMain\.handle\('client:signout',event=>\{remote\(event\);return endCompanySession\(\);\}\)/);
+ assert.match(main,/ipcMain\.handle\('client:handoff',\(event,next\)=>\{serverFrame\(event\);return bindCompanySession\(next\);\}\)/);
+ assert.match(main,/ipcMain\.handle\('client:signout',event=>\{serverFrame\(event\);return endCompanySession\(\);\}\)/);
+ // `serverFrame` really is the origin gate, not a pass: it requires a Company session, the
+ // connected window's own webContents, and the sending frame's origin equal to the server.
+ const guard=main.slice(main.indexOf('function serverFrame(event)'),main.indexOf('function serverFrame(event)')+900);
+ assert.match(guard,/company\?\.require\(\)/);
+ assert.match(guard,/event\.sender!==win\.webContents/);
+ assert.match(guard,/from!==config\.server/);
  // The token has exactly one door out of the main process, and it is the bridge's Bearer header.
  const exits=main.match(/credential\(\)/g)||[];
  assert.equal(exits.length,1);

@@ -6,6 +6,7 @@ const {HEADER,CLIENT,serverRequest,serverOrigin,externalURL,connectionLink,trust
 const updater=require('./updater.cjs');
 const bridge=require('./bridge.cjs');
 const {Connections}=require('./connections.cjs');
+const {Instances}=require('./instances.cjs');
 const {loadServerPage,showingFile}=require('./navigation.cjs');
 const shellAttach=require('./shell-attach.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
@@ -80,10 +81,19 @@ app.once('ready', ()=>boot('ready'));
 let activity=Date.now(),downloads=0,requests=new Set(),failures=0,captureGranted=false,restartOnClosed=false,pendingServer=null,restartingHidden=false;
 //: The PIN-cookie listener that attaches the connected window to the instance's shell (one per connection).
 let shellCookieListener=null;
-let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers',servers:{state:'idle',rows:[],error:'',limit:0,fallback:''}};
+let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers',servers:{state:'idle',rows:[],error:'',limit:0,fallback:''},
+ // THE ACCOUNT'S INSTANCES, and the plans a new one may be bought on. The instance plane is the
+ // account service's, so a service that has not shipped it yet is `available:false` — a
+ // capability fact, not an error, and the list is still drawn from the account's connections.
+ instances:{state:'idle',rows:[],error:'',available:true},
+ plans:{loaded:false,configured:false,mode:null,rows:[],error:''}};
 // The account-scoped list of e-servers (desktop/connections.cjs). `accountsOrigin` is the one
 // author of the API address - the vendored account client - and is read at initializeCompany.
 let accountsOrigin='';
+//: When the instance list was last re-read by the setup window regaining focus. A focus is a
+//: hint, not a reason to ask the service a question it answered a moment ago.
+let lastInstanceRefresh=0;
+const INSTANCE_FOCUS_MIN_MS=10000;
 let activeSession=null;
 let idleLock=null,idleTimer=null,idleCookieListener=null,buildWatch=null;
 //: The account's theme preference ('light'|'dark'|'system'|null), read from the account document
@@ -229,6 +239,110 @@ function connectionsClient(){
  return new Connections({origin:accountsOrigin,development,credential:companyToken});
 }
 function serve(next){state={...state,servers:{...state.servers,...next}};publish({});}
+// ── the account's INSTANCES (Owen, 2026-11-09) ───────────────────────────────────────────────
+// The first screen after sign-in is the instance menu, and this is its half of the account
+// service: the instances the account owns or belongs to, the plans a new one may be bought on,
+// and the four actions (create, rename, delete, leave). The transport is desktop/instances.cjs;
+// this process is where the Company token lives, so the renderer names an instance and never a
+// credential. `available:false` is the service saying it has not shipped the plane yet; the list
+// then falls back to the account's connections and the create button says why it cannot be used.
+function instancesClient(){
+ if(!accountsOrigin)throw Error('The Easter Company account service is not ready yet.');
+ return new Instances({origin:accountsOrigin,development,credential:companyToken});
+}
+function serveInstances(next){state={...state,instances:{...state.instances,...next}};publish({});}
+function servePlans(next){state={...state,plans:{...state.plans,...next}};publish({});}
+async function refreshInstances(){
+ serveInstances({state:'loading',error:''});
+ try{
+  const answer=await bounded(instancesClient().list(),SERVER_LIST_WATCHDOG_MS,'Your instances');
+  serveInstances({state:answer.instances.length?'ready':'empty',rows:answer.instances,error:'',available:true});
+  return {ok:true};
+ }catch(error){
+  if(error.code==='instances_unavailable'){
+   serveInstances({state:'empty',rows:[],error:'',available:false});
+   return {ok:false,error:error.message,available:false};
+  }
+  serveInstances({state:'error',rows:[],error:error.message||'Your instances could not be loaded.',available:true});
+  return {ok:false,error:error.message||'unreachable'};
+ }
+}
+// THE PLANS ARE READ WHEN THE CREATE PAGE IS OPENED, not on every list paint: a price list is
+// only useful to a person who is about to buy, and the catalogue is configuration that can be
+// absent. `configured:false` is the honest answer, and the page states it instead of offering a
+// plan it cannot sell.
+async function refreshPlans(){
+ servePlans({loaded:false,error:''});
+ try{
+  const answer=await bounded(instancesClient().plans(),SERVER_LIST_WATCHDOG_MS,'The instance plans');
+  servePlans({loaded:true,configured:answer.configured,mode:answer.mode,error:'',
+   rows:(answer.plans||[]).map(row=>({...row,price:priceLabel(row.monthlyPence,row.currency)}))});
+  return {ok:true};
+ }catch(error){
+  servePlans({loaded:true,configured:false,mode:null,rows:[],error:error.message||'The plans could not be loaded.'});
+  return {ok:false,error:error.message||'unreachable'};
+ }
+}
+/** The plan's price as the create page prints it. The amount is the service's; this only
+ *  formats it, and an amount it does not have is never invented. */
+function priceLabel(amount,currency){
+ if(!Number.isFinite(amount))return '';
+ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:currency||'GBP',
+  minimumFractionDigits:amount%100?2:0}).format(amount/100)+' / month';}catch{return '';}
+}
+async function createInstance({displayName,domain,plan}={}){
+ const answer=await instancesClient().create({displayName,domain,plan});
+ await refreshInstances();
+ // THE PAYMENT PAGE IS THE PERSON'S OWN BROWSER, never a window this app frames: the Company
+ // session and the card both stay where they belong. The instance exists as `pending` until
+ // Stripe's webhook confirms it, which is what the list will show on the next read.
+ if(answer.checkout){
+  if(!(await openExternal(answer.checkout)))return {ok:false,error:'The payment page could not be opened. Try again.'};
+ }
+ return {ok:true,instance:answer.instance,checkout:!!answer.checkout};
+}
+async function renameInstance(id,displayName){
+ const row=await instancesClient().rename(id,displayName);
+ await refreshInstances();
+ return {ok:true,instance:row};
+}
+async function deleteInstance(id){
+ const row=(state.instances.rows||[]).find(item=>item.id===id);
+ const name=row?row.displayName:'this instance';
+ const ends=row&&row.billing&&row.billing.currentPeriodEnd?new Date(row.billing.currentPeriodEnd):null;
+ const choice=await dialog.showMessageBox(setup||win||undefined,{type:'warning',buttons:['Cancel','Delete instance'],
+  defaultId:0,cancelId:0,message:'Delete '+name+'?',
+  detail:(ends&&Number.isFinite(ends.getTime())
+   ?'Its plan is cancelled now and the instance stays active until the paid period ends on '+ends.toLocaleDateString()+'.'
+   :'Its plan is cancelled at the end of the paid period, and the instance stays active until then.')+
+   ' This cannot be undone.'});
+ if(choice.response!==1)return {ok:false,cancelled:true};
+ const answer=await instancesClient().remove(id);
+ // A deleted instance is no longer a place to connect to either: drop the local row too.
+ if(answer.deleted&&row)await removeConnectionRow(row.origin).catch(()=>{});
+ await refreshInstances();
+ return {ok:true,deleted:answer.deleted,deletion:answer.deletion,instance:answer.instance};
+}
+async function leaveInstance(id){
+ const row=(state.instances.rows||[]).find(item=>item.id===id);
+ const name=row?row.displayName:'this instance';
+ const choice=await dialog.showMessageBox(setup||win||undefined,{type:'warning',buttons:['Cancel','Leave'],
+  defaultId:0,cancelId:0,message:'Leave '+name+'?',
+  detail:'Your records on it and your access to it are removed. The instance itself is not changed.'});
+ if(choice.response!==1)return {ok:false,cancelled:true};
+ await instancesClient().leave(id);
+ if(row)await removeConnectionRow(row.origin).catch(()=>{});
+ await refreshInstances();
+ return {ok:true};
+}
+/** Remove the account's connection row for an origin, if it has one. Best effort: the instance
+ *  action already succeeded, and a stale local row must not turn it into an error sentence. */
+async function removeConnectionRow(origin){
+ const row=(state.servers.rows||[]).find(item=>item.origin===origin);
+ if(!row)return;
+ await connectionsClient().remove(row.id);
+ await refreshServers();
+}
 // ── the account's theme, and this window's first paint (ticket c28be1de) ─────────────────────
 // Owen, 2026-11-05: "user settings should be global and the same rules apply across all
 // interfaces". The account's own settings document is the store, every interface reads it, and the
@@ -315,7 +429,7 @@ async function openServers(){
  // wrong palette while the person looks at them.
  void readAccountTheme();
  publish({phase:'setup',view:'servers',title:'Your e-servers.',message:'Choose an e-server to connect to. It will ask for its own PIN.',error:''});
- setupWindow();await refreshServers();
+ setupWindow();await Promise.all([refreshServers(),refreshInstances()]);
 }
 function stopIdleLock(){
  if(idleTimer)clearInterval(idleTimer);idleTimer=null;
@@ -786,7 +900,7 @@ function serverFrame(event){
 // default the preload runs only in the main frame, so every framed page fell back to the sign-in
 // form (measured 2026-11-09: `bridge: undefined` inside /account). Subframe preloads are isolated
 // and sandboxed, and every bridge handler still checks the frame's origin in the main process.
-const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,nodeIntegrationInSubFrames:true,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,allowRunningInsecureContent:false});
+const preferences=(ses)=>({session:ses,preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,webviewTag:false,nodeIntegrationInSubFrames:true,allowRunningInsecureContent:false});
 function setupWindow(){
  if(setup&&!setup.isDestroyed()){setup.show();return setup;}
  setup=new BrowserWindow({width:680,height:860,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,webPreferences:preferences(session.fromPartition('setup'))});
@@ -807,6 +921,16 @@ function setupWindow(){
  // reload, so the order of the window and the read no longer decides the screen.
  setup.webContents.on('did-finish-load',()=>publish({}));
  setup.webContents.on('will-navigate',(event,url)=>{if(url!==pathToFileURL(shellFile).href)event.preventDefault();});
+ // COMING BACK FROM STRIPE REFRESHES THE MENU. The payment page is the person's own browser,
+ // so the app is unfocused while they pay; a focus that finds the setup window is the one moment
+ // the list is certainly worth re-reading. Bounded, so alt-tabbing is not a request stream.
+ setup.on('focus',()=>{
+  if(!company?.authorized())return;
+  const now=Date.now();
+  if(now-lastInstanceRefresh<INSTANCE_FOCUS_MIN_MS)return;
+  lastInstanceRefresh=now;
+  void refreshInstances();
+ });
  setup.on('closed',()=>{setup=null;if(!win&&!quitting)app.quit();});return setup;
 }
 function persistent(){return safeStorage.isEncryptionAvailable()&&(!safeStorage.getSelectedStorageBackend||safeStorage.getSelectedStorageBackend()!=='basic_text');}
@@ -980,8 +1104,10 @@ async function connect(){
  });
  current.on('closed',()=>{if(win===current)stopFeed('the window closed');if(win===current)win=null;if(restartOnClosed){void (async()=>{if(pendingServer){
   config.server=pendingServer;
-  // The person chose a server, so the relaunch opens THAT server rather than the list again.
-  config.openOnStart=pendingServer;}await save();restart();})().catch(error=>explain('Could not restart e-server',error));}});
+  // THE RELAUNCH OPENS THE INSTANCE MENU TOO, never the server it just switched from: the menu
+  // is the first screen of every signed-in boot (Owen, 2026-11-09), and the account's own list
+  // already offers the server it chose. A deep link is the one launch that connects directly.
+  }await save();restart();})().catch(error=>explain('Could not restart e-server',error));}});
  current.on('resize',()=>{if(!current.isMaximized()&&!current.isMinimized()){config.bounds=current.getBounds();void save();}});
  current.webContents.on('will-prevent-unload',async event=>{
   const result=await dialog.showMessageBox(current,{type:'warning',buttons:['Stay','Leave'],defaultId:0,cancelId:0,message:'This page has unsaved work or an active transfer. Leave anyway?'});
@@ -1095,14 +1221,20 @@ async function start(){
  // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
  ipcMain.handle('client:connect',(event,value)=>{local(event);company.require();return connectTo(value);});
  ipcMain.handle('client:view',(event,value)=>{
-  local(event);if(!['servers','add'].includes(value))throw Error('Unknown view.');
+  local(event);if(!['servers','add','create','rename'].includes(value))throw Error('Unknown view.');
   // The heading is the view's, and it is published from here so a second renderer (or a resume)
   // cannot show one view's title over another view's content.
-  // Both sentences are here, so returning to the list never leaves the add view's instruction
+  // Every sentence is here, so returning to the list never leaves another view's instruction
   // standing over the rows (measured: it did, in the same window).
-  publish({view:value,
-   title:value==='add'?'Add an e-server.':'Your e-servers.',
-   message:value==='add'?'Type the HTTPS address of an e-server you can reach.':'Choose an e-server to connect to. It will ask for its own PIN.'});
+  const copy={
+   servers:['Your e-servers.','Choose an e-server to connect to. It will ask for its own PIN.'],
+   add:['Add an e-server.','Type the HTTPS address of an e-server you can reach.'],
+   create:['Create a new e-server.','Choose a display name, a domain and a plan. The plan is paid through Stripe.'],
+   rename:['Rename your e-server.','Choose the display name other people will see.']}[value];
+  publish({view:value,title:copy[0],message:copy[1]});
+  // THE PLANS ARE READ WHEN THE PAGE NEEDS THEM, not on every list paint: a price list only
+  // matters to a person about to buy, and the catalogue may legitimately be absent.
+  if(value==='create')void refreshPlans();
   return state;
  });
  // The list's four calls answer, they never reject into the page. `local(event)` still throws for
@@ -1114,6 +1246,14 @@ async function start(){
  ipcMain.handle('client:servers-add',answered(payload=>addServer(payload||{})));
  ipcMain.handle('client:servers-remove',answered((id,label)=>removeServer(String(id||''),String(label||''))));
  ipcMain.handle('client:servers-use',answered(async id=>{await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};}));
+ // THE INSTANCE MENU'S OWN CALLS. Same door, same answer shape: a refusal is a sentence the view
+ // prints, never an IPC rejection wrapped in Electron's plumbing.
+ ipcMain.handle('client:instances-refresh',answered(()=>refreshInstances()));
+ ipcMain.handle('client:instance-plans',answered(()=>refreshPlans()));
+ ipcMain.handle('client:instance-create',answered(payload=>createInstance(payload||{})));
+ ipcMain.handle('client:instance-rename',answered((id,name)=>renameInstance(String(id||''),String(name||''))));
+ ipcMain.handle('client:instance-delete',answered(id=>deleteInstance(String(id||''))));
+ ipcMain.handle('client:instance-leave',answered(id=>leaveInstance(String(id||''))));
  // THE PERMISSION SCREEN'S TWO CALLS (desktop/preload.cjs wires them, so Diana's document carries
  // no script of ours): its answer, and the state to paint. Both are guarded to that one file.
  ipcMain.handle('client:permission-state',event=>{permissionFrame(event);return {...state,permission:permissionState};});
@@ -1217,10 +1357,13 @@ async function start(){
  boot('update-check-start');
  if(await checkUpdate(true))return;
  boot('update-check-done');
- // A relaunch that a server choice caused opens that server; every other start opens the list.
- const open=config.openOnStart;
- if(open&&open===config.server){delete config.openOnStart;await save();await connect();}
- else if(company?.authorized())await afterCompany();else await connect();
+ // THE INSTANCE MENU IS ALWAYS THE FIRST SCREEN OF A SIGNED-IN LAUNCH. Owen, 2026-11-09:
+ // "e-server instance selection menu should always be the first screen a signed in user sees
+ // once the app has booted or the user just signed in." So the remembered server is a memory the
+ // list offers, never a place the app opens on its own. `openOnStart` is retired here, and an
+ // older settings file that still carries it is cleaned on the way in.
+ if(config.openOnStart){delete config.openOnStart;await save();}
+ if(company?.authorized())await afterCompany();else await connect();
  boot('first-window-requested');
  schedule();
 }

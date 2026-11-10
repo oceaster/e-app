@@ -2,18 +2,23 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
 <title>e-server</title><link rel="stylesheet" href="vendor/launcher/theme/theme.css"><link rel="stylesheet" href="vendor/launcher/account/account.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css"><link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css"><link rel="stylesheet" href="vendor/launcher/theme/account-control.css"><link rel="stylesheet" href="connections.css"><link rel="stylesheet" href="connections-adapter.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="vendor/launcher/theme/shell-frame.css"><link rel="stylesheet" href="shell-bar-adapter.css"><script src="vendor/launcher/theme/theme-early.js"></script><script src="theme-shell.js"></script><script src="shell.mjs" type="module"></script></head>
-<body class="account">
+<body class="account" data-account-state="signed-out">
 <!-- THE PRE-CONNECTION BAR, and it is Diana's own fragment
      (/home/diana/Documents/handoff/surface-pass/shell-frame.html): the same 56px row and the
-     same account pill at x=12 y=12 that the connected shell will show, with NOTHING on the
+     same account pill at x=12 y=12 that the connected chrome shows, with NOTHING on the
      right — there is no instance here whose state could be read, so no orb, no mark, no menu
      and no focusable placeholder. Her fragment's {{ACCOUNT_PILL_INNER}} slot holds the
      existing account control's INNER identity markup (the launcher's face: picture, else the
-     first letter), never the control itself; desktop/shell-bar-adapter.css carries its paint,
-     desktop/shell.mjs fills it from the account the main process publishes. The bar is
-     markup here and not a second copy of the connected one: the connected bar arrives with
-     the instance's own /shell document (ticket f1bdcd46). -->
-<header class="sf-bar" aria-label="Application"></header>
+     first letter), never the control itself; desktop/shell-bar-adapter.css carries its paint
+     and its signed-out glass, desktop/shell.mjs fills it from the account the main process
+     publishes. The connected bar arrives with the e-app's own chrome document
+     (desktop/chrome.html, ticket a3f30715), never from an e-server route. -->
+<header class="sf-bar" aria-label="Application">
+ <div class="sf-left">
+  <button class="sf-control sf-account web-account-face-mark" id="account-pill" type="button" data-action="account" aria-label="Account" title="Account"><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span></button>
+ </div>
+</header>
+<a class="account-skip" href="#account-root">Skip to account</a>
 <main class="account-main">
 <div class="account-panel" id="account-panel" data-busy="false">
 <p class="account-overline">EASTER COMPANY</p>
@@ -30,10 +35,40 @@
 <p class="client-copy" id="servers-copy">Choose an e-server to connect to. It will ask for its own PIN.</p>
 <p class="client-copy" id="servers-status" role="status" aria-live="polite"></p>
 <p id="servers-loading" class="servers-loading" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+<p class="client-copy instance-note" id="instances-unavailable" hidden>Instance management is not available on this account service yet. An e-server you added still connects.</p>
+<div class="server-problem" id="instances-error" hidden><p id="instances-error-text"></p><button id="instances-retry" type="button" class="account-provider">Try again</button></div>
 <ul class="server-list" id="server-list"></ul>
 <p class="client-copy" id="servers-empty" hidden></p>
 <div class="server-problem" id="servers-error" hidden><p id="servers-error-text"></p><div class="client-actions"><button id="servers-retry" type="button" class="account-provider">Try again</button><button id="servers-fallback" type="button" class="account-provider" hidden></button></div></div>
-<div class="client-actions"><button id="server-add" type="button" class="company-submit">Add an e-server</button></div>
+<div class="client-actions" id="servers-actions"><button id="instance-create" type="button" class="company-submit">Create a new e-server</button><button id="server-add" type="button" class="account-provider">Add an existing e-server</button></div>
+</section>
+<section id="create-instance-view" hidden>
+<div class="company-signin">
+<form id="create-instance" data-busy="false" novalidate>
+<label for="create-name">Display name</label>
+<input id="create-name" type="text" maxlength="80" required autocomplete="off" spellcheck="false" placeholder="Cy">
+<label for="create-domain">Domain</label>
+<input id="create-domain" type="text" required autocomplete="off" spellcheck="false" placeholder="cy.instance.easter.company">
+<p class="client-hint" id="create-domain-hint">The instance's own address, as a host name. It becomes https://&lt;domain&gt;.</p>
+<fieldset class="plan-fieldset" id="plan-fieldset"><legend>Plan</legend><div class="plan-list" id="plan-list"></div><p class="client-copy" id="plan-empty" hidden></p><button id="plan-retry" type="button" class="account-provider" hidden>Reload plans</button></fieldset>
+<div class="create-summary" id="create-summary" hidden><span id="create-summary-name"></span><span id="create-summary-plan"></span><span id="create-summary-price"></span></div>
+<button type="submit" class="company-submit" id="create-submit">Create and pay</button>
+<button id="create-cancel" type="button" class="account-provider">Back</button>
+<p class="client-problem" id="create-problem" role="alert"></p>
+<p class="client-copy" id="create-wait" role="status" aria-live="polite" hidden>Finish the payment in your browser. The instance appears here once it is confirmed.</p>
+</form>
+</div>
+</section>
+<section id="rename-instance-view" hidden>
+<div class="company-signin">
+<form id="rename-instance" data-busy="false" novalidate>
+<label for="rename-name">Display name</label>
+<input id="rename-name" type="text" maxlength="80" required autocomplete="off" spellcheck="false">
+<button type="submit" class="company-submit" id="rename-submit">Save name</button>
+<button id="rename-cancel" type="button" class="account-provider">Back</button>
+<p class="client-problem" id="rename-problem" role="alert"></p>
+</form>
+</div>
 </section>
 <section id="add-server-view" hidden>
 <div class="company-signin">

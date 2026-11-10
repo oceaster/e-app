@@ -2,11 +2,17 @@
 
 The desktop frontend for an e-server you own or have permission to access. Windows
 10+ (x64), Ubuntu, Arch Linux and Linux AppImage (x86_64). macOS and mobile are not
-offered. Sign in to your global Easter Company account first, then choose from the
-e-servers saved to that account - add one by its HTTPS origin, remove one you no longer
-use - and the server you pick asks for its PIN. Private network/VPN access, the PIN and
-your Easter Company account are still required. No server address, PIN, Company token or
-backend source is bundled into releases.
+offered. Sign in to your global Easter Company account first: the client then always opens
+the account's e-server instance menu, where every instance carries a display name and a
+domain. An owner renames or deletes an instance there - deleting cancels the plan at the
+end of the paid period, so the instance stays active until then - and a member leaves it,
+which removes that account's records on it and its row from that person's menu. A new
+instance is created on a full page that offers the service's plans and opens Stripe
+Checkout in the operating system browser; the service sells from its test catalogue until
+it is switched to production. An e-server whose address you hold can still be added by its
+HTTPS origin and removed again. The server you open asks for its PIN. Private network/VPN
+access, the PIN and your Easter Company account are still required. No server address, PIN,
+Company token or backend source is bundled into releases.
 
 `npm ci`, `npm test`, `npm start`. `npm run dist:linux` builds AppImage, DEB and
 pacman; `npm run dist:windows` builds an NSIS installer on Windows. `npm run pack:debug` builds a support-only

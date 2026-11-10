@@ -13,7 +13,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 
 const ROOT=path.resolve(__dirname,'..');
-const FILES=['desktop/main.cjs','desktop/preload.cjs','desktop/shell.mjs','desktop/connections.cjs','desktop/bridge.cjs','desktop/security.cjs','desktop/updater.cjs','desktop/navigation.cjs','desktop/build-rev.cjs'];
+const FILES=['desktop/main.cjs','desktop/preload.cjs','desktop/shell.mjs','desktop/connections.cjs','desktop/instances.cjs','desktop/bridge.cjs','desktop/security.cjs','desktop/updater.cjs','desktop/navigation.cjs','desktop/build-rev.cjs'];
 
 /** Every name this file declares at its top level (module or function scope root). */
 function declaredNames(source){

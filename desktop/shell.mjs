@@ -67,15 +67,27 @@ function drawAccountPill(account){
  const pill=$('account-pill');if(!pill)return;
  const name=account&&typeof account.name==='string'?account.name.trim():'';
  const signedIn=!!account;
- // NO PERSON, NO PILL. The pre-connection bar carried the app's mark as a stand-in for a user
- // when nobody was signed in; it read as a pretend account control (measured 2026-11-09). The
- // pill exists only for an account, and the sign-in options own the signed-out screen.
- pill.hidden=!signedIn;
+ // THE BAR'S MOOD IS THE ACCOUNT'S. Owen, 2026-11-09: the bar is glassy while nobody is
+ // signed in. The document carries that one fact as an attribute (the paint is
+ // desktop/shell-bar-adapter.css), so a sign-in or a sign-out repaints the row in the frame
+ // that learns it and no second state lives in this file.
+ document.body.dataset.accountState=signedIn?'signed-in':'signed-out';
+ // THE PILL IS PRESENT IN BOTH MOODS, AND IT MEANS DIFFERENT THINGS. Signed in it is the
+ // account's face and name. Signed out it is the app's own mark on the glass, with the one
+ // accessible name "Account": pressing it puts the cursor on the sign-in options (showAccount),
+ // which is what the site's own account control does. It never prints a name it does not have.
+ pill.hidden=false;
+ pill.classList.toggle('web-account-face-mark',!signedIn);
+ document.body.dataset.accountState=signedIn?'signed-in':'signed-out';
  if(!signedIn){
   pill.dataset.state='signed-out';
-  pill.setAttribute('aria-label','Account');pill.title='';
+  pill.setAttribute('aria-label','Account');pill.title='Account';
   const face=pill.querySelector('.web-account-face');
-  if(face)face.classList.remove('web-account-face-mark');
+  if(face)face.classList.add('web-account-face-mark');
+  const initial=pill.querySelector('.web-account-initial');
+  if(initial)initial.textContent='';
+  const picture=pill.querySelector('.web-account-picture');
+  if(picture){picture.removeAttribute('src');picture.hidden=true;}
   return;
  }
  // Identity, not a label: the full name (with no second line, no badge and no count) in both the
@@ -223,85 +235,287 @@ function hostOf(origin){try{return new URL(origin).host}catch{return String(orig
 // What changed, said once, politely: the rows are rebuilt on a list change and a screen reader
 // has no way to notice that on its own.
 function say(sentence){$('servers-status').textContent=sentence||'';}
-function rowNode(row){
- const item=document.createElement('li');item.className='server-row';item.dataset.origin=row.origin;
+// ONE MENU, TWO SOURCES, AND THE INSTANCE IS THE ROW. Owen, 2026-11-09: the instance menu is the
+// first screen after sign-in, and every instance carries a display name and a domain. The account
+// service owns the instances; the account's connections list still owns an address somebody typed.
+// A row is keyed by HOSTNAME, so one e-server is one row even when both sources know it, and a
+// service that has not shipped the instance plane degrades to today's list rather than a dead end.
+function hostnameOf(origin){try{return new URL(origin).hostname.toLowerCase()}catch{return String(origin||'').toLowerCase()}}
+function mergeRows(state){
+ const rows=new Map();
+ for(const row of (state.servers?.rows||[])){
+  const key=hostnameOf(row.origin);
+  rows.set(key,{connection:row,instance:null,origin:row.origin});
+ }
+ for(const inst of (state.instances?.rows||[])){
+  const key=String(inst.domain||'').toLowerCase();
+  const entry=rows.get(key)||{connection:null,instance:null,origin:inst.origin};
+  entry.instance=inst;entry.origin=inst.origin;rows.set(key,entry);
+ }
+ // OWNED FIRST, THEN MEMBERSHIPS, THEN ADDRESSES ONLY THIS MACHINE KNOWS. The sort is stable, so
+ // within a group the service's own order (created soonest first) survives.
+ const rank=entry=>entry.instance?(entry.instance.owned?0:1):2;
+ return [...rows.values()].sort((a,b)=>rank(a)-rank(b));
+}
+function instanceDay(value){
+ if(!value)return '';
+ const at=new Date(value);if(!Number.isFinite(at.getTime()))return '';
+ try{return at.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});}catch{return '';}
+}
+/** The quiet sentence under a row: what the plan is doing, if anything. */
+function billingLine(inst){
+ if(!inst)return '';
+ if(inst.deletion?.scheduledFor)return 'Deletes when the paid period ends on '+instanceDay(inst.deletion.scheduledFor);
+ if(inst.billing?.cancelAtPeriodEnd&&inst.billing.currentPeriodEnd)return 'Plan ends on '+instanceDay(inst.billing.currentPeriodEnd);
+ if(inst.billing?.status==='pending')return 'Waiting for the plan payment';
+ if(inst.billing?.status==='past_due')return 'Plan payment is past due';
+ return inst.plan?.name?inst.plan.name:'';
+}
+function rowNode(entry){
+ const inst=entry.instance,conn=entry.connection;
+ const label=inst?inst.displayName:(conn?.label||hostOf(entry.origin));
+ const where=inst?inst.domain:hostOf(entry.origin);
+ const item=document.createElement('li');item.className='server-row';item.dataset.origin=entry.origin;
+ if(inst)item.dataset.instance=inst.id;
  const choose=document.createElement('button');choose.type='button';choose.className='server-connect';
- const name=document.createElement('span');name.className='server-name';name.textContent=row.label||hostOf(row.origin);
- // The address is the quiet second line - unless it is already the row's name, in which case
- // printing it twice says nothing and looks like a mistake (measured on a row whose label the
- // service derived from its host).
+ const name=document.createElement('span');name.className='server-name';name.textContent=label;
  choose.append(name);
- if(name.textContent!==hostOf(row.origin)){const where=document.createElement('span');where.className='server-origin';where.textContent=hostOf(row.origin);choose.append(where);}
- choose.onclick=()=>action(()=>bridge.connect(row.origin));
- const remove=document.createElement('button');remove.type='button';remove.className='server-remove';
- remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+(row.label||hostOf(row.origin)));
- remove.onclick=()=>action(async()=>{await bridge.removeServer(row.id,row.label);say('Removed '+(row.label||hostOf(row.origin))+' from your e-servers.');});
- item.append(choose,remove);return item;
+ // THE DOMAIN IS ALWAYS THE SECOND LINE FOR AN INSTANCE (it is the identifier the requirement
+ // names); for an address-only row it appears only when it is not already the name, exactly as
+ // before.
+ if(inst||name.textContent!==hostOf(entry.origin)){const line=document.createElement('span');line.className='server-origin';line.textContent=where;choose.append(line);}
+ if(inst){const role=document.createElement('span');role.className='server-role';role.dataset.role=inst.role;role.textContent=inst.owned?'Owner':'Member';choose.append(role);}
+ const billing=billingLine(inst);
+ if(billing){const line=document.createElement('span');line.className='server-billing';line.textContent=billing;choose.append(line);}
+ choose.onclick=()=>action(()=>bridge.connect(entry.origin));
+
+ const actions=document.createElement('div');actions.className='server-actions';
+ if(inst&&inst.owned){
+  const rename=document.createElement('button');rename.type='button';rename.className='server-rename';
+  rename.textContent='Rename';rename.setAttribute('aria-label','Rename '+label);
+  rename.onclick=()=>{startRename(inst);};
+  const remove=document.createElement('button');remove.type='button';remove.className='server-delete';
+  remove.textContent='Delete';remove.setAttribute('aria-label','Delete '+label);
+  remove.onclick=()=>action(async()=>{
+   const answer=await bridge.deleteInstance(inst.id);
+   if(!answer||!answer.ok)return;
+   say(answer.deleted?'Deleted '+label+'.':'Deleting '+label+' when its paid period ends'+(answer.deletion?.scheduledFor?' on '+instanceDay(answer.deletion.scheduledFor):'')+'.');
+  });
+  actions.append(rename,remove);
+ }else if(inst){
+  const leave=document.createElement('button');leave.type='button';leave.className='server-leave';
+  leave.textContent='Leave';leave.setAttribute('aria-label','Leave '+label);
+  leave.onclick=()=>action(async()=>{
+   const answer=await bridge.leaveInstance(inst.id);
+   if(answer&&answer.ok)say('You left '+label+'.');
+  });
+  actions.append(leave);
+ }
+ // A connection row whose instance the account service does not know (or an instance-free list)
+ // keeps the only action it has ever had: remove it from this account's address list.
+ if(conn&&!inst){
+  const remove=document.createElement('button');remove.type='button';remove.className='server-remove';
+  remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+label);
+  remove.onclick=()=>action(async()=>{await bridge.removeServer(conn.id,conn.label);say('Removed '+label+' from your e-servers.');});
+  actions.append(remove);
+ }
+ if(actions.childElementCount)item.append(choose,actions);else item.append(choose);
+ return item;
 }
 function drawServers(state,shown){
- const list=boundedList(state.servers||{state:'idle',rows:[]});
+ const servers=boundedList(state.servers||{state:'idle',rows:[]});
+ const instances=state.instances||{state:'idle',rows:[],available:true};
  $('client-servers').hidden=!shown;
  if(!shown)return;
  watchLoading();
- $('client-servers').dataset.state=list.state||'idle';
- const adding=state.view==='add';
- $('servers').hidden=adding;$('add-server-view').hidden=!adding;
- // The rows are rebuilt only when the list they came from changed, so a keystroke in the add
- // form or a publish from the updater cannot move the person's focus out of a row.
- const key=JSON.stringify((list.rows||[]).map(row=>[row.id,row.label,row.origin]));
+ const rows=mergeRows({servers,instances});
+ // THE VISIBLE STATE is the menu's, not the connections list's: an account whose instances exist
+ // but whose address list is empty is a list with rows, not an empty pane.
+ const stateName=rows.length?'ready':
+  (servers.state==='error'?'error':servers.state==='loading'?'loading':'empty');
+ $('client-servers').dataset.state=stateName;
+ // The rows are rebuilt only when the list they came from changed, so a keystroke in a form or a
+ // publish from the updater cannot move the person's focus out of a row.
+ const key=JSON.stringify(rows.map(entry=>[entry.origin,entry.instance?.id||'',entry.instance?.displayName||'',
+  entry.instance?.role||'',entry.instance?.billing?.status||'',entry.connection?.label||'']));
  if(key!==drawn){
   drawn=key;
-  $('server-list').replaceChildren(...(list.rows||[]).map(rowNode));
-  const previous=$('server-list').getAttribute('aria-busy');void previous;
+  $('server-list').replaceChildren(...rows.map(rowNode));
  }
- $('servers-empty').hidden=list.state!=='empty';
- $('servers-empty').textContent='No e-servers yet. Add the address of one you can reach.';
- $('servers-error').hidden=list.state!=='error';
- $('servers-error-text').textContent=list.state==='error'?(list.error||'Your e-servers could not be loaded.'):'';
- $('servers-retry').hidden=list.state!=='error';
- const fallback=list.state==='error'?list.fallback||'':'';
+ const view=state.view||'servers';
+ $('servers').hidden=view!=='servers';
+ $('add-server-view').hidden=view!=='add';
+ $('create-instance-view').hidden=view!=='create';
+ $('rename-instance-view').hidden=view!=='rename';
+ $('servers-empty').hidden=stateName!=='empty';
+ $('servers-empty').textContent='No e-servers yet. Create a new one, or add the address of one you can reach.';
+ $('servers-error').hidden=servers.state!=='error';
+ $('servers-error-text').textContent=servers.state==='error'?(servers.error||'Your e-servers could not be loaded.'):'';
+ $('servers-retry').hidden=servers.state!=='error';
+ const fallback=servers.state==='error'?servers.fallback||'':'';
  $('servers-fallback').hidden=!fallback;
  $('servers-fallback').textContent=fallback?'Connect to '+hostOf(fallback)+' instead':'';
- $('server-add').hidden=list.state==='loading'||list.state==='error';
- // A WAIT IS VISIBLE, IN DIANA'S WORDS AND HER LAYOUT (/home/diana/Desktop/servers-loading.css,
- // NOTES.md: "Loading your e-servers…", one form immediately, no spinner, no second sentence, no
- // timer of its own). The region exists so a person never sees a bare pane; the CSS owns how it
- // paints, this only says which state it is in and writes the sentence ONCE on entry, because a
- // rewritten live region announces itself again on every unrelated publication.
- const loading=list.state==='loading';
- // NULL-SAFE ON PURPOSE: measure-checked, a shell document without this node used to throw here
- // and take the whole list down with it (a partial update, or a page older than this script). A
- // missing wait line must cost the words, never the list.
+ // THE INSTANCE PLANE'S OWN TWO ANSWERS. `available:false` is the service saying it has not
+ // shipped it: a capability sentence, not an error, and the create button says why it is gone.
+ const unavailable=instances.available===false;
+ $('instances-unavailable').hidden=!unavailable;
+ const instanceProblem=instances.state==='error';
+ $('instances-error').hidden=!instanceProblem;
+ $('instances-error-text').textContent=instanceProblem?(instances.error||'Your instances could not be loaded.'):'';
+ $('server-add').hidden=servers.state==='loading'||servers.state==='error';
+ const create=$('instance-create');
+ create.hidden=unavailable||instanceProblem||servers.state==='loading';
+ create.textContent='Create a new e-server';
+ $('servers-actions').hidden=$('server-add').hidden&&create.hidden;
+ // A WAIT IS VISIBLE, IN DIANA'S WORDS AND HER LAYOUT. Unchanged from the connections list: the
+ // wait belongs to the address read, and it ends when that read does.
+ const loading=servers.state==='loading'&&!rows.length;
  const line=$('servers-loading');
  if(line){
   if(loading&&line.hidden){
    line.textContent='Loading your e-servers…';
-   // Focus never stays on a control that is being hidden: Retry and the rows are gone in this
-   // state, so a keyboard user who pressed Retry parks on the wait itself (Diana's NOTES.md).
    if(document.activeElement?.id==='servers-retry'){line.tabIndex=-1;line.focus();parkedFocus=true;}
   }
   if(!loading&&!line.hidden){line.textContent='';}
   line.hidden=!loading;
  }
- $('servers-copy').hidden=list.state==='error'||loading;
+ $('servers-copy').hidden=stateName==='error'||loading;
  $('servers-copy').textContent=state.message||'Choose an e-server to connect to. It will ask for its own PIN.';
- if(adding&&!document.activeElement?.closest('#add-server'))setTimeout(()=>$('add-origin').focus(),0);
- // THE PARKED FOCUS LANDS SOMEWHERE REAL when the wait has settled: the first row to connect to,
- // Add for an empty account, or Retry for a refusal. Nothing else takes it.
+ if(view==='add'&&!document.activeElement?.closest('#add-server'))setTimeout(()=>$('add-origin').focus(),0);
+ if(view==='create')drawCreate(state);
+ if(view==='rename')drawRename(state);
  if(parkedFocus&&!loading){
   parkedFocus=false;
-  const target=list.state==='error'?$('servers-retry'):(list.state==='empty'?$('server-add'):$('server-list').querySelector('.server-connect'));
+  const target=servers.state==='error'?$('servers-retry'):(rows.length?$('server-list').querySelector('.server-connect'):($('instance-create').hidden?$('server-add'):$('instance-create')));
   if(target&&!target.hidden)target.focus();
  }
 }
 function focusRow(origin){
  const row=origin&&[...$('server-list').children].find(item=>item.dataset.origin===origin);
- if(row)row.querySelector('.server-connect').focus();else $('server-add').focus();
+ if(row)row.querySelector('.server-connect').focus();
+ else if(!$('instance-create').hidden)$('instance-create').focus();
+ else $('server-add').focus();
+}
+// ── the create page ──────────────────────────────────────────────────────────────────────
+// THE PLAN LIST IS THE SERVICE'S. This file never invents a plan, a price or a currency: it draws
+// the rows the account service returned and sends back the key the person chose. When the service
+// has no catalogue the page says so and the button cannot be pressed — the honest failure the
+// whole transport is written for.
+let chosenPlan='';
+function moneyLabel(plan){return plan.price||(Number.isFinite(plan.monthlyPence)
+ ?(plan.monthlyPence/100).toFixed(plan.monthlyPence%100?2:0)+' '+(plan.currency||''):'');}
+function drawCreate(state){
+ const plans=state.plans||{loaded:false,configured:false,rows:[]};
+ const list=$('plan-list');
+ const key=JSON.stringify((plans.rows||[]).map(plan=>[plan.key,plan.name,plan.price,plan.monthlyPence,plan.currency]));
+ if(list.dataset.key!==key||!list.childElementCount){
+  list.dataset.key=key;
+  list.replaceChildren(...(plans.rows||[]).map(plan=>{
+   const option=document.createElement('label');option.className='plan-option';
+   const input=document.createElement('input');input.type='radio';input.name='plan';input.value=plan.key;
+   input.checked=plan.key===chosenPlan;
+   input.onchange=()=>{chosenPlan=plan.key;drawSummary(state);};
+   const copy=document.createElement('span');
+   const name=document.createElement('span');name.className='plan-name';name.textContent=plan.name;
+   copy.append(name);
+   if(plan.description){const detail=document.createElement('span');detail.className='plan-copy';detail.textContent=plan.description;copy.append(detail);}
+   const price=document.createElement('span');price.className='plan-price';price.textContent=moneyLabel(plan);
+   option.append(input,copy,price);
+   return option;
+  }));
+  if(!chosenPlan&&plans.rows?.length)chosenPlan=plans.rows[0].key;
+  for(const input of list.querySelectorAll('input'))input.checked=input.value===chosenPlan;
+ }
+ const empty=$('plan-empty');
+ if(!plans.loaded){empty.hidden=false;empty.textContent='Loading plans…';}
+ else if(plans.error){empty.hidden=false;empty.textContent=plans.error;}
+ else if(!plans.configured){empty.hidden=false;empty.textContent='Plans are not available on this service yet, so a new instance cannot be paid for.';}
+ else if(!(plans.rows||[]).length){empty.hidden=false;empty.textContent='No plans are offered right now.';}
+ else empty.hidden=true;
+ $('plan-retry').hidden=!(plans.loaded&&plans.error);
+ const ready=plans.loaded&&plans.configured&&(plans.rows||[]).length>0&&!!chosenPlan;
+ $('create-submit').disabled=!ready;
+ $('plan-fieldset').hidden=!(plans.rows||[]).length&&plans.loaded&&!plans.error;
+ if(!document.activeElement?.closest('#create-instance'))setTimeout(()=>$('create-name').focus(),0);
+ drawSummary(state);
+}
+function drawSummary(state){
+ const name=$('create-name').value.trim(),domain=$('create-domain').value.trim();
+ const plan=(state.plans?.rows||[]).find(row=>row.key===chosenPlan);
+ $('create-summary').hidden=!(name||domain||plan);
+ $('create-summary-name').textContent=name||'';
+ $('create-summary-plan').textContent=plan?plan.name:'';
+ $('create-summary-price').textContent=plan?moneyLabel(plan):'';
+}
+// ── the rename page ──────────────────────────────────────────────────────────────────────
+let renaming=null;
+function startRename(inst){
+ renaming={id:inst.id,name:inst.displayName};
+ $('rename-name').value=inst.displayName;
+ $('rename-problem').textContent='';
+ void bridge.view('rename');
+}
+function drawRename(state){
+ if(!renaming){void bridge.view('servers');return;}
+ if($('rename-name').value===''||$('rename-name').dataset.instance!==renaming.id){
+  $('rename-name').value=renaming.name;
+  $('rename-name').dataset.instance=renaming.id;
+ }
+ if(!document.activeElement?.closest('#rename-instance'))setTimeout(()=>$('rename-name').focus(),0);
+ void state;
 }
 $('server-add').onclick=()=>{problem('');$('add-problem').textContent='';void bridge.view('add');};
 $('add-cancel').onclick=()=>{void bridge.view('servers');};
 $('servers-retry').onclick=()=>action(()=>bridge.refresh());
-$('servers-fallback').onclick=()=>action(()=>bridge.connect(current.servers?.fallback||''));
+$('instances-retry').onclick=()=>action(async()=>{await bridge.instances();say('');});
+$('plan-retry').onclick=()=>action(async()=>{await bridge.plans();});
+$('instance-create').onclick=()=>{problem('');$('create-problem').textContent='';$('create-wait').hidden=true;void bridge.view('create');};
+$('create-cancel').onclick=()=>{void bridge.view('servers');};
+$('rename-cancel').onclick=()=>{renaming=null;void bridge.view('servers');};
+$('create-name').addEventListener('input',()=>drawSummary(current));
+$('create-domain').addEventListener('input',()=>drawSummary(current));
+// THE CREATE PAGE'S ONE WRITE. The fields are checked here so a typo costs no round trip, the
+// service checks them again (it is the authority), and a refusal is printed under the form. A
+// success has already opened Stripe Checkout in the person's browser from the main process; the
+// list is where they come back to, and the instance appears as `pending` until Stripe confirms it.
+$('create-instance').onsubmit=event=>{
+ event.preventDefault();
+ const displayName=$('create-name').value.trim(),domain=$('create-domain').value.trim();
+ $('create-problem').textContent='';
+ if(!displayName){$('create-problem').textContent='Enter a display name for the instance.';$('create-name').focus();return;}
+ if(!domain){$('create-problem').textContent='Enter the domain the instance will answer on.';$('create-domain').focus();return;}
+ if(!chosenPlan){$('create-problem').textContent='Choose a plan.';return;}
+ const form=$('create-instance'),submit=$('create-submit');
+ form.dataset.busy='true';submit.disabled=true;$('create-wait').hidden=false;
+ bridge.createInstance({displayName,domain,plan:chosenPlan}).then(answer=>{
+  form.dataset.busy='false';submit.disabled=false;$('create-wait').hidden=true;
+  if(answer&&answer.ok){
+   $('create-name').value='';$('create-domain').value='';chosenPlan='';
+   void bridge.view('servers');
+   say((answer.instance?.displayName||displayName)+' was created'+(answer.checkout?'. Finish the payment in your browser.':'.'));
+   return;
+  }
+  $('create-problem').textContent=(answer&&answer.error)||'The instance could not be created.';
+  submit.disabled=false;
+ }).catch(error=>{
+  form.dataset.busy='false';submit.disabled=false;$('create-wait').hidden=true;
+  $('create-problem').textContent=sentence(error);
+ });
+};
+$('rename-instance').onsubmit=event=>{
+ event.preventDefault();
+ if(!renaming)return;
+ const displayName=$('rename-name').value.trim();
+ $('rename-problem').textContent='';
+ if(!displayName){$('rename-problem').textContent='Enter a display name.';$('rename-name').focus();return;}
+ const form=$('rename-instance'),submit=$('rename-submit');
+ form.dataset.busy='true';submit.disabled=true;
+ bridge.renameInstance(renaming.id,displayName).then(answer=>{
+  form.dataset.busy='false';submit.disabled=false;
+  if(answer&&answer.ok){const next=answer.instance?.displayName||displayName;renaming=null;void bridge.view('servers');say('Renamed to '+next+'.');return;}
+  $('rename-problem').textContent=(answer&&answer.error)||'The name could not be saved.';
+ }).catch(error=>{form.dataset.busy='false';submit.disabled=false;$('rename-problem').textContent=sentence(error);});
+};
 $('add-server').onsubmit=event=>{
  event.preventDefault();
  const origin=$('add-origin').value.trim(),label=$('add-name').value.trim();

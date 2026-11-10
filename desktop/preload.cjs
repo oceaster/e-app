@@ -7,6 +7,14 @@ if(location.protocol==='file:'){
   // accounts origin: it names an address, a row or a view, and the main process owns the rest.
   view:value=>ipcRenderer.invoke('client:view',value),refresh:()=>ipcRenderer.invoke('client:servers-refresh'),
   addServer:payload=>ipcRenderer.invoke('client:servers-add',payload),removeServer:(id,label)=>ipcRenderer.invoke('client:servers-remove',id,label),
+  // THE INSTANCE MENU (Owen, 2026-11-09). The page names an instance, a display name, a domain
+  // or a plan; the Company session, the accounts origin and the Stripe URL stay in the main
+  // process. `plans` and `instances` are reads and answer with the published state.
+  instances:()=>ipcRenderer.invoke('client:instances-refresh'),plans:()=>ipcRenderer.invoke('client:instance-plans'),
+  createInstance:payload=>ipcRenderer.invoke('client:instance-create',payload),
+  renameInstance:(id,name)=>ipcRenderer.invoke('client:instance-rename',id,name),
+  deleteInstance:id=>ipcRenderer.invoke('client:instance-delete',id),
+  leaveInstance:id=>ipcRenderer.invoke('client:instance-leave',id),
   retry:()=>ipcRenderer.invoke('client:retry'),download:()=>ipcRenderer.invoke('client:installer'),
   login:(identifier,password)=>ipcRenderer.invoke('company:login',identifier,password),
   provider:provider=>ipcRenderer.invoke('company:provider',provider),providers:()=>ipcRenderer.invoke('company:providers'),

@@ -3,6 +3,47 @@
 Pending work for the desktop client, with what "done" means. Rules live in `README.md` and
 `docs/COMPANY_LOGIN.md`; this file is what is left, not what is true.
 
+## The instance menu (2026-11-09, client built and measured; the cloud half is NOT deployed)
+
+Owen, 2026-11-09, in one message: the top bar is glassy while nobody is signed in and must look
+exactly like the legacy SSR bar (whose server-side copy is removed); the login page must respond;
+the instance menu is always the first screen after boot or sign-in; every instance has a display
+name and a domain; the owner can rename, delete (plan cancels at the end of the paid period) and
+create one through a plan + Stripe page; a member can leave, which removes that account's records
+and the row.
+
+Landed in this tree: the pre-connection fragment restored (the missing `#account-pill` was the
+login page's crash: `shell.mjs` threw before it ever subscribed to state), the signed-out glass
+(`shell-bar-adapter.css`, keyed on `body[data-account-state]`), `desktop/instances.cjs` (the
+frozen `/v2/accounts/instances` + `/v2/accounts/instance-plans` contract), the six IPC calls, the
+merged menu (cloud instances join the account's connections by hostname), the create and rename
+pages, and the removal of the `openOnStart` auto-connect so a boot always lands on the menu.
+Measured: `tests/instance-menu-journey.cjs` (real window: rows, role actions, both pages, the
+glass) and `tests/instances.test.cjs` (the transport); `npm test` green.
+
+STILL OWED, in the order it blocks the feature:
+
+1. **The cloud routes are not deployed.** They are implemented on `ticket/instance-menu` in
+   `/root/easter-co-cloud` (list, plans, create+Stripe Checkout, rename, delete-at-period-end,
+   leave) and their tests pass, but this machine's AWS session is expired, so nothing is live.
+   Until it is deployed the app shows "Instance management is not available on this account
+   service yet." and the account's connections still connect. Re-auth AWS and deploy the accounts
+   stack; then verify the six routes against the live service.
+2. **The Stripe catalogue is configuration, not code.** `GET /v2/accounts/instance-plans` is
+   `configured:false` until `EASTER_STRIPE_INSTANCE_CATALOGUE` names a valid SSM parameter and
+   `EASTER_STRIPE_MODE` agrees with its own mode. The create page correctly refuses to sell an
+   unconfigured plan; a real test-mode price id must be put in that parameter.
+3. **The period-end teardown is recorded, not performed.** `DELETE` sets
+   `cancel_at_period_end` on the subscription and records `deletion.scheduledFor`; no worker
+   deletes the instance at that instant because the hosting plane is not deployed.
+4. **One owned instance per account** is the cloud rule today. The menu's create button is always
+   present, so a second create is refused with `account_owns_an_instance` until that rule is
+   relaxed (it is a uniqueness claim in `records.INSTANCE_OWNER_CLAIM`).
+5. **The legacy bar's visual parity** is Diana's vendored sheet, byte for byte, and the chrome
+   already draws it; the server's `/shell` route is gone and `/shell` answers 404. What is still
+   worth measuring is the connected chrome against the pre-removal server bar on a real instance,
+   which this session could not do because AWS and the live client credentials were unavailable.
+
 ## Live user feeds: the client half (2026-11-06, on `ticket/eapp-live-feeds`, not merged)
 
 Owen: "Each client connected to an e-server instance MUST access it's web camera and create a stream
