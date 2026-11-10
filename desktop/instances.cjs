@@ -79,8 +79,16 @@ function originOf(domain){
 function instance(row){
  if(!row||typeof row!=='object')throw new InstanceError('invalid_response',MESSAGES.invalid_response);
  const id=text(row.id);
- const domain=text(row.domain).trim().toLowerCase();
- if(!id||!domain)throw new InstanceError('invalid_response',MESSAGES.invalid_response);
+ if(!id)throw new InstanceError('invalid_response',MESSAGES.invalid_response);
+ // AN INSTANCE CAN PREDATE DOMAINS. The plane registered instances before the field existed, and
+ // a legacy row publishes domain:null rather than an invented address - so the menu must render
+ // it (owner actions and all) instead of failing the whole list. `origin` falls back to the
+ // domain when the service did not send one; an instance with neither is shown as having no
+ // address yet and cannot be connected to.
+ let domain=text(row.domain).trim().toLowerCase();
+ let origin=text(row.origin);
+ if(!domain&&origin){try{domain=new URL(origin).hostname.toLowerCase();}catch{domain='';}}
+ if(!origin&&domain)origin=originOf(domain);
  const plan=row.plan&&typeof row.plan==='object'?row.plan:null;
  const billing=row.billing&&typeof row.billing==='object'?row.billing:null;
  const deletion=row.deletion&&typeof row.deletion==='object'?row.deletion:null;
@@ -89,7 +97,7 @@ function instance(row){
   id,
   displayName:text(row.displayName).trim()||domain.split('.')[0]||id,
   domain,
-  origin:text(row.origin)||originOf(domain),
+  origin,
   role,
   owned:role==='owner',
   state:text(row.state)||'active',

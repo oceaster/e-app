@@ -248,9 +248,11 @@ function mergeRows(state){
   rows.set(key,{connection:row,instance:null,origin:row.origin});
  }
  for(const inst of (state.instances?.rows||[])){
-  const key=String(inst.domain||'').toLowerCase();
+  // A legacy instance may have no domain. It is still its own row (keyed by its id), never
+  // merged into another instance that also has none.
+  const key=inst.domain?String(inst.domain).toLowerCase():'instance:'+inst.id;
   const entry=rows.get(key)||{connection:null,instance:null,origin:inst.origin};
-  entry.instance=inst;entry.origin=inst.origin;rows.set(key,entry);
+  entry.instance=inst;entry.origin=inst.origin||entry.origin;rows.set(key,entry);
  }
  // OWNED FIRST, THEN MEMBERSHIPS, THEN ADDRESSES ONLY THIS MACHINE KNOWS. The sort is stable, so
  // within a group the service's own order (created soonest first) survives.
@@ -274,7 +276,7 @@ function billingLine(inst){
 function rowNode(entry){
  const inst=entry.instance,conn=entry.connection;
  const label=inst?inst.displayName:(conn?.label||hostOf(entry.origin));
- const where=inst?inst.domain:hostOf(entry.origin);
+ const where=inst?(inst.domain||'No domain yet'):hostOf(entry.origin);
  const item=document.createElement('li');item.className='server-row';item.dataset.origin=entry.origin;
  if(inst)item.dataset.instance=inst.id;
  const choose=document.createElement('button');choose.type='button';choose.className='server-connect';
@@ -287,7 +289,10 @@ function rowNode(entry){
  if(inst){const role=document.createElement('span');role.className='server-role';role.dataset.role=inst.role;role.textContent=inst.owned?'Owner':'Member';choose.append(role);}
  const billing=billingLine(inst);
  if(billing){const line=document.createElement('span');line.className='server-billing';line.textContent=billing;choose.append(line);}
- choose.onclick=()=>action(()=>bridge.connect(entry.origin));
+ // No address, no connection: a legacy instance with neither a domain nor an origin is a row
+ // whose owner can still rename and delete it, and whose Connect cannot lie about a place.
+ if(entry.origin)choose.onclick=()=>action(()=>bridge.connect(entry.origin));
+ else{choose.disabled=true;choose.setAttribute('aria-disabled','true');choose.title='This instance has no domain yet.';}
 
  const actions=document.createElement('div');actions.className='server-actions';
  if(inst&&inst.owned){

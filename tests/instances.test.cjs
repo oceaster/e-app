@@ -187,7 +187,22 @@ test('no session is refused without a request, and every call is bounded',async(
 
 test('a missing or unreadable row is a refusal, never a half-drawn screen',()=>{
  assert.throws(()=>instance(null),e=>e.code==='invalid_response');
- assert.throws(()=>instance({id:'cy'}),e=>e.code==='invalid_response');
+ assert.throws(()=>instance({domain:'x.example'}),e=>e.code==='invalid_response');
  assert.throws(()=>plan(null),e=>e.code==='invalid_response');
  assert.equal(instance({id:'x',domain:'x.example'}).displayName,'x');
+});
+
+test('an instance that predates domains still renders, without an address it does not have',()=>{
+ // The account service's own registration predates the domain field and publishes domain:null
+ // rather than an invented host. The menu must draw the row (and its owner actions) and must
+ // not pretend there is a place to connect to.
+ const legacy=instance({id:'easter-server',displayName:'Easter-Server',domain:null,origin:null,role:'owner'});
+ assert.equal(legacy.displayName,'Easter-Server');
+ assert.equal(legacy.domain,'');
+ assert.equal(legacy.origin,'');
+ assert.equal(legacy.owned,true);
+ // A row whose origin survived but whose domain did not still gets its domain from the origin.
+ const fromOrigin=instance({id:'old',origin:'https://Old.Example.Test',role:'member'});
+ assert.equal(fromOrigin.domain,'old.example.test');
+ assert.equal(fromOrigin.origin,'https://Old.Example.Test');
 });
