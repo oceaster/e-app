@@ -23,23 +23,23 @@ glass) and `tests/instances.test.cjs` (the transport); `npm test` green.
 
 STILL OWED, in the order it blocks the feature:
 
-1. **The cloud routes are not deployed.** They are implemented on `ticket/instance-menu` in
-   `/root/easter-co-cloud` (list, plans, create+Stripe Checkout, rename, delete-at-period-end,
-   leave) and their tests pass, but this machine's AWS session is expired, so nothing is live.
-   Until it is deployed the app shows "Instance management is not available on this account
-   service yet." and the account's connections still connect. Re-auth AWS and deploy the accounts
-   stack; then verify the six routes against the live service.
-2. **The Stripe catalogue is configuration, not code.** `GET /v2/accounts/instance-plans` is
-   `configured:false` until `EASTER_STRIPE_INSTANCE_CATALOGUE` names a valid SSM parameter and
-   `EASTER_STRIPE_MODE` agrees with its own mode. The create page correctly refuses to sell an
-   unconfigured plan; a real test-mode price id must be put in that parameter.
+1. **The cloud routes are DEPLOYED (2026-11-09).** `EasterServerCloudStack` is
+   UPDATE_COMPLETE with 19 routes; all six instance-menu routes answer 401 `invalid_session`
+   unauthenticated, so they are live. The owner-index migration has run (account 3 ->
+   `easter-server`). The client's "not available yet" sentence is now the fallback for a
+   service that is down, not the normal state.
+2. **The test catalogue is CONFIGURED** from easter.company's plan carousel: Personal
+   $39.99, Professional $99.99, Family $18.99 (the minimum subscription, pay-as-you-go).
+   `GET /v2/accounts/instance-plans` answers `configured: true`, `mode: test`, and a
+   subscription Checkout Session was opened and expired against the real test key. Business is
+   deliberately unset (custom/contact plan). The production switch is a catalogue in
+   `production` mode plus `EASTER_STRIPE_MODE=production`; no app change.
 3. **The period-end teardown is recorded, not performed.** `DELETE` sets
    `cancel_at_period_end` on the subscription and records `deletion.scheduledFor`; no worker
    deletes the instance at that instant because the hosting plane is not deployed.
 4. **No cap on plans per account** (Owen, 2026-11-09). The cloud's one-instance claim and its
    `account_owns_an_instance` refusal are deleted, so the menu's create action is honest for an
-   account that already owns an instance; several owned instances are listed together. The
-   deploy and the owner-index migration are still owed (see the cloud repo's TODO.md).
+   account that already owns an instance; several owned instances are listed together.
 5. **The legacy bar's visual parity** is Diana's vendored sheet, byte for byte, and the chrome
    already draws it; the server's `/shell` route is gone and `/shell` answers 404. What is still
    worth measuring is the connected chrome against the pre-removal server bar on a real instance,
