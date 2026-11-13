@@ -97,7 +97,8 @@ test('main.cjs wires the module that was proved, in the three places that exist'
   const source = read(MAIN);
   assert.match(source, /const shellAttach=require\('\.\/shell-attach\.cjs'\);/, 'the module is required');
   // the first document of a connection
-  assert.match(source, /const startURL=current=>shellAttach\.startURL\(\{origin:config\.server,cookie:sessionCookie,window:current\}\)/);
+  assert.match(source, /const startURL=async current=>\{/);
+  assert.match(source, /return url===base\?base\+'\?entry='\+Date\.now\(\):url;/);
   assert.match(source, /await loadServerPage\(current,await startURL\(current\)\);/, 'connect() opens the shell (or the gate) as its FIRST document');
   // the handover when the PIN cookie lands, and the did-finish-load fallback
   assert.match(source, /shellCookieListener=\(_event,cookie,_cause,removed\)=>\{[\s\S]*?cookie\.name!=='sec_session'[\s\S]*?void attachShell\(current\);/);

@@ -521,7 +521,10 @@ async function removeServer(id,label){
 async function connectTo(value){
  const origin=serverOrigin(value,{development});
  const row=(state.servers.rows||[]).find(item=>item.origin===origin);
- if(win&&origin===config.server){if(setup&&!setup.isDestroyed())setup.close();win.show();win.focus();return {ok:true,same:true};}
+ // CHOOSING A SERVER IS A NEW ENTRY, NOT A WINDOW TO UNHIDE. A remembered PIN session used to
+ // make this branch show the cached dashboard: measured 2026-11-12, the window had a valid
+ // session and no PIN was asked. Forget it and reload through the server's gate.
+ if(win&&origin===config.server){if(setup&&!setup.isDestroyed())setup.close();await forgetPin();await win.loadURL(origin.replace(/\/+$/,'')+'/?entry='+Date.now());win.show();win.focus();return {ok:true,same:true,reentered:true};}
  if(win){
   const choice=await dialog.showMessageBox(win,{buttons:['Cancel','Switch server'],defaultId:0,cancelId:0,message:'Switch your e-server connection?',detail:'Finish transfers and save your work first.'});
   if(choice.response!==1)return {ok:false,cancelled:true};
@@ -654,7 +657,15 @@ async function attachShell(current){
 }
 /** The document a connection opens with: the shell when this window already holds the PIN session,
  *  the server's own gate when it does not (the PIN is the SERVER's question). */
-const startURL=current=>shellAttach.startURL({origin:config.server,cookie:sessionCookie,window:current});
+const startURL=async current=>{
+ const url=await shellAttach.startURL({origin:config.server,cookie:sessionCookie,window:current});
+ // A FRESH DOCUMENT, NOT A RESTORED ONE. Chromium can bring back the previous page's DOM and
+ // form state for the same URL (measured 2026-11-12: a hung "Unlocking..." screen survived an
+ // app restart while the cookie had already been forgotten). The entry token makes the gate a
+ // new navigation every time, so the PIN screen is the server's current document.
+ const base=String(config.server||'').replace(/\/+$/,'')+'/';
+ return url===base?base+'?entry='+Date.now():url;
+};
 function tellFeed(window,channel,...args){try{if(window&&!window.isDestroyed())window.send(channel,...args);}catch{}}
 /** Resolve the one pending camera question with an answer (or with nothing, when it is dropped). */
 function answerStates(states){
@@ -943,12 +954,16 @@ function setupWindow(){
  setup.on('closed',()=>{setup=null;if(!win&&!quitting)app.quit();});return setup;
 }
 function persistent(){return safeStorage.isEncryptionAvailable()&&(!safeStorage.getSelectedStorageBackend||safeStorage.getSelectedStorageBackend()!=='basic_text');}
+/** Drop this install's remembered PIN session for the current server. The next load is the gate. */
+async function forgetPin(){
+ try{if(activeSession&&config.server)await activeSession.cookies.remove(config.server,'sec_session');}catch{}
+}
 async function connect(){
  // A server switch ends the old connection's engine before anything else happens: a llama-server
  // started under the previous origin is no longer this window's, and its VRAM is not ours to hold.
  localAI?.syncTrust();
  if(!company?.authorized()){accountChanged();return;}
- if(win){if(windowAccount===company.key()){if(setup)setup.close();win.show();return;}const previous=win;win=null;previous.destroy();}
+ if(win){if(windowAccount===company.key()){if(setup)setup.close();await forgetPin();await win.loadURL(config.server.replace(/\/+$/,'')+'/?entry='+Date.now());win.show();return;}const previous=win;win=null;previous.destroy();}
  if(!config.server){publish({phase:'setup',title:'Your e-server.',error:''});setupWindow();return;}
  const remembered=persistent();
  const partition=(remembered?'persist:':'')+'server-'+crypto.createHash('sha256').update(config.server+'\0'+company.key()).digest('hex').slice(0,24);
@@ -959,6 +974,10 @@ async function connect(){
  const decided=mediaDecision(config.server);
  mediaGrant=decided?{camera:decided==='granted',microphone:decided==='granted'}:{camera:null,microphone:null};
  permissionState={state:'',blurred:false};
+ // A PIN session is not a login that survives the client. Every launch and every server
+ // selection starts at the server's gate; the session cookie is minted by that gate and lives
+ // only for this connection.
+ await forgetPin();
  const oldVersion=config.serverVersions?.[config.server];
  if(oldVersion&&updateLevel(oldVersion,VERSION)!=='patch')await activeSession.clearCache();
  if(oldVersion&&updateLevel(oldVersion,VERSION)==='major')await activeSession.clearStorageData();
