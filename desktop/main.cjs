@@ -14,6 +14,7 @@ const {IdleLock}=require('./idle-lock.cjs');
 const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
 const mediaPermission=require('./media-permission.cjs');
+const {MediaBridge}=require('./media-bridge.cjs');
 const {CompanyAccount}=require('./company.cjs'),{CompanyMicrosoft}=require('./company-microsoft.cjs');
 const {AccountTheme,resolve:resolveTheme,readCache:readThemeCache,writeCache:writeThemeCache,THEME_CACHE_FILE}=require('./theme.cjs');
 const vault=require('./vendor/launcher/vault.cjs'),{providerSignIn}=require('./vendor/launcher/providers.cjs');
@@ -1214,6 +1215,9 @@ async function start(){
  if(process.platform!=='win32')await fs.chmod(HOME,0o700);
  try{config=JSON.parse(await fs.readFile(path.join(HOME,'settings.json'),'utf8'));if(config.server)config.server=serverOrigin(config.server,{development});}catch{config={};}
  if(fixture)config.server=serverOrigin(fixture,{development:true});
+ // The page's one filesystem capability, installed after `config` exists because every handler
+ // checks the configured e-server origin. Tokens live in userData and survive a reboot.
+ new MediaBridge({app,dialog,getWindow:()=>win,getOrigin:()=>config.server,serverFrame}).install(ipcMain);
  // THE LAST ANSWER THE ACCOUNT GAVE, before any window exists: `ground()` reads it for the frame
  // colour Electron paints ahead of the document, and the shell's own blocking script reads it
  // through the preload seam below. A machine with no cache and no session has none of this and

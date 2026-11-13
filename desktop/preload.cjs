@@ -473,3 +473,23 @@ button:focus-visible { outline: 2px solid var(--build-ink); outline-offset: 1px;
 })();
 // ===== end local-ai bridge ==================================================================
 
+
+// ===== media file bridge ===================================================================
+// Only the configured e-server origin, and only opaque-handle operations. The main process
+// re-checks the frame origin on every call; this gate just avoids exposing an API to pages
+// that could never use it.
+(() => {
+  if (location.protocol !== 'https:') return;
+  const { contextBridge, ipcRenderer } = require('electron');
+  let origin = '';
+  try { origin = String(ipcRenderer.sendSync('media:origin') || ''); } catch (_) { origin = ''; }
+  if (!origin || location.origin !== origin) return;
+  contextBridge.exposeInMainWorld('eServerMedia', {
+    pick: () => ipcRenderer.invoke('media:pick'),
+    save: (name, size) => ipcRenderer.invoke('media:save', name, size),
+    read: (handle, offset, length) => ipcRenderer.invoke('media:read', handle, offset, length),
+    write: (handle, offset, data) => ipcRenderer.invoke('media:write', handle, offset, data),
+    pending: () => ipcRenderer.invoke('media:pending'),
+    release: (handle) => ipcRenderer.invoke('media:release', handle),
+  });
+})();
