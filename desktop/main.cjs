@@ -138,7 +138,7 @@ const inspect=(file,manifest)=>{const pkg=require(file+'/package.json');if(!upda
 if(!app.requestSingleInstanceLock()){app.quit();}else{
  app.on('second-instance',(_,argv)=>{const link=argv.find(v=>v.startsWith('e-server:'));if(link)void receiveLink(link);else show();});
  app.on('open-url',(event,url)=>{event.preventDefault();void receiveLink(url);});
- app.whenReady().then(start).catch(error=>{explain('e-server could not start',error);app.quit();});
+ app.whenReady().then(start).catch(error=>{explain('e-app could not start',error);app.quit();});
 }
 function show(){if(!company?.authorized()){setupWindow();return;}const target=win||setup;if(target){target.show();target.focus();}}
 /** THE DEVICE-INSTANCE PERMISSION RELATIONSHIP IS PERSISTENT. Owen, 2026-11-06: "the
@@ -597,7 +597,7 @@ async function feedCaptureWindow(){
  if(captureWindow&&!captureWindow.isDestroyed()&&captureReady){await captureReady;return captureWindow;}
  if(captureWindow&&!captureWindow.isDestroyed()){await captureReady;return captureWindow;}
  captureWindow=new BrowserWindow({show:false,width:320,height:240,focusable:false,skipTaskbar:true,
-  title:'e-server camera',
+  title:'e-app camera',
   webPreferences:{session:activeSession,preload:path.join(__dirname,'capture-preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,backgroundThrottling:false}});
  captureWindow.setMenu(null);captureWindow.setMenuBarVisibility(false);
  captureWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -1010,7 +1010,7 @@ async function connect(){
    }
    return answer((await askMedia()).camera===true);
   }
-  const choice=await dialog.showMessageBox(win,{type:'question',buttons:['Allow','Deny'],defaultId:1,cancelId:1,title:'e-server permission',message:`Allow your e-server to use ${permission==='display-capture'?'screen sharing':'notifications'}?`,detail:config.server});
+  const choice=await dialog.showMessageBox(win,{type:'question',buttons:['Allow','Deny'],defaultId:1,cancelId:1,title:'e-app permission',message:`Allow your e-server to use ${permission==='display-capture'?'screen sharing':'notifications'}?`,detail:config.server});
   if(choice.response===0&&['display-capture'].includes(permission))captureGranted=true;
   answer(choice.response===0);
  });
@@ -1025,10 +1025,10 @@ async function connect(){
  },{useSystemPicker:true});
  activeSession.on('will-download',(event,item)=>{
   downloads++;item.once('done',()=>{downloads=Math.max(0,downloads-1);});
-  item.setSaveDialogOptions({title:'Save from e-server',defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});
+  item.setSaveDialogOptions({title:'Save from Media',defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});
  });
  const bounds=config.bounds&&[config.bounds.width,config.bounds.height].every(n=>Number.isFinite(n)&&n>=360)?config.bounds:{width:1280,height:900};
- win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-server',show:false,webPreferences:preferences(activeSession)});
+ win=new BrowserWindow({...bounds,minWidth:360,minHeight:500,autoHideMenuBar:true,backgroundColor:ground(),icon,title:'e-app',show:false,webPreferences:preferences(activeSession)});
  boot('window-created');
  win.setMenu(null);win.setMenuBarVisibility(false);windowAccount=company.key();
  const current=win;
@@ -1173,8 +1173,8 @@ async function checkUpdate(startup=false,manual=false){
  try{
   const latest=await probe();
   if(updater.compare(latest,VERSION)>0){
-   if(startup){setupWindow();publish({phase:'checking',title:'Updating e-server',message:'Checking the latest desktop client.',error:''});}
-   await updater.update({current:VERSION,root:UPDATES,runtime:RUNTIME,inspect,apply:false,notify:startup?value=>publish({...value,title:'Updating e-server'}):()=>{}});
+   if(startup){setupWindow();publish({phase:'checking',title:'Updating e-app',message:'Checking the latest desktop client.',error:''});}
+   await updater.update({current:VERSION,root:UPDATES,runtime:RUNTIME,inspect,apply:false,notify:startup?value=>publish({...value,title:'Updating e-app'}):()=>{}});
    failures=0;
    if(startup){await updater.activateStaged({root:UPDATES,current:VERSION,runtime:RUNTIME,inspect});quitting=true;restart();return true;}
    await applyStaged(manual);
@@ -1225,7 +1225,7 @@ async function start(){
  themePreference=readThemeCache(THEME_CACHE);
  if(app.isPackaged)app.setAsDefaultProtocolClient('e-server');
  Menu.setApplicationMenu(null);
- try{tray=new Tray(icon);tray.setToolTip('e-server');tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));tray.on('click',show);}catch{}
+ try{tray=new Tray(icon);tray.setToolTip('e-app');tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));tray.on('click',show);}catch{}
  // THE APP'S OWN FRAMES ASK THIS: the setup shell and the connected chrome (both file://, main
  // frame). It carries the account view and the server origin, never a token.
  ipcMain.handle('client:state',event=>{if(!localFrame(event))throw Error('This action is only available in e-server.');return state;});

@@ -1,7 +1,7 @@
 {
   "name": "e-app",
   "version": "1.0.30",
-  "description": "The private e-server desktop client",
+  "description": "e-server Desktop Client",
   "main": "desktop/bootstrap.cjs",
   "type": "commonjs",
   "private": true,
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "ltd.easter.eserver",
-    "productName": "e-server",
+    "productName": "e-app",
     "copyright": "Copyright \u00a9 2026 Easter LTD. All rights reserved.",
     "asar": true,
     "directories": {
@@ -48,7 +48,7 @@
     ],
     "protocols": [
       {
-        "name": "e-server connection",
+        "name": "e-app connection",
         "schemes": [
           "e-server"
         ]
@@ -65,7 +65,17 @@
       "executableName": "e-server-client",
       "artifactName": "Easter-e-server-Linux-${arch}.${ext}",
       "maintainer": "Easter LTD",
-      "synopsis": "Your private e-server desktop client"
+      "synopsis": "e-server Desktop Client",
+      "description": "e-app is the private e-server desktop client.",
+      "desktop": {
+        "entry": {
+          "Name": "e-app",
+          "GenericName": "e-server Desktop Client",
+          "Comment": "The private e-server desktop client",
+          "StartupWMClass": "e-app"
+        }
+      },
+      "syncDesktopName": true
     },
     "pacman": {
       "depends": [
@@ -105,7 +115,8 @@
         "nsis"
       ],
       "icon": "desktop/icon.png",
-      "artifactName": "Easter-e-server-Windows-${arch}.${ext}"
+      "artifactName": "Easter-e-server-Windows-${arch}.${ext}",
+      "executableName": "e-server"
     },
     "nsis": {
       "oneClick": false,
@@ -113,7 +124,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "e-server"
+      "shortcutName": "e-app"
     }
-  }
+  },
+  "desktopName": "e-app.desktop"
 }

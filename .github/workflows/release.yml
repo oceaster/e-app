@@ -77,4 +77,4 @@ jobs:
           cd release
           for asset in Easter-e-server-Windows-x64.exe Easter-e-server-Linux-amd64.deb Easter-e-server-Linux-x64.pacman Easter-e-server-Linux-x86_64.AppImage Easter-e-server-Update-linux-x64.asar Easter-e-server-Update-linux-x64.json Easter-e-server-Update-win32-x64.asar Easter-e-server-Update-win32-x64.json; do test -s "$asset"; done
           sha256sum Easter-e-server-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" Easter-e-server-* SHA256SUMS --target "$GITHUB_SHA" --title "e-server client $VERSION" --notes-file ../docs/release-notes.md
+          gh release create "$GITHUB_REF_NAME" Easter-e-server-* SHA256SUMS --target "$GITHUB_SHA" --title "e-app $VERSION" --notes-file ../docs/release-notes.md
