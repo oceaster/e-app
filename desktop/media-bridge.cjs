@@ -32,6 +32,7 @@ class MediaBridge {
     this.now = now || (() => Date.now());
     this.file = path.join(app.getPath('userData'), 'media-bridge.json');
     this.records = this._load();
+    this.handles = new Map();
   }
 
   _load() {
@@ -134,15 +135,15 @@ class MediaBridge {
     if (!Number.isInteger(start) || start < 0) throw Error('That write offset is out of range.');
     const buffer = Buffer.from(data || []);
     if (!buffer.length || buffer.length > MAX_CHUNK) throw Error('That write is out of range.');
-    const flags = start === 0 ? 'w' : 'r+';
-    const handle = await fsp.open(record.path, flags);
-    try {
-      await handle.write(buffer, 0, buffer.length, start);
-    } finally {
-      await handle.close();
+    let handle = this.handles.get(String(token));
+    if (!handle) {
+      handle = await fsp.open(record.path, start === 0 ? 'w' : 'r+');
+      this.handles.set(String(token), handle);
     }
+    await handle.write(buffer, 0, buffer.length, start);
     record.existing = Math.max(Number(record.existing) || 0, start + buffer.length);
-    this._save();
+    // The file's own size is the durable offset (pending() stats it); writing the registry on
+    // every 256 KiB chunk would be 20,000 JSON writes for one 5 GB download.
     return { written: buffer.length, size: record.existing };
   }
 
@@ -159,7 +160,10 @@ class MediaBridge {
   }
 
   release(token) {
-    delete this.records[String(token || '')];
+    const key = String(token || '');
+    const handle = this.handles.get(key);
+    if (handle) { this.handles.delete(key); handle.close().catch(() => {}); }
+    delete this.records[key];
     this._save();
     return { released: true };
   }
