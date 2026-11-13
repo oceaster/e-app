@@ -160,3 +160,58 @@
   position: fixed !important;
   z-index: 2147483000 !important;
 }
+
+/* ── THE BAR'S FACE, RESTORED (2026-11-12) ────────────────────────────────────────────────
+   The chrome document is not a launcher page, so it never carried the `.web-mode` class the
+   shared account menu reads its four tokens from. The menu painted `var(--app-panel)` with no
+   value: a transparent panel over the live page, and the agent marks behind it stopped taking
+   clicks. These are the same tokens, bound to the shell's own palette; `.web-mode` on <html>
+   makes the vendored component resolve them too. */
+:root {
+  --app-panel: var(--sf-panel);
+  --app-border: var(--sf-line);
+  --app-muted: var(--sf-muted);
+  --app-gold: var(--sf-accent);
+}
+.desktop-profile-menu {
+  background: var(--sf-panel);
+  color: var(--sf-ink);
+  border-color: var(--sf-line);
+  box-shadow: 0 12px 32px var(--ec-shadow-color, #0008);
+  z-index: 50;
+}
+/* The old pill was the person, not a lone initial in a box. */
+.sf-bar .sf-account {
+  width: auto; min-width: var(--sf-account); max-width: 220px;
+  padding-inline: 7px; gap: 8px;
+}
+.sf-bar .sf-account .web-account-name {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--sf-ink); font-size: 12px; font-weight: 600; line-height: 1;
+}
+.sf-bar .sf-account .web-account-face {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--sf-accent); color: var(--ec-on-accent, var(--sf-panel));
+  font-size: 13px; font-weight: 700;
+}
+/* A hovered or current control is a state, not a second border. The old gold outline on every
+   mouse-over read as a selection ring that would not go away. */
+.sf-bar .sf-control:hover,
+.sf-bar .sf-control:focus:hover {
+  border-color: var(--sf-line);
+  background: var(--ec-panel-soft, var(--sf-panel));
+  color: var(--sf-ink);
+}
+.sf-bar .sf-control[aria-current="page"] {
+  border-color: var(--sf-line);
+  background: var(--ec-accent-wash, transparent);
+  color: var(--sf-accent);
+  box-shadow: none;
+}
+.sf-bar .sf-control:focus-visible {
+  outline: none;
+  background: var(--ec-accent-wash, transparent);
+  color: var(--sf-accent);
+  border-color: var(--sf-line);
+}
+.sf-orb { display: none !important; }

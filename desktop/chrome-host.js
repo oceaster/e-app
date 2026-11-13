@@ -354,12 +354,15 @@ function accountName(account){
  // app's icon read as a pretend signed-in user. It appears only with a real account.
  slot.hidden=!value;
  if(!value){
+  var empty=slot.querySelector(".web-account-name");if(empty)empty.textContent="";
   slot.removeAttribute("data-account-name");
   slot.setAttribute("aria-label","Account");
   slot.setAttribute("title","Account");
   return;
  }
  slot.setAttribute("data-account-name",value);
+ var name=slot.querySelector(".web-account-name");
+ if(name)name.textContent=value;
  var face=slot.querySelector(".web-account-face");
  var initial=slot.querySelector(".web-account-initial");
  var picture=slot.querySelector(".web-account-picture");
