@@ -3,7 +3,7 @@ const {contextBridge,ipcRenderer}=require('electron');
 const chromeDocument=location.protocol!=='file:'&&location.pathname==='/desktop/chrome/';
 if(location.protocol==='file:'||chromeDocument){
  contextBridge.exposeInMainWorld('eServerSetup',{
-  connect:origin=>ipcRenderer.invoke('client:connect',origin),state:()=>ipcRenderer.invoke('client:state'),
+  connect:origin=>ipcRenderer.invoke('client:connect',origin),backToServers:()=>ipcRenderer.invoke('client:back-to-servers'),state:()=>ipcRenderer.invoke('client:state'),
   // The account-scoped list of e-servers. The renderer never sees the Company session or the
   // accounts origin: it names an address, a row or a view, and the main process owns the rest.
   view:value=>ipcRenderer.invoke('client:view',value),refresh:()=>ipcRenderer.invoke('client:servers-refresh'),
@@ -162,7 +162,7 @@ if(location.protocol==='file:'||chromeDocument){
   // three. Each answers a promise the page awaits, and main.cjs answers only the connected
   // server's main frame (remote(event)), so a frame that is not this page gets a refusal rather
   // than an answer.
-  bindSession:next=>ipcRenderer.invoke('client:handoff',next),signOut:()=>ipcRenderer.invoke('client:signout')
+  bindSession:next=>ipcRenderer.invoke('client:handoff',next),signOut:()=>ipcRenderer.invoke('client:signout'),backToServers:()=>ipcRenderer.invoke('client:back-to-servers')
  });
  // ── the one line this window draws itself ───────────────────────────────────────────────
  // Owen, 2026-11-03: a fix shipped, deployed and verified, and his window kept drawing the OLD

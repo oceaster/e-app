@@ -1279,6 +1279,19 @@ async function start(){
  // Choosing an e-server, from the list or from anywhere else. One path, so the switch
  // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
  ipcMain.handle('client:connect',(event,value)=>{local(event);company.require();return connectTo(value);});
+// THE PIN GATE'S WAY BACK. The server's own unlock screen is the only view with no navigation
+// control; without this a person who does not know the PIN is trapped. The request is accepted
+// from the server's frame only (serverFrame), closes that window's connection, and reopens the
+// account's e-server list. The PIN session is not remembered, so re-entering the same server
+// asks for the PIN again exactly as before.
+ipcMain.handle('client:back-to-servers',async event=>{
+ serverFrame(event);
+ const current=win;
+ win=null;windowAccount=null;activeSession=null;
+ if(current&&!current.isDestroyed())current.destroy();
+ await openServers();
+ return {ok:true};
+});
  ipcMain.handle('client:view',(event,value)=>{
   local(event);if(!['servers','add','create','rename'].includes(value))throw Error('Unknown view.');
   // The heading is the view's, and it is published from here so a second renderer (or a resume)
