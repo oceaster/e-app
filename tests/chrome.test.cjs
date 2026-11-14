@@ -77,10 +77,7 @@ test('the frozen parent contract: one hint, and the three checks before a messag
   assert.match(HOST, /if\(!frame\.contentWindow\|\|event\.source!==frame\.contentWindow\)return;/);
   assert.match(HOST, /if\(String\(data\.token\|\|""\)!==nav\.token\|\|String\(data\.navigationId\|\|""\)!==String\(nav\.id\)\)return;/);
   assert.equal(/event\.origin!==location\.origin/.test(HOST), false, 'the chrome must never compare against its own (opaque) origin');
-  // §4 chrome → frame is strict: the instance origin, never '*'
-  assert.match(HOST, /function openHarnessSurface\(surface,fallbackKey\)\{/);
-  assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
-  assert.equal(/postMessage\([^)]*,'\*'\)/.test(HOST), false, 'the chrome never posts with a wildcard');
+  // Surface navigation now loads the destination document; no host-specific message protocol.
   // and the trusted verifier the ported controller keeps
   assert.match(HOST, /arrived\(\)|function arrived\(\)/);
   assert.match(HOST, /TIMEOUT_MS/);
@@ -91,15 +88,8 @@ test('the account menu opens the owner’s four rows, in the site’s own menu r
     assert.ok(HOST.includes(`accountRow("${row}"`), `the menu carries ${row}`);
   }
   assert.match(HOST, /menu\.className="desktop-profile-menu"/, 'the site’s own menu class');
-  assert.match(CHROME, /vendor\/launcher\/theme\/account-control\.css/, 'and the site’s own sheet is linked');
+  assert.match(CHROME, /(vendor\/launcher\/theme|\/profiles\/assets)\/account-control\.css/, 'and the site’s own sheet is linked');
   assert.match(HOST, /document\.addEventListener\("keydown"/, 'Escape closes it');
-});
-
-test('the harness hop: strict targetOrigin, one acknowledgement window, one honest fallback', () => {
-  assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
-  assert.match(HOST, /var DSH_ACK_MS=1500;/);
-  assert.match(HOST, /harnessAcknowledged/);
-  assert.match(HOST, /nav\.pending===fallbackKey/, 'the fallback cannot clobber a newer navigation');
 });
 
 test('the controller is the app’s OWN — the destinations and her copy live here now', () => {

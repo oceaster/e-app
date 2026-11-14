@@ -215,3 +215,11 @@
   border-color: var(--sf-line);
 }
 .sf-orb { display: none !important; }
+
+/* THE CONTENT REGION IS THE WINDOW BELOW THE BAR, EDGE TO EDGE. The grid already says
+   `56px minmax(0,1fr)`; these lines remove the last places a shorter iframe or a body that
+   only grew to its content could leave a strip of chrome background at the bottom. */
+html, body.shell-frame { height: 100%; min-height: 100%; }
+body.shell-frame { height: 100dvh; }
+.sf-content { min-height: 0; height: 100%; }
+#shell-frame { display: block; width: 100%; height: 100%; min-height: 0; }
