@@ -15,7 +15,10 @@
      (desktop/chrome.html, ticket a3f30715), never from an e-server route. -->
 <header class="sf-bar" aria-label="Application">
  <div class="sf-left">
-  <button class="sf-control sf-account web-account-face-mark" id="account-pill" type="button" data-action="account" aria-label="Account" title="Account"><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span></button>
+  <div class="topbar-account" id="account-pill" hidden>
+  <button class="web-account-nav" id="account-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account" title="Account"><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span><span class="web-account-name"></span></button>
+  <div class="desktop-profile-menu" id="account-menu" role="menu" aria-label="Account" hidden><button id="signout" type="button" role="menuitem">Sign out</button></div>
+ </div>
  </div>
 </header>
 <a class="account-skip" href="#account-root">Skip to account</a>
@@ -29,7 +32,7 @@
 <div class="account-body" id="client-steps" hidden>
 <p class="client-copy" id="message"></p>
 <div class="company-signin" id="finish-block"><form id="account-finish" hidden><h2>Finish your account</h2><label for="username">Choose your username</label><input id="username" autocomplete="username" required pattern="[A-Za-z0-9_-]{3,20}" minlength="3" maxlength="20"><label for="new-password">Create a password</label><input id="new-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><label for="confirm-password">Confirm your password</label><input id="confirm-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><button type="submit" class="company-submit">Save account &amp; continue</button></form></div>
-<div class="client-status" id="account-status" hidden><span id="account-name"></span><button id="signout" type="button" class="account-provider">Sign out</button></div>
+
 <section class="client-servers" id="client-servers" data-state="idle" hidden>
 <section id="servers">
 <p class="client-copy" id="servers-copy">Choose an e-server to connect to. It will ask for its own PIN.</p>

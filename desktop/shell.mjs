@@ -65,62 +65,55 @@ let current={};
 // else, and a portrait that cannot be painted must not become a request.
 function drawAccountPill(account){
  const pill=$('account-pill');if(!pill)return;
+ const button=$('account-button');
  const name=account&&typeof account.name==='string'?account.name.trim():'';
  const signedIn=!!account;
- // THE BAR'S MOOD IS THE ACCOUNT'S. Owen, 2026-11-09: the bar is glassy while nobody is
- // signed in. The document carries that one fact as an attribute (the paint is
- // desktop/shell-bar-adapter.css), so a sign-in or a sign-out repaints the row in the frame
- // that learns it and no second state lives in this file.
  document.body.dataset.accountState=signedIn?'signed-in':'signed-out';
- // THE PILL IS PRESENT IN BOTH MOODS, AND IT MEANS DIFFERENT THINGS. Signed in it is the
- // account's face and name. Signed out it is the app's own mark on the glass, with the one
- // accessible name "Account": pressing it puts the cursor on the sign-in options (showAccount),
- // which is what the site's own account control does. It never prints a name it does not have.
+ // NO ONE SIGNED IN, NO USER BUTTON: the login view's bar is intentionally empty.
+ if(!signedIn){pill.hidden=true;closeAccountMenu();return;}
  pill.hidden=false;
- pill.classList.toggle('web-account-face-mark',!signedIn);
- document.body.dataset.accountState=signedIn?'signed-in':'signed-out';
- if(!signedIn){
-  pill.dataset.state='signed-out';
-  pill.setAttribute('aria-label','Account');pill.title='Account';
-  const face=pill.querySelector('.web-account-face');
-  if(face)face.classList.add('web-account-face-mark');
-  const initial=pill.querySelector('.web-account-initial');
-  if(initial)initial.textContent='';
-  const picture=pill.querySelector('.web-account-picture');
-  if(picture){picture.removeAttribute('src');picture.hidden=true;}
-  return;
- }
- // Identity, not a label: the full name (with no second line, no badge and no count) in both the
- // accessible name and the tooltip, exactly as Diana's NOTES require for the compact pill.
- const label=signedIn?name||'Account':'Account';
- pill.setAttribute('aria-label',label);pill.title=label;
- pill.dataset.state=signedIn?'signed-in':'signed-out';
- const face=pill.querySelector('.web-account-face');
- const initial=pill.querySelector('.web-account-initial');
- const picture=pill.querySelector('.web-account-picture');
+ if(!button)return;
+ const label=name||'Account';
+ button.setAttribute('aria-label',label);button.title=label;
+ const nameSlot=button.querySelector('.web-account-name');
+ if(nameSlot)nameSlot.textContent=name;
+ const face=button.querySelector('.web-account-face');
+ const initial=button.querySelector('.web-account-initial');
+ const picture=button.querySelector('.web-account-picture');
  if(!face||!initial||!picture)return;
- initial.textContent=signedIn?(name||(account.username||'')).slice(0,1):'';
- const portrait=signedIn&&typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
+ initial.textContent=(name||(account.username||'')).slice(0,1);
+ const portrait=typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
  if(portrait){if(picture.getAttribute('src')!==portrait)picture.src=portrait;picture.hidden=false;face.classList.add('has-picture');}
  else{picture.removeAttribute('src');picture.hidden=true;face.classList.remove('has-picture');}
- // Signed out there is no face to draw: the tile carries the mark instead (the launcher's own
- // last resort, in desktop/shell-bar-adapter.css).
- face.classList.toggle('web-account-face-mark',!signedIn);
 }
-/** What pressing the pill does before an instance is connected: it takes the person to the
- *  account the window actually shows — the name and Sign out row when signed in, the sign-in
- *  options when not — and never opens a second account menu of its own. */
+function closeAccountMenu(){
+ const menu=$('account-menu'),button=$('account-button');
+ if(!menu)return;
+ menu.hidden=true;
+ if(button)button.setAttribute('aria-expanded','false');
+}
+/** The setup view's user button: the standardised pill, with only Sign out beneath it. */
 function showAccount(){
- const row=$('account-status');
- if(row&&!row.hidden){
-  row.tabIndex=-1;row.focus({preventScroll:false});
-  if(row.scrollIntoView)row.scrollIntoView({block:'nearest'});
-  return;
- }
- const first=$('account-root').querySelector('button:not([hidden]),input:not([hidden])');
- if(first)first.focus();
+ const menu=$('account-menu'),button=$('account-button');
+ if(!menu||!button||$('account-pill').hidden)return;
+ if(!menu.hidden){closeAccountMenu();return;}
+ const box=button.getBoundingClientRect();
+ menu.hidden=false;
+ menu.style.left=Math.round(box.left)+'px';
+ menu.style.top=Math.round(box.bottom+4)+'px';
+ button.setAttribute('aria-expanded','true');
+ const row=menu.querySelector('button');if(row)row.focus({preventScroll:true});
 }
-$('account-pill').addEventListener('click',showAccount);
+document.addEventListener('pointerdown',function(event){
+ const menu=$('account-menu'),button=$('account-button');
+ if(!menu||menu.hidden)return;
+ if(menu.contains(event.target)||button.contains(event.target))return;
+ closeAccountMenu();
+});
+document.addEventListener('keydown',function(event){
+ if(event.key==='Escape'&&$('account-menu')&&!$('account-menu').hidden){closeAccountMenu();$('account-button').focus();}
+});
+$('account-button').addEventListener('click',showAccount);
 function render(state){
  current=state;
  // THE ACCOUNT'S THEME, in the same publish that carries the account card and the e-server list.
@@ -161,8 +154,6 @@ function render(state){
  // .company-signin form rules something to match, exactly as the site's panel nests them.
  $('account-finish').hidden=!finish||updating;
  drawServers(state,ready&&state.phase==='setup'&&!updating);
- $('account-status').hidden=!state.account||updating;
- $('account-name').textContent=state.account?.name||'';
  $('retry').hidden=!(ready&&['offline','update-error'].includes(state.phase));$('installer').hidden=state.phase!=='update-error';
  $('cancel-signin').hidden=!busy;
  // A plain sign-in is the page, entire: every client row is absent from it.

@@ -79,13 +79,16 @@ test('the document carries Diana’s pre-connection fragment and nothing on the 
   // Her fragment: header.sf-bar > div.sf-left > button.sf-control.sf-account[data-action=account].
   assert.match(html, /<header class="sf-bar" aria-label="Application">/, 'her header, her accessible name');
   assert.match(html, /<div class="sf-left">/, 'her left cluster');
-  assert.match(html, /<button class="sf-control sf-account web-account-face-mark" id="account-pill" type="button" data-action="account" aria-label="Account" title="Account">/,
-    'the account pill is her control, with her slot filled');
+  assert.match(html, /<div class="topbar-account" id="account-pill" hidden>/,
+    'the account control is the standardised topbar button, hidden while signed out');
+  assert.match(html, /<button class="web-account-nav" id="account-button" type="button" aria-haspopup="menu"/,
+    'the account button is the site control button');
   // THE INNER IDENTITY MARKUP, NOT A NESTED CONTROL: a face span holding the initial and a picture.
   assert.match(html, /<span class="web-account-face" aria-hidden="true"><span class="web-account-initial"><\/span><img class="web-account-picture" alt="" decoding="async" hidden><\/span>/,
-    'the pill holds the identity markup, not a second button');
-  assert.equal((html.match(/<button/g) || []).length >= 1, true);
-  assert.equal(/<button[^>]*>\s*<button/.test(html), false, 'no control may be nested inside the pill');
+    'the pill holds the identity markup');
+  assert.match(html, /<div class="desktop-profile-menu" id="account-menu"[^>]*role="menu"[^>]*><button id="signout"[^>]*role="menuitem">Sign out<\/button><\/div>/,
+    'the setup menu contains only Sign out');
+  assert.equal(/<button[^>]*>\s*<button/.test(html), false, 'no control may be nested inside the account button');
   // NOTHING ON THE RIGHT: no orb, no marks, no menu, no destinations, no placeholder.
   for (const forbidden of ['sf-right', 'sf-orb', 'sf-menu', 'sf-menu-wrap', 'sf-agents', 'agent-pill', 'swarm-pill', 'processes-pill', 'sf-skip', 'shell-page', 'sf-status']) {
     assert.equal(html.includes(forbidden), false, `the pre-connection bar must not contain ${forbidden}`);
@@ -117,12 +120,13 @@ test('the pill is filled from the account the main process publishes, and never 
   const source = read(MODULE);
   assert.match(source, /function drawAccountPill\(account\)/, 'one function owns the pill');
   assert.match(source, /drawAccountPill\(state\.account\);/, 'and the state publish is what calls it');
-  assert.match(source, /pill\.setAttribute\('aria-label',label\);pill\.title=label;/, 'the accessible name and the tooltip are the account’s name');
+  assert.match(source, /button\.setAttribute\('aria-label',label\);button\.title=label;/, 'the accessible name and the tooltip are the account’s name');
   assert.match(source, /account\.picture\.startsWith\('data:image\/png;base64,'\)/,
     'the portrait must be the account document’s own data URI; anything else would be a request the CSP refuses');
   assert.match(source, /picture\.removeAttribute\('src'\)/, 'a signed-out window drops the source rather than leaving a stale face');
   assert.match(source, /id="account-pill"|'account-pill'/, 'the pill is the document’s own id');
-  assert.match(source, /\$\('account-pill'\)\.addEventListener\('click',showAccount\)/, 'the pill is a working control');
+  assert.match(source, /\$\('account-button'\)\.addEventListener\('click',showAccount\)/, 'the account button is a working control');
+  assert.match(source, /if\(!signedIn\)\{pill\.hidden=true;closeAccountMenu\(\);return;\}/, 'signed out leaves the bar empty');
 });
 
 test('the journey that measures all of this is committable and parses', () => {

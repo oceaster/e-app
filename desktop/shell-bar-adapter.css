@@ -79,3 +79,39 @@ body.account[data-account-state="signed-out"] .sf-bar {
 .sf-account .web-account-face.has-picture.web-account-face-mark { background-image: none; }
 .sf-account .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .sf-account .web-account-picture.web-account-head { image-rendering: pixelated; }
+
+/* THE STANDARDISED ACCOUNT BUTTON ON THE PRE-CONNECTION VIEW.
+   Same face+name pill as the connected chrome, built from the account control's own
+   classes, and only one command beneath it: Sign out. The instance-selection page no
+   longer repeats the name and a Sign out button in the body. */
+body.account {
+  --app-panel: var(--account-panel);
+  --app-border: var(--account-line);
+  --ink: var(--account-ink);
+  --app-muted: var(--account-muted);
+  --app-gold: var(--account-gold);
+  --shadow: var(--ec-shadow-color, rgba(0,0,0,.53));
+}
+#account-pill { display: inline-flex; }
+#account-pill .web-account-nav {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 9px 0 4px;
+  border: 1px solid var(--account-line); border-radius: 8px;
+  background: var(--account-panel); color: var(--account-ink);
+  font: inherit; cursor: pointer;
+}
+#account-pill .web-account-nav:hover { border-color: var(--account-gold); }
+#account-pill .web-account-nav:focus-visible { outline: 2px solid var(--account-gold); outline-offset: 2px; }
+#account-pill .web-account-face {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: 24px; height: 24px; overflow: hidden;
+  border-radius: 6px; background: var(--account-gold); color: var(--account-panel);
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+#account-pill .web-account-face.has-picture .web-account-initial { visibility: hidden; }
+#account-pill .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#account-pill .web-account-name {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--account-ink); font-size: 12px; font-weight: 600; line-height: 1;
+}
+#account-menu { z-index: 20; }
