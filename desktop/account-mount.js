@@ -16,6 +16,15 @@
     node.dataset.accountName = account.name || account.username || '';
     node.dataset.accountUsername = account.username || '';
     node.dataset.accountAvatar = account.picture || '';
+    // The dialogs read the public account document, including providers and details, on their
+    // first paint. E-app's account object already is that document; carry only its public half.
+    node.dataset.account = JSON.stringify({
+      id: account.id, username: account.username, name: account.name,
+      picture: account.picture || null, providers: account.providers || [],
+      microsoftLinked: account.microsoftLinked === true,
+      providerDetails: account.providerDetails || null,
+      minecraftName: account.minecraftName || null
+    });
   }
   await import('/profiles/assets/account-host.mjs');
 })();
