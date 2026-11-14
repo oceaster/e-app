@@ -1107,7 +1107,9 @@ async function connect(){
    // /desktop/chrome/ but the document was still the PIN form). A cookie arrival is the
    // handover, so allow exactly one fresh shell load for it.
    shellAttach.reset(current);
-   void attachShell(current);
+   // LOAD THE SHELL ITSELF, not `attachShell`: the gate may currently be served AT the
+   // shell's own URL, so `attach` would see the address and call it already attached.
+   if(config.server)void loadServerPage(current,shellAttach.shellURL(config.server)).catch(()=>{});
   }
  };
  activeSession.cookies.on('changed',shellCookieListener);
