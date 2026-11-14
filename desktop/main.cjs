@@ -163,6 +163,11 @@ function changeServer(){if(!company?.authorized()){setupWindow();return;}void op
 // destructive action.
 function endCompanySession(){
  const origin=config.server,connected=activeSession;
+ // THE CONNECTED WINDOW OUTLIVES A SIGN-OUT, but the shell attach does not: it is one-shot per
+ // webContents so a server redirect can never reload the bar. Re-entering the same window after
+ // signing back in must be allowed to load the shell again, so release that record with the
+ // session that owned it.
+ try{if(win&&!win.isDestroyed())shellAttach.reset(win);}catch(error){/* a closing window */}
  return bridge.endSession({origin,endOwn:()=>company.signOut(),send:(url,init)=>connected?connected.fetch(url,init):Promise.reject(Error('Connect to your e-server first.'))});
 }
 async function signOutCompany(){
