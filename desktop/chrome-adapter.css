@@ -318,3 +318,13 @@ body.shell-frame { height: 100dvh; }
 html[data-easter-theme="light"] .shell-frame {
   --modal-scrim: rgba(40, 52, 82, .5);
 }
+
+/* A selected flyout row is a wash, not an underlined tab. The shared sheet drew the
+   current destination with an inset gold underline because the bar's own controls are
+   tab-like; inside the menu that line reads as a stray border under the label. */
+.sf-menu a[aria-current="page"] {
+  border-color: transparent;
+  box-shadow: none;
+  background: var(--ec-accent-wash, transparent);
+  color: var(--sf-accent);
+}
