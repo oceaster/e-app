@@ -904,6 +904,13 @@ function permissionFrame(event){
  if(!event.senderFrame||event.senderFrame.url!==pathToFileURL(permissionFile).href)throw Error('This request did not come from the permission screen.');
 }
 function local(event){if(!localFrame(event)||event.senderFrame.url!==pathToFileURL(shellFile).href)throw Error('This action is only available in e-server setup.');}
+/** The server chrome is now an instance document, not a file, so the setup-only `localFrame`
+ *  helper cannot answer for it. It is still this window's main frame and the shell for this
+ *  server — and it carries no secret: the state view names the account, not a token. */
+function chromeFrame(event){
+ if(!win||event.sender!==win.webContents||!event.senderFrame||event.senderFrame!==event.sender.mainFrame)return false;
+ return shellAttach.isShell(event.senderFrame.url,config.server);
+}
 function remote(event){company?.require();if(!config.server||!win||event.sender!==win.webContents||!trusted(event,config.server))throw Error('This request did not come from your e-server.');}
 /** THE CONNECTED SERVER'S PAGE, framed or not. The Company handoff and sign-out are the two page
  *  actions that MUST work from the shell's frame now that the chrome is ours; `remote` deliberately
@@ -1247,7 +1254,7 @@ async function start(){
  try{tray=new Tray(icon);tray.setToolTip('e-app');tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));tray.on('click',show);}catch{}
  // THE APP'S OWN FRAMES ASK THIS: the setup shell and the connected chrome (both file://, main
  // frame). It carries the account view and the server origin, never a token.
- ipcMain.handle('client:state',event=>{if(!localFrame(event))throw Error('This action is only available in e-server.');return state;});
+ ipcMain.handle('client:state',event=>{if(!localFrame(event)&&!chromeFrame(event))throw Error('This action is only available in e-server.');return state;});
  // Choosing an e-server, from the list or from anywhere else. One path, so the switch
  // confirmation, the PIN session partition and the restart-on-switch cannot drift apart.
  ipcMain.handle('client:connect',(event,value)=>{local(event);company.require();return connectTo(value);});

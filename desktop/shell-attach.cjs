@@ -1,6 +1,5 @@
 'use strict';
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 // ONE DOCUMENT LOAD PER CONNECTION: the client's half of the persistent bar.
 //
 // Owen, 2026-11-08: "the top nav bar should always be present while logged in via e-app ... that top
@@ -37,13 +36,15 @@ const { pathToFileURL } = require('node:url');
  * `desktop/chrome.html` — a file in `app.asar`, carrying Diana's bar and the one frame — and the
  * instance it is attached to travels in its query string, so one document serves any instance.
  */
-const CHROME_FILE = path.join(__dirname, 'chrome.html');
+const CHROME_PATH = '/desktop/chrome/';
 
 /** The one-shot record, keyed by Electron's webContents: a WeakSet so a closed window leaves nothing. */
 const tried = new WeakSet();
 
 /** The chrome document, attached to `origin`, with the origin validated the way the rest of the
- *  app validates one. A `file://` URL: the top-level document must never be an e-server route. */
+ *  app validates one. It is served BY THE INSTANCE so the top-level chrome and the framed pages
+ *  are same-site: a file:// chrome made every instance frame cross-site and Chromium dropped the
+ *  preference cookies (measured 2026-11-13). */
 function shellURL(origin) {
   let url;
   try {
@@ -52,14 +53,13 @@ function shellURL(origin) {
     throw Error('The e-server address is not valid.');
   }
   if (!/^https?:$/.test(url.protocol)) throw Error('The e-server address must be https.');
-  return pathToFileURL(CHROME_FILE).href + '?origin=' + encodeURIComponent(url.origin);
+  return url.origin + CHROME_PATH + '?origin=' + encodeURIComponent(url.origin);
 }
 
 /** Is this document the chrome for that origin? (The only top-level document a connected window
  *  keeps.) A chrome opened for ANOTHER instance is not ours. */
 function isShell(value, origin) {
   const asked = String(value || '');
-  if (!asked.startsWith(pathToFileURL(CHROME_FILE).href)) return false;
   let at;
   try {
     at = new URL(String(origin)).origin;
@@ -67,7 +67,9 @@ function isShell(value, origin) {
     return false;
   }
   try {
-    return new URL(asked).searchParams.get('origin') === at;
+    const url = new URL(asked);
+    return url.origin === at && url.pathname === CHROME_PATH
+      && url.searchParams.get('origin') === at;
   } catch {
     return false;
   }
@@ -135,9 +137,6 @@ function topLevelAllowed({ window, origin, url }) {
   } catch {
     return false;
   }
-  // THE CHROME IS A FILE, so its "origin" is not the server's: it may be navigated to itself and
-  // nothing else.
-  if (target.protocol === 'file:') return isShell(target.href, origin);
   if (target.origin !== at) return false;
   if (isShell(target.href, origin)) return true;
   const contents = window && !window.isDestroyed() ? window.webContents : null;

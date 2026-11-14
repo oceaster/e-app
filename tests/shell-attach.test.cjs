@@ -28,10 +28,10 @@ function fakeWindow(url = 'about:blank') {
   return { destroyed: false, isDestroyed: () => false, webContents: contents };
 }
 
-test('the connected document is the e-app’s OWN chrome, and never an e-server route', () => {
+test('the connected document is the instance’s OWN chrome, served from the same origin', () => {
   const chrome = attach.shellURL(ORIGIN);
-  assert.equal(chrome.startsWith('file://'), true, `the top-level document must be local, measured ${chrome}`);
-  assert.equal(chrome.endsWith('/desktop/chrome.html?origin=' + encodeURIComponent(ORIGIN)), true, chrome);
+  assert.equal(chrome.startsWith(ORIGIN + '/desktop/chrome/'), true, `the top-level document must be same-origin, measured ${chrome}`);
+  assert.equal(chrome.endsWith('/desktop/chrome/?origin=' + encodeURIComponent(ORIGIN)), true, chrome);
   assert.throws(() => attach.shellURL('not a url'), /not valid/);
   assert.throws(() => attach.shellURL('ftp://instance.example'), /must be https/);
   // one chrome serves every instance: the instance travels in the query, and a chrome opened for

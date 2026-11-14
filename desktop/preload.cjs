@@ -1,6 +1,7 @@
 'use strict';
 const {contextBridge,ipcRenderer}=require('electron');
-if(location.protocol==='file:'){
+const chromeDocument=location.protocol!=='file:'&&location.pathname==='/desktop/chrome/';
+if(location.protocol==='file:'||chromeDocument){
  contextBridge.exposeInMainWorld('eServerSetup',{
   connect:origin=>ipcRenderer.invoke('client:connect',origin),state:()=>ipcRenderer.invoke('client:state'),
   // The account-scoped list of e-servers. The renderer never sees the Company session or the
