@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="vendor/launcher/theme/account-control.css">
 <link rel="stylesheet" href="/profiles/assets/account-host.css">
 <link rel="stylesheet" href="chrome-adapter.css">
+<link rel="stylesheet" href="/dialog/assets/dialog.css">
+<link rel="stylesheet" href="/profiles/assets/profile.css">
 <script src="vendor/launcher/theme/theme-early.js"></script>
 <script src="chrome-boot.js" defer></script>
 <script src="chrome-host.js" defer></script>
@@ -58,6 +60,7 @@
  <iframe id="shell-frame" name="shell-frame" title="Page content" src="about:blank" loading="eager" referrerpolicy="same-origin" hidden></iframe>
 </main>
 <p id="shell-announce" class="sf-announce" role="status" aria-live="polite" aria-atomic="true"></p>
+<div class="sf-loading" id="shell-loading" role="status" aria-live="polite" hidden><span class="sf-loading-spinner" aria-hidden="true"></span><span>Loading…</span></div>
 <script src="account-mount.js" defer></script>
 </body>
 </html>

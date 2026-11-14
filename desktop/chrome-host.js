@@ -39,6 +39,8 @@ function destinations(){return document.querySelectorAll("[data-destination]")}
 
 /* ── the navigation state machine. One token per navigation, never reused ─────────────── */
 var nav={id:0,token:"",route:null,started:0,timer:null,reveal:null,source:"chrome",pending:null};
+var loadingIndicator=document.getElementById("shell-loading");
+function setLoading(on){if(loadingIndicator)loadingIndicator.hidden=!on;}
 
 /* ── THE PARENT HINT, frozen with e-server on 2026-11-09 ────────────────────────────────────
    A framed page posts its verdict to its parent. When the parent is this document its origin is
@@ -124,6 +126,7 @@ function navigate(routeKey,options){
  nav.started=Date.now();
  nav.source=options.source||"chrome";
  nav.pending=routeKey;
+ setLoading(true);
  clearTimeout(nav.timer);
  clearTimeout(nav.reveal);
  /* NO INTERIM "Opening …" VIEW. Keep the page that is already on the glass until the next one
@@ -150,6 +153,7 @@ function navigate(routeKey,options){
    token is still revoked on a real timeout, so nothing here can be mistaken for that verdict. */
 function arrived(){
  if(!nav.pending)return;
+ setLoading(false);
  var arrivedAt=nav.pending;
  /* THE LOAD IS THE END OF THE WAIT. Stop the verdict timer here too: a shell page whose
     `shell:ready` is late or absent must not be covered again by the timeout pane after it has
@@ -180,6 +184,7 @@ function randomToken(){
 
 function timeout(){
  if(!nav.pending)return;
+ setLoading(false);
  /* The timeout REVOKES the token: a late ready cannot replace this pane (her NOTES). */
  clearTimeout(nav.reveal);
  nav.token="";
@@ -194,6 +199,7 @@ function retryPending(){
  navigate(route,{source:"retry"});
 }
 function failed(statusCode){
+ setLoading(false);
  clearTimeout(nav.reveal);
  nav.pending=null;
  nav.token="";
@@ -209,6 +215,7 @@ function failed(statusCode){
  say(copy[0]+".");
 }
 function ready(message){
+ setLoading(false);
  var routeKey=String(message.routeKey||"");
  // THE ACCOUNT ROWS' SURFACES ARE NOT DESTINATIONS IN THE BAR, but they are registry-routed
  // pages the frame can be showing, so their route keys are known here too.
@@ -524,6 +531,7 @@ window.addEventListener("message",function(event){
 function openSurface(surface){
  nav.id+=1;nav.token=(Date.now().toString(36)+Math.random().toString(36).slice(2));
  nav.route=surface.route;nav.started=Date.now();nav.source="chrome";nav.pending=surface.route;
+ setLoading(true);
  clearTimeout(nav.timer);
  clearTimeout(nav.reveal);
  setStatus(COPY.opening_heading.replace("{destination}",surface.label),COPY.opening_detail,null);

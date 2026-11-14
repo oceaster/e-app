@@ -232,3 +232,70 @@ body.shell-frame { height: 100dvh; }
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
   white-space: nowrap; border: 0;
 }
+
+
+/* ── COMPACT BAR ────────────────────────────────────────────────────────────────────────
+   The bar was 56px with a 32px target and a full border around every control, which made
+   five small icons read as five boxes. It is 48px with 28px targets; a control has no box
+   at rest and only gains its line on hover, focus or the current page. The account pill
+   keeps its own border because it is the one persistent identity control. */
+.shell-frame {
+  --sf-bar: 48px;
+  --sf-target: 28px;
+  --sf-account: 44px;
+  --sf-mark: 20px;
+  --sf-gap: 3px;
+  --sf-pad: 10px;
+}
+.sf-bar .sf-control {
+  border-color: transparent;
+  background: transparent;
+}
+.sf-bar .sf-control:hover,
+.sf-bar .sf-control:focus-visible,
+.sf-bar .sf-control[aria-current="page"] {
+  border-color: var(--sf-line);
+  background: var(--ec-panel-soft, var(--sf-panel));
+  color: var(--sf-ink);
+}
+.sf-bar .sf-control[aria-current="page"] {
+  background: var(--ec-accent-wash, transparent);
+  color: var(--sf-accent);
+}
+.sf-bar .web-account-nav {
+  height: 32px;
+  padding: 0 9px 0 4px;
+  gap: 6px;
+}
+
+/* The page-transition indicator: a quiet floating pill, not an interstitial. It sits
+   over the page, never takes pointer events, and exists only while a frame navigation
+   is in flight. */
+.sf-loading {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: calc(var(--sf-layer) + 4);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: var(--sf-panel);
+  color: var(--sf-muted);
+  font: 500 12px/1.2 var(--sf-font);
+  box-shadow: 0 8px 24px var(--ec-shadow-color, #0006);
+  pointer-events: none;
+}
+.sf-loading[hidden] { display: none !important; }
+.sf-loading-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--sf-line);
+  border-top-color: var(--sf-accent);
+  border-radius: 50%;
+  animation: sf-loading-spin .75s linear infinite;
+}
+@keyframes sf-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sf-loading-spinner { animation: none; } }
