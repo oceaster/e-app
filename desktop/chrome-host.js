@@ -132,17 +132,19 @@ function navigate(routeKey,options){
  currentMark(null);
  document.title="";
  /* THE THREE AGENT DESTINATIONS ARE ONE DOCUMENT with three faces. Once it is mounted, choosing
-    another of them posts `dsh:open` and costs no load at all — which is what keeps a tour of the
+    another of them posts `harness:open` and costs no load at all — which is what keeps a tour of the
     ten destinations at ZERO top-level loads and, for these three, no second frame load either. */
- if(harnessMounted&&DSH_SURFACES[routeKey]){
+ if(harnessMounted&&HARNESS_SURFACES[routeKey]){
   setStatus("", "", null);
   clearStatus();
   frame.hidden=false;
   currentMark(routeKey);
   document.title=destination[1];
-  dshOpen(DSH_SURFACES[routeKey],routeKey);
+  openHarnessSurface(HARNESS_SURFACES[routeKey],routeKey);
   say(destination[1]+" opened.");
-  nav.pending=null;
+  // DO NOT CLEAR `nav.pending` HERE. It is the token openHarnessSurface's 1.5s fallback checks before
+  // doing ONE real load; clearing it made the fallback unreachable and left the button
+  // looking dead whenever the harness did not acknowledge (measured 2026-11-14).
   clearTimeout(nav.timer);
   return;
  }
@@ -222,7 +224,7 @@ function ready(message){
  for(var rowKey in ROW_SURFACES){if(ROW_SURFACES[rowKey].route===routeKey)rowSurface=ROW_SURFACES[rowKey];}
  if(!byKey(routeKey)&&!rowSurface){failed(404);return;}
  // the harness has certified itself: its other faces now cost a message, never a load
- if(DSH_SURFACES[routeKey])harnessMounted=true;
+ if(HARNESS_SURFACES[routeKey])harnessMounted=true;
  nav.pending=null;
  clearTimeout(nav.timer);
  clearTimeout(nav.reveal);
@@ -256,7 +258,7 @@ window.addEventListener("message",function(event){
  var data=event.data;
  if(!data||typeof data!=="object")return;
  if(String(data.token||"")!==nav.token||String(data.navigationId||"")!==String(nav.id))return;
- if(data.type==="dsh:ready"||data.type==="dsh:route"||String(data.type||"").indexOf("dsh:")===0){dshAcknowledged();return;}
+ if(data.type==="harness:ready"||data.type==="harness:route"||String(data.type||"").indexOf("harness:")===0){harnessAcknowledged();return;}
  if(data.type==="shell:ready")ready(data);
  else if(data.type==="shell:error")failed(parseInt(data.status,10)||0);
  else if(data.type==="shell:navigate"){
@@ -513,31 +515,32 @@ function paintOrb(state,text){
 
 /* ── THE HARNESS INTENT, chrome → frame, and it is STRICT (§4 of the frozen contract) ──────
    The three agent destinations are one document with three faces; switching between them posts
-   `dsh:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
-   one value this document knows exactly — never `'*'`. The page acknowledges with `dsh:ready`
+   `harness:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
+   one value this document knows exactly — never `'*'`. The page acknowledges with `harness:ready`
    carrying our token; a page that never acknowledges simply keeps its current face, which is the
    honest outcome rather than a reload loop. */
-var DSH_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
-var harnessMounted=false,dshWait=null,dshToken="";
+var HARNESS_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
+var harnessMounted=false,harnessWait=null,harnessToken="";
 /** The harness page forwards this into its app frame; the app acknowledges EVERY accepted message
  *  (e-server 626d269fcc). If nothing comes back inside the bound, the honest floor is ONE load. */
 var DSH_ACK_MS=1500;
-function dshOpen(surface,fallbackKey){
+function openHarnessSurface(surface,fallbackKey){
  if(!frame.contentWindow){if(fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}return;}
- dshToken=(Date.now().toString(36)+Math.random().toString(36).slice(2));
- var intent={type:"dsh:open",surface:surface,conversation:null,token:dshToken};
- clearTimeout(dshWait);
+ harnessToken=(Date.now().toString(36)+Math.random().toString(36).slice(2));
+ var intent={type:"harness:open",surface:surface,conversation:null,token:harnessToken};
+ clearTimeout(harnessWait);
  // NO ACKNOWLEDGEMENT INSIDE THE BOUND → ONE REAL LOAD. The intent is a message, not a promise:
  // a page that does not answer leaves the person on the face they were shown, so the fallback is
  // the same single load this controller would have done without the protocol.
- dshWait=setTimeout(function(){dshWait=null;// only if the person is still waiting on THIS one
+ harnessWait=setTimeout(function(){harnessWait=null;// only if the person is still waiting on THIS one
   if(fallbackKey&&nav.pending===fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}},DSH_ACK_MS);
  try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load */}
 }
-/** Any accepted `dsh:` message from the harness means the intent arrived: cancel the fallback. */
-function dshAcknowledged(){
- if(!dshWait)return;
- clearTimeout(dshWait);dshWait=null;harnessMounted=true;
+/** Any accepted `harness:` message from the harness means the intent arrived: cancel the fallback. */
+function harnessAcknowledged(){
+ if(!harnessWait)return;
+ clearTimeout(harnessWait);harnessWait=null;harnessMounted=true;
+ nav.pending=null;
 }
 
 /* ── THE ACCOUNT ROWS' SURFACES, and every one of them already exists ────────────────────

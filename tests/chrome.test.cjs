@@ -78,7 +78,7 @@ test('the frozen parent contract: one hint, and the three checks before a messag
   assert.match(HOST, /if\(String\(data\.token\|\|""\)!==nav\.token\|\|String\(data\.navigationId\|\|""\)!==String\(nav\.id\)\)return;/);
   assert.equal(/event\.origin!==location\.origin/.test(HOST), false, 'the chrome must never compare against its own (opaque) origin');
   // §4 chrome → frame is strict: the instance origin, never '*'
-  assert.match(HOST, /function dshOpen\(surface,fallbackKey\)\{/);
+  assert.match(HOST, /function openHarnessSurface\(surface,fallbackKey\)\{/);
   assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
   assert.equal(/postMessage\([^)]*,'\*'\)/.test(HOST), false, 'the chrome never posts with a wildcard');
   // and the trusted verifier the ported controller keeps
@@ -98,7 +98,7 @@ test('the account menu opens the owner’s four rows, in the site’s own menu r
 test('the harness hop: strict targetOrigin, one acknowledgement window, one honest fallback', () => {
   assert.match(HOST, /frame\.contentWindow\.postMessage\(intent,SERVER_ORIGIN\)/);
   assert.match(HOST, /var DSH_ACK_MS=1500;/);
-  assert.match(HOST, /dshAcknowledged/);
+  assert.match(HOST, /harnessAcknowledged/);
   assert.match(HOST, /nav\.pending===fallbackKey/, 'the fallback cannot clobber a newer navigation');
 });
 
