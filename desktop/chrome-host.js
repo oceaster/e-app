@@ -132,7 +132,7 @@ function navigate(routeKey,options){
  currentMark(null);
  document.title="";
  /* THE THREE AGENT DESTINATIONS ARE ONE DOCUMENT with three faces. Once it is mounted, choosing
-    another of them posts `harness:open` and costs no load at all — which is what keeps a tour of the
+    another of them posts `dsh:open` and costs no load at all — which is what keeps a tour of the
     ten destinations at ZERO top-level loads and, for these three, no second frame load either. */
  if(harnessMounted&&HARNESS_SURFACES[routeKey]){
   setStatus("", "", null);
@@ -141,11 +141,13 @@ function navigate(routeKey,options){
   currentMark(routeKey);
   document.title=destination[1];
   openHarnessSurface(HARNESS_SURFACES[routeKey],routeKey);
+  // THE WRAPPER IS ALREADY ON THE GLASS AND OWNS THE SURFACE SWITCH. Do not wait for an
+  // acknowledgement that the e-server wrapper does not send upward: `arrived()` ends the
+  // wait, marks the destination and keeps `nav.pending` from triggering a second full load
+  // of a page that is already mounted. This is what makes Agents/Swarm/Processes cost a
+  // message instead of reloading the whole harness.
+  arrived();
   say(destination[1]+" opened.");
-  // DO NOT CLEAR `nav.pending` HERE. It is the token openHarnessSurface's 1.5s fallback checks before
-  // doing ONE real load; clearing it made the fallback unreachable and left the button
-  // looking dead whenever the harness did not acknowledge (measured 2026-11-14).
-  clearTimeout(nav.timer);
   return;
  }
  var glue=destination[2].indexOf("?")===-1?"?":"&";
@@ -166,6 +168,7 @@ function navigate(routeKey,options){
    token is still revoked on a real timeout, so nothing here can be mistaken for that verdict. */
 function arrived(){
  if(!nav.pending)return;
+ var arrivedAt=nav.pending;
  /* THE LOAD IS THE END OF THE WAIT. Stop the verdict timer here too: a shell page whose
     `shell:ready` is late or absent must not be covered again by the timeout pane after it has
     already painted (measured 2026-11-09: Security loaded in 183 ms and the pane stayed for
@@ -176,6 +179,14 @@ function arrived(){
  nav.pending=null;
  frame.hidden=false;
  clearStatus();
+ // THE DOCUMENT IS ON THE GLASS. A wrapper that never forwards `shell:ready` must not leave
+ // an old mark or title behind; the next click can still use the in-place surface message.
+ if(byKey(arrivedAt)){
+  nav.route=arrivedAt;
+  currentMark(arrivedAt);
+  document.title=byKey(arrivedAt)[1]+" — e-server";
+  if(HARNESS_SURFACES[arrivedAt])harnessMounted=true;
+ }
 }
 
 function randomToken(){
@@ -258,7 +269,7 @@ window.addEventListener("message",function(event){
  var data=event.data;
  if(!data||typeof data!=="object")return;
  if(String(data.token||"")!==nav.token||String(data.navigationId||"")!==String(nav.id))return;
- if(data.type==="harness:ready"||data.type==="harness:route"||String(data.type||"").indexOf("harness:")===0){harnessAcknowledged();return;}
+ if(data.type==="dsh:ready"||data.type==="dsh:route"||String(data.type||"").indexOf("harness:")===0){harnessAcknowledged();return;}
  if(data.type==="shell:ready")ready(data);
  else if(data.type==="shell:error")failed(parseInt(data.status,10)||0);
  else if(data.type==="shell:navigate"){
@@ -515,8 +526,8 @@ function paintOrb(state,text){
 
 /* ── THE HARNESS INTENT, chrome → frame, and it is STRICT (§4 of the frozen contract) ──────
    The three agent destinations are one document with three faces; switching between them posts
-   `harness:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
-   one value this document knows exactly — never `'*'`. The page acknowledges with `harness:ready`
+   `dsh:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
+   one value this document knows exactly — never `'*'`. The page acknowledges with `dsh:ready`
    carrying our token; a page that never acknowledges simply keeps its current face, which is the
    honest outcome rather than a reload loop. */
 var HARNESS_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
@@ -526,16 +537,28 @@ var harnessMounted=false,harnessWait=null,harnessToken="";
 var DSH_ACK_MS=1500;
 function openHarnessSurface(surface,fallbackKey){
  if(!frame.contentWindow){if(fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}return;}
+ // THE SERVER-SERVED WRAPPER IS THE HOST NOW. It owns the app frame and exposes
+ // `__harnessHost.show(surface)`; posting `dsh:open` at the wrapper itself does nothing
+ // because the wrapper listens on its own DOM event/API. This is the difference that made
+ // Agents/Swarm/Processes look dead and fall back to a full page load.
+ try{
+  var win=frame.contentWindow;
+  if(win.__harnessHost&&typeof win.__harnessHost.show==="function"){
+   win.__harnessHost.show(surface);harnessMounted=true;return;
+  }
+  if(win.document){
+   win.document.dispatchEvent(new win.CustomEvent("harness:intent",{detail:{surface:surface,conversation:null}}));
+   harnessMounted=true;return;
+  }
+ }catch(error){/* a frame mid-navigation falls through to the direct-harness contract */}
  harnessToken=(Date.now().toString(36)+Math.random().toString(36).slice(2));
- var intent={type:"harness:open",surface:surface,conversation:null,token:harnessToken};
+ var intent={type:"dsh:open",surface:surface,conversation:null,token:harnessToken};
  clearTimeout(harnessWait);
- // NO ACKNOWLEDGEMENT INSIDE THE BOUND → ONE REAL LOAD. The intent is a message, not a promise:
- // a page that does not answer leaves the person on the face they were shown, so the fallback is
- // the same single load this controller would have done without the protocol.
- harnessWait=setTimeout(function(){harnessWait=null;// only if the person is still waiting on THIS one
+ harnessWait=setTimeout(function(){harnessWait=null;
   if(fallbackKey&&nav.pending===fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}},DSH_ACK_MS);
  try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load */}
 }
+
 /** Any accepted `harness:` message from the harness means the intent arrived: cancel the fallback. */
 function harnessAcknowledged(){
  if(!harnessWait)return;

@@ -90,10 +90,10 @@ function instance() {
     if (url.pathname === '/security/monitors') return refusal(403);
     if (url.pathname === '/system/events') return refusal(502);
     const found = DESTINATIONS.find((row) => row.href === url.pathname && (!url.searchParams.get('route') || url.searchParams.get('route') === row.key));
-    // THE HARNESS PAGE ACKNOWLEDGES `harness:open` (e-server 626d269fcc: every accepted message is
+    // THE HARNESS PAGE ACKNOWLEDGES `dsh:open` (e-server 626d269fcc: every accepted message is
     // answered). The fixture answers as that page does, so the chrome's ack window is exercised.
     const ack = found && found.key === 'agents'
-      ? `<script>addEventListener('message',function(event){var d=event.data||{};if(String(d.type||'').indexOf('dsh:')!==0)return;parent.postMessage({type:'harness:ready',token:d.token},'*');});</script>`
+      ? `<script>addEventListener('message',function(event){var d=event.data||{};if(String(d.type||'').indexOf('dsh:')!==0)return;parent.postMessage({type:'dsh:ready',token:d.token},'*');});</script>`
       : '';
     const body = bare(found ? `${found.label} page` : 'Page') + BOOTSTRAP + ack;
     // ONE SLOW DESTINATION, so the wait pane is observable rather than raced: a page that answers
@@ -220,7 +220,7 @@ async function main() {
   report.wire = report.wire || { readySeen: 0, errorSeen: 0 };
   const framed = report.frames.filter((row) => row.shell === '1');
   // THE HARNESS IS ONE DOCUMENT WITH THREE FACES: `swarm` and `processes` are entered by
-  // `harness:open` into the already-mounted harness, so they cost NO load at all. Every other
+  // `dsh:open` into the already-mounted harness, so they cost NO load at all. Every other
   // destination costs exactly one framed request, plus the chrome's own first paint.
   const FACE_SWITCHES = 2; // swarm, processes (agents is the one that loads the harness)
   assert.equal(framed.length, DESTINATIONS.length - FACE_SWITCHES + 1,

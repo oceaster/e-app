@@ -48,6 +48,12 @@ ipcMain.on('localai:isTrusted',event=>{event.returnValue=false;});
 // In DEBUG the readable sources are loaded instead (see desktop/debug.cjs's `engineEntry`), which is
 // the "non-obfuscated files for debugging" half of the owner's rule. Same API either way.
 const VERSION=require('../package.json').version,RUNTIME=process.versions.electron;
+// THE GPU PROCESS CANNOT READ THE HOST'S DRI DRIVERS INSIDE CHROMIUM'S GPU SANDBOX on this
+// Linux target (measured: MESA-LOADER failed to open /usr/lib/gbm/dri_gbm.so with permission
+// denied, so every window fell back to software painting and the whole client felt slow).
+// The renderer sandbox stays on; only the GPU helper's own sandbox is lifted so it can use the
+// driver the OS installed.
+if(process.platform==='linux')app.commandLine.appendSwitch('disable-gpu-sandbox');
 const HOME=path.join(app.getPath('appData'),'Easter Company','e-server-client'),UPDATES=path.join(HOME,'updates');
 app.setPath('userData',HOME);app.setAppUserModelId('ltd.easter.eserver');
 const development=!app.isPackaged,fixture=development?process.env.E_SERVER_CLIENT_TEST_ORIGIN:null;
