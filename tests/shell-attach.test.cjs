@@ -101,7 +101,7 @@ test('main.cjs wires the module that was proved, in the three places that exist'
   assert.match(source, /return url===base\?base\+'\?entry='\+Date\.now\(\):url;/);
   assert.match(source, /await loadServerPage\(current,await startURL\(current\)\);/, 'connect() opens the shell (or the gate) as its FIRST document');
   // the handover when the PIN cookie lands, and the did-finish-load fallback
-  assert.match(source, /shellCookieListener=\(_event,cookie,_cause,removed\)=>\{[\s\S]*?cookie\.name!=='sec_session'[\s\S]*?void attachShell\(current\);/);
+  assert.match(source, /shellCookieListener=\(_event,cookie,_cause,removed\)=>\{[\s\S]*?cookie\.name!=='sec_session'[\s\S]*?loadServerPage\(current,shellAttach\.shellURL\(config\.server\)\)/);
   assert.match(source, /activeSession\.cookies\.on\('changed',shellCookieListener\);/);
   assert.match(source, /await attachShell\(current\);\n  await startFeed\(current\);/, 'did-finish-load attaches before it starts the feed');
   // and the policy
