@@ -7,7 +7,7 @@
      an e-server route: the bar and the one frame are ours, the pages are the server's.
      CSP: `frame-src https:` is the one allowance a chrome that frames an instance needs; the code
      below only ever points the frame at the configured instance origin plus a registry href. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src https: http://127.0.0.1:* http://localhost:*; connect-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src https: http://127.0.0.1:* http://localhost:*; connect-src 'self'">
 <title>e-server</title>
 <link rel="stylesheet" href="vendor/launcher/theme/theme.css">
 <link rel="stylesheet" href="vendor/launcher/theme/launcher-bindings.css">
@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="vendor/launcher/theme/launcher-light-adapter.css">
 <link rel="stylesheet" href="vendor/launcher/theme/shell-frame.css">
 <link rel="stylesheet" href="vendor/launcher/theme/account-control.css">
+<link rel="stylesheet" href="/profiles/assets/account-host.css">
 <link rel="stylesheet" href="chrome-adapter.css">
 <script src="vendor/launcher/theme/theme-early.js"></script>
 <script src="chrome-boot.js" defer></script>
@@ -24,7 +25,7 @@
 <a class="sf-skip" href="#shell-content" data-action="focus-content">Skip to content</a>
 <header class="sf-bar" id="shell-bar" aria-label="Application">
  <div class="sf-left">
-  <button class="sf-control sf-account" id="shell-account" type="button" data-action="account" aria-label="Account" title="Account" data-account-name="" hidden><span class="web-account-face" aria-hidden="true"><span class="web-account-initial"></span><img class="web-account-picture" alt="" decoding="async" hidden></span><span class="web-account-name"></span></button>
+  <div class="topbar-account" id="shell-account" data-account-name="" data-account-username="" data-account-avatar="" data-microsoft="1"></div>
   <nav class="sf-agents" aria-label="Agent views">
    <a class="sf-control agent-pill" href="/agent/harness" data-destination="agents" aria-label="Agents" title="Agents"><svg class="harness-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="harness-outline" d="M12 3 22 21H2Z"/><path class="harness-trace" pathLength="60" d="M12 3 22 21H2Z"/><circle class="harness-core" cx="12" cy="15" r="2.2"/></svg><span class="harness-label agent-pill-word">Agents</span></a>
    <a class="sf-control swarm-pill" href="/agent/harness/epsilons" data-destination="swarm" aria-label="Swarm" title="Swarm"><svg class="epsilon-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="epsilon-outline" d="M18 5.5C15 2.5 6 3.5 6 8.3C6 10.5 8.4 12 12 12H16M12 12C8.2 12 5 13.3 5 16.4C5 21 14 22 18.5 18.3"/><path class="epsilon-trace" pathLength="80" d="M18 5.5C15 2.5 6 3.5 6 8.3C6 10.5 8.4 12 12 12H16M12 12C8.2 12 5 13.3 5 16.4C5 21 14 22 18.5 18.3"/><circle class="epsilon-core" cx="12" cy="12" r="1.7"/><g class="epsilon-orbit"><circle cx="4" cy="5" r="1"/><circle cx="21" cy="10" r=".8"/><circle cx="17" cy="22" r=".8"/></g></svg><span class="epsilon-label agent-pill-word">Swarm</span></a>
@@ -57,5 +58,6 @@
  <iframe id="shell-frame" name="shell-frame" title="Page content" src="about:blank" loading="eager" referrerpolicy="same-origin" hidden></iframe>
 </main>
 <p id="shell-announce" class="sf-announce" role="status" aria-live="polite" aria-atomic="true"></p>
+<script src="account-mount.js" defer></script>
 </body>
 </html>
