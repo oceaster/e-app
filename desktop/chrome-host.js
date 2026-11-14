@@ -126,32 +126,14 @@ function navigate(routeKey,options){
  nav.pending=routeKey;
  clearTimeout(nav.timer);
  clearTimeout(nav.reveal);
- /* The OLD document must not masquerade as the new destination: hide it immediately, and show
-    the same neutral pane every time. The bar does not change while loading. */
- setStatus(COPY.opening_heading.replace("{destination}",destination[1]),COPY.opening_detail,null);
+ /* NO INTERIM "Opening …" VIEW. Keep the page that is already on the glass until the next one
+    has loaded; a blank pane that flashes for 100–300 ms is more disruptive than a slightly stale
+    page. Errors still paint the status pane after the real timeout. */
+ clearStatus();
  currentMark(null);
  document.title="";
- /* THE THREE AGENT DESTINATIONS ARE ONE DOCUMENT with three faces. Once it is mounted, choosing
-    another of them posts `dsh:open` and costs no load at all — which is what keeps a tour of the
-    ten destinations at ZERO top-level loads and, for these three, no second frame load either. */
- if(harnessMounted&&HARNESS_SURFACES[routeKey]){
-  setStatus("", "", null);
-  clearStatus();
-  frame.hidden=false;
-  currentMark(routeKey);
-  document.title=destination[1];
-  openHarnessSurface(HARNESS_SURFACES[routeKey],routeKey);
-  // THE WRAPPER IS ALREADY ON THE GLASS AND OWNS THE SURFACE SWITCH. Do not wait for an
-  // acknowledgement that the e-server wrapper does not send upward: `arrived()` ends the
-  // wait, marks the destination and keeps `nav.pending` from triggering a second full load
-  // of a page that is already mounted. This is what makes Agents/Swarm/Processes cost a
-  // message instead of reloading the whole harness.
-  arrived();
-  say(destination[1]+" opened.");
-  return;
- }
  var glue=destination[2].indexOf("?")===-1?"?":"&";
- frame.hidden=true;
+ frame.hidden=false;
  frame.src=SERVER_ORIGIN+destination[2]+glue+"shell=1&nav="+encodeURIComponent(nav.id)
   +"&tok="+encodeURIComponent(nav.token)+"&route="+encodeURIComponent(routeKey)
   +"&parent="+encodeURIComponent(PARENT_HINT);
@@ -185,7 +167,6 @@ function arrived(){
   nav.route=arrivedAt;
   currentMark(arrivedAt);
   document.title=byKey(arrivedAt)[1]+" — e-server";
-  if(HARNESS_SURFACES[arrivedAt])harnessMounted=true;
  }
 }
 
@@ -235,7 +216,6 @@ function ready(message){
  for(var rowKey in ROW_SURFACES){if(ROW_SURFACES[rowKey].route===routeKey)rowSurface=ROW_SURFACES[rowKey];}
  if(!byKey(routeKey)&&!rowSurface){failed(404);return;}
  // the harness has certified itself: its other faces now cost a message, never a load
- if(HARNESS_SURFACES[routeKey])harnessMounted=true;
  nav.pending=null;
  clearTimeout(nav.timer);
  clearTimeout(nav.reveal);
@@ -269,7 +249,6 @@ window.addEventListener("message",function(event){
  var data=event.data;
  if(!data||typeof data!=="object")return;
  if(String(data.token||"")!==nav.token||String(data.navigationId||"")!==String(nav.id))return;
- if(data.type==="dsh:ready"||data.type==="dsh:route"||String(data.type||"").indexOf("harness:")===0){harnessAcknowledged();return;}
  if(data.type==="shell:ready")ready(data);
  else if(data.type==="shell:error")failed(parseInt(data.status,10)||0);
  else if(data.type==="shell:navigate"){
@@ -523,48 +502,6 @@ function paintOrb(state,text){
  orb.setAttribute("title",text);
 }
 (function quietOrb(){paintOrb("quiet","Instance status unavailable")})();
-
-/* ── THE HARNESS INTENT, chrome → frame, and it is STRICT (§4 of the frozen contract) ──────
-   The three agent destinations are one document with three faces; switching between them posts
-   `dsh:open` into the frame rather than reloading it, and the targetOrigin is the INSTANCE — the
-   one value this document knows exactly — never `'*'`. The page acknowledges with `dsh:ready`
-   carrying our token; a page that never acknowledges simply keeps its current face, which is the
-   honest outcome rather than a reload loop. */
-var HARNESS_SURFACES={agents:"inbox",swarm:"epsilons",processes:"processes"};
-var harnessMounted=false,harnessWait=null,harnessToken="";
-/** The harness page forwards this into its app frame; the app acknowledges EVERY accepted message
- *  (e-server 626d269fcc). If nothing comes back inside the bound, the honest floor is ONE load. */
-var DSH_ACK_MS=1500;
-function openHarnessSurface(surface,fallbackKey){
- if(!frame.contentWindow){if(fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}return;}
- // THE SERVER-SERVED WRAPPER IS THE HOST NOW. It owns the app frame and exposes
- // `__harnessHost.show(surface)`; posting `dsh:open` at the wrapper itself does nothing
- // because the wrapper listens on its own DOM event/API. This is the difference that made
- // Agents/Swarm/Processes look dead and fall back to a full page load.
- try{
-  var win=frame.contentWindow;
-  if(win.__harnessHost&&typeof win.__harnessHost.show==="function"){
-   win.__harnessHost.show(surface);harnessMounted=true;return;
-  }
-  if(win.document){
-   win.document.dispatchEvent(new win.CustomEvent("harness:intent",{detail:{surface:surface,conversation:null}}));
-   harnessMounted=true;return;
-  }
- }catch(error){/* a frame mid-navigation falls through to the direct-harness contract */}
- harnessToken=(Date.now().toString(36)+Math.random().toString(36).slice(2));
- var intent={type:"dsh:open",surface:surface,conversation:null,token:harnessToken};
- clearTimeout(harnessWait);
- harnessWait=setTimeout(function(){harnessWait=null;
-  if(fallbackKey&&nav.pending===fallbackKey){harnessMounted=false;navigate(fallbackKey,{source:"chrome"})}},DSH_ACK_MS);
- try{frame.contentWindow.postMessage(intent,SERVER_ORIGIN)}catch(error){/* a frame mid-load */}
-}
-
-/** Any accepted `harness:` message from the harness means the intent arrived: cancel the fallback. */
-function harnessAcknowledged(){
- if(!harnessWait)return;
- clearTimeout(harnessWait);harnessWait=null;harnessMounted=true;
- nav.pending=null;
-}
 
 /* ── THE ACCOUNT ROWS' SURFACES, and every one of them already exists ────────────────────
    The pill's menu is hers; what a row opens is the app's. These are the INSTANCE's own account
