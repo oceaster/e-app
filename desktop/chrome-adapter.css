@@ -299,3 +299,22 @@ body.shell-frame { height: 100dvh; }
 }
 @keyframes sf-loading-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sf-loading-spinner { animation: none; } }
+
+/* ── THE SITE'S DIALOG TOKENS ─────────────────────────────────────────────────────────────
+   dialog.css, account-control.css and profile.css are the website's own sheets; they read
+   --card/--text/--border/--muted/--purple and the --modal-scrim/--modal-blur pair. The chrome
+   speaks --sf-*, so without these mappings every account dialog fell back to browser colours
+   and its backdrop had no scrim or blur. */
+.shell-frame {
+  --card: var(--sf-panel);
+  --bg: var(--sf-panel);
+  --text: var(--sf-ink);
+  --border: var(--sf-line);
+  --muted: var(--sf-muted);
+  --purple: var(--sf-accent);
+  --modal-scrim: rgba(6, 19, 27, .62);
+  --modal-blur: 5px;
+}
+html[data-easter-theme="light"] .shell-frame {
+  --modal-scrim: rgba(40, 52, 82, .5);
+}
