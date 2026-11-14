@@ -1100,7 +1100,15 @@ async function connect(){
  // listener per connection, removed with the window.
  shellCookieListener=(_event,cookie,_cause,removed)=>{
   if(removed||!cookie||cookie.name!=='sec_session'||!cookie.value)return;
-  if(activeSession)void attachShell(current);
+  if(activeSession){
+   // THE PIN CAN LAND WHILE AN EARLIER SHELL LOAD IS IN FLIGHT. That load may have reached
+   // the server before the cookie committed and been answered with the gate; the one-shot
+   // record would then suppress the retry for ever (measured 2026-11-14: the window URL was
+   // /desktop/chrome/ but the document was still the PIN form). A cookie arrival is the
+   // handover, so allow exactly one fresh shell load for it.
+   shellAttach.reset(current);
+   void attachShell(current);
+  }
  };
  activeSession.cookies.on('changed',shellCookieListener);
  // THE PIN COOKIE MUST SURVIVE THE FRAME. The server sets `sec_session` SameSite=Lax; the chrome
