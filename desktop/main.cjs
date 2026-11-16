@@ -323,6 +323,9 @@ async function createInstance({displayName,domain,plan}={}){
  }
  return {ok:true,instance:answer.instance,checkout:!!answer.checkout};
 }
+async function changePlanInstance(id,planKey){
+ const answer=await instancesClient().changePlan(id,planKey);await refreshInstances();return answer;
+}
 async function renameInstance(id,displayName){
  const row=await instancesClient().rename(id,displayName);
  await refreshInstances();
@@ -1306,7 +1309,7 @@ ipcMain.handle('client:back-to-servers',async event=>{
  return {ok:true};
 });
  ipcMain.handle('client:view',(event,value)=>{
-  local(event);if(!['servers','add','create','rename'].includes(value))throw Error('Unknown view.');
+  local(event);if(!['servers','add','create','rename','change-plan'].includes(value))throw Error('Unknown view.');
   // The heading is the view's, and it is published from here so a second renderer (or a resume)
   // cannot show one view's title over another view's content.
   // Every sentence is here, so returning to the list never leaves another view's instruction
@@ -1315,11 +1318,12 @@ ipcMain.handle('client:back-to-servers',async event=>{
    servers:['Your e-servers.','Choose an e-server to connect to. It will ask for its own PIN.'],
    add:['Add an e-server.','Type the HTTPS address of an e-server you can reach.'],
    create:['Create a new e-server.','Choose a display name, a domain and a plan. The plan is paid through Stripe.'],
-   rename:['Rename your e-server.','Choose the display name other people will see.']}[value];
+   rename:['Rename your e-server.','Choose the display name other people will see.'],
+   'change-plan':['Change plan.','Choose the plan this instance should use.']}[value];
   publish({view:value,title:copy[0],message:copy[1]});
   // THE PLANS ARE READ WHEN THE PAGE NEEDS THEM, not on every list paint: a price list only
   // matters to a person about to buy, and the catalogue may legitimately be absent.
-  if(value==='create')void refreshPlans();
+  if(value==='create'||value==='change-plan')void refreshPlans();
   return state;
  });
  // The list's four calls answer, they never reject into the page. `local(event)` still throws for
@@ -1338,6 +1342,7 @@ ipcMain.handle('client:back-to-servers',async event=>{
  ipcMain.handle('client:instance-plans',answered(()=>refreshPlans()));
  ipcMain.handle('client:instance-create',answered(payload=>createInstance(payload||{})));
  ipcMain.handle('client:instance-rename',answered((id,name)=>renameInstance(String(id||''),String(name||''))));
+ ipcMain.handle('client:instance-plan',answered((id,plan)=>changePlanInstance(String(id||''),String(plan||''))));
  ipcMain.handle('client:instance-delete',answered(id=>deleteInstance(String(id||''))));
  ipcMain.handle('client:instance-leave',answered(id=>leaveInstance(String(id||''))));
  // THE PERMISSION SCREEN'S TWO CALLS (desktop/preload.cjs wires them, so Diana's document carries

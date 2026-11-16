@@ -308,6 +308,9 @@ function rowNode(entry){
   actions.append(joinButton);
  }
  if(inst&&inst.owned){
+  const plan=document.createElement('button');plan.type='button';plan.className='server-plan';
+  plan.textContent='Plan';plan.setAttribute('aria-label','Change plan for '+label);
+  plan.onclick=()=>{startPlanChange(inst);};
   const rename=document.createElement('button');rename.type='button';rename.className='server-rename';
   rename.textContent='Rename';rename.setAttribute('aria-label','Rename '+label);
   rename.onclick=()=>{startRename(inst);};
@@ -318,7 +321,7 @@ function rowNode(entry){
    if(!answer||!answer.ok)return;
    say(answer.deleted?'Deleted '+label+'.':'Deleting '+label+' when its paid period ends'+(answer.deletion?.scheduledFor?' on '+instanceDay(answer.deletion.scheduledFor):'')+'.');
   });
-  actions.append(rename,remove);
+  actions.append(plan,rename,remove);
  }else if(inst){
   const leave=document.createElement('button');leave.type='button';leave.className='server-leave';
   leave.textContent='Leave';leave.setAttribute('aria-label','Leave '+label);
@@ -364,6 +367,7 @@ function drawServers(state,shown){
  $('add-server-view').hidden=view!=='add';
  $('create-instance-view').hidden=view!=='create';
  $('rename-instance-view').hidden=view!=='rename';
+ $('change-plan-view').hidden=view!=='change-plan';
  $('servers-empty').hidden=stateName!=='empty';
  $('servers-empty').textContent='No e-servers yet. Create a new one, or add the address of one you can reach.';
  $('servers-error').hidden=servers.state!=='error';
@@ -401,6 +405,7 @@ function drawServers(state,shown){
  if(view==='add'&&!document.activeElement?.closest('#add-server'))setTimeout(()=>$('add-origin').focus(),0);
  if(view==='create')drawCreate(state);
  if(view==='rename')drawRename(state);
+ if(view==='change-plan')drawPlanChange(state);
  if(parkedFocus&&!loading){
   parkedFocus=false;
   const target=servers.state==='error'?$('servers-retry'):(rows.length?$('server-list').querySelector('.server-connect'):($('instance-create').hidden?$('server-add'):$('instance-create')));
@@ -464,6 +469,53 @@ function drawSummary(state){
  $('create-summary-plan').textContent=plan?plan.name:'';
  $('create-summary-price').textContent=plan?moneyLabel(plan):'';
 }
+// ── the change-plan page ─────────────────────────────────────────────────────────────────
+let planChanging=null, chosenChangePlan='';
+function startPlanChange(inst){
+ planChanging={id:inst.id,name:inst.displayName,current:inst.plan?.key||''};
+ chosenChangePlan=planChanging.current;
+ if(!(state.plans?.rows||[]).length&&typeof bridge.plans==='function')void bridge.plans();
+ bridge.view('change-plan');
+}
+function drawPlanChange(state){
+ if(!planChanging)return;
+ $('change-plan-title').textContent='Change plan for '+planChanging.name;
+ const plans=state.plans||{loaded:false,configured:false,rows:[]};
+ const list=$('change-plan-list');
+ const key=JSON.stringify((plans.rows||[]).map(plan=>[plan.key,plan.name,plan.price,plan.monthlyPence,plan.currency]));
+ if(list.dataset.key!==key||!list.childElementCount){
+  list.dataset.key=key;
+  list.replaceChildren(...(plans.rows||[]).map(plan=>{
+   const option=document.createElement('label');option.className='plan-option';
+   const input=document.createElement('input');input.type='radio';input.name='change-plan';input.value=plan.key;
+   input.checked=plan.key===chosenChangePlan;
+   input.onchange=()=>{chosenChangePlan=plan.key;};
+   const copy=document.createElement('span');
+   const name=document.createElement('span');name.className='plan-name';name.textContent=plan.name;
+   copy.append(name);
+   if(plan.description){const detail=document.createElement('span');detail.className='plan-copy';detail.textContent=plan.description;copy.append(detail);}
+   const price=document.createElement('span');price.className='plan-price';price.textContent=moneyLabel(plan);
+   option.append(input,copy,price);return option;
+  }));
+ }
+ const empty=$('change-plan-empty');
+ empty.hidden=!!(plans.rows||[]).length;
+ empty.textContent=!plans.loaded?'Loading plans…':(plans.error||'No plans are offered right now.');
+ const ready=!!chosenChangePlan&&chosenChangePlan!==planChanging.current;
+ $('change-plan-submit').disabled=!ready;
+ $('change-plan-submit').textContent=ready?'Change to '+((plans.rows||[]).find(p=>p.key===chosenChangePlan)?.name||''):'Change plan';
+}
+$('change-plan-cancel')?.addEventListener('click',()=>{planChanging=null;bridge.view('servers');});
+$('change-plan')?.addEventListener('submit',event=>{
+ event.preventDefault();
+ if(!planChanging||!chosenChangePlan||chosenChangePlan===planChanging.current)return;
+ void action(async()=>{
+  await bridge.changePlan(planChanging.id,chosenChangePlan);
+  say('Plan changed to '+chosenChangePlan+'.');
+  planChanging=null;bridge.view('servers');
+ });
+});
+
 // ── the rename page ──────────────────────────────────────────────────────────────────────
 let renaming=null;
 function startRename(inst){

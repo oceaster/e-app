@@ -14,6 +14,7 @@ if(location.protocol==='file:'||chromeDocument){
   instances:()=>ipcRenderer.invoke('client:instances-refresh'),plans:()=>ipcRenderer.invoke('client:instance-plans'),
   createInstance:payload=>ipcRenderer.invoke('client:instance-create',payload),
   renameInstance:(id,name)=>ipcRenderer.invoke('client:instance-rename',id,name),
+  changePlan:(id,plan)=>ipcRenderer.invoke('client:instance-plan',id,plan),
   deleteInstance:id=>ipcRenderer.invoke('client:instance-delete',id),
   leaveInstance:id=>ipcRenderer.invoke('client:instance-leave',id),
   retry:()=>ipcRenderer.invoke('client:retry'),download:()=>ipcRenderer.invoke('client:installer'),

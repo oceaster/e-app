@@ -243,6 +243,16 @@ class Instances{
   return instance(document&&document.instance);
  }
 
+ /** Change an owned instance's plan. Upgrade is prorated by the service; downgrade takes
+  *  the lower price now. The service owns Stripe and the proration policy. */
+ async changePlan(id,planKey){
+  if(!id)throw new InstanceError('not_found',MESSAGES.not_found);
+  if(!planKey)throw new InstanceError('invalid_plan',MESSAGES.invalid_plan);
+  const document=await this.call(INSTANCES_PATH+'/'+encodeURIComponent(String(id))+'/plan',
+   {method:'PATCH',body:{plan:String(planKey)},timeout:WRITE_TIMEOUT_MS});
+  return instance(document&&document.instance);
+ }
+
  /** Delete an owned instance. The plan is cancelled at the end of the paid period, so the
   *  answer carries the deadline rather than claiming the instance is already gone. */
  async remove(id){
