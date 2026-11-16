@@ -11,6 +11,7 @@ const {createInstancePoller}=require('./instances-poll.cjs');
 const {loadServerPage,showingFile}=require('./navigation.cjs');
 const shellAttach=require('./shell-attach.cjs');
 const {IdleLock}=require('./idle-lock.cjs');
+const tailnet=require('./tailnet.cjs');
 const {LiveFeed}=require('./live-feed.cjs');
 const {BuildWatch}=require('./build-rev.cjs');
 const mediaPermission=require('./media-permission.cjs');
@@ -94,7 +95,8 @@ let state={phase:'auth',version:VERSION,server:'',accountBusy:true,view:'servers
  // account service's, so a service that has not shipped it yet is `available:false` — a
  // capability fact, not an error, and the list is still drawn from the account's connections.
  instances:{state:'idle',rows:[],error:'',available:true},
- plans:{loaded:false,configured:false,mode:null,rows:[],error:''}};
+ plans:{loaded:false,configured:false,mode:null,rows:[],error:''},
+ tailnet:{state:'idle',rows:[]}};
 // The account-scoped list of e-servers (desktop/connections.cjs). `accountsOrigin` is the one
 // author of the API address - the vendored account client - and is read at initializeCompany.
 let accountsOrigin='';
@@ -443,13 +445,23 @@ async function refreshServers(){
   return {ok:false,error:error.message||'unreachable'};
  }
 }
+async function refreshTailnet(){
+ state={...state,tailnet:{state:'loading',rows:state.tailnet?.rows||[]}};publish({});
+ try{
+  const answer=await tailnet.discover();
+  state={...state,tailnet:{state:answer.state,rows:answer.rows}};
+ }catch{
+  state={...state,tailnet:{state:'empty',rows:[]}};
+ }
+ publish({});
+}
 async function openServers(){
  if(!company?.authorized()){accountChanged();return;}
  // The account's theme is read on the way in, so the list and the card are never painted in the
  // wrong palette while the person looks at them.
  void readAccountTheme();
  publish({phase:'setup',view:'servers',title:'Your e-servers.',message:'Choose an e-server to connect to. It will ask for its own PIN.',error:''});
- setupWindow();await Promise.all([refreshServers(),refreshInstances()]);
+ setupWindow();await Promise.all([refreshServers(),refreshInstances(),refreshTailnet()]);
 }
 function stopIdleLock(){
  if(idleTimer)clearInterval(idleTimer);idleTimer=null;
@@ -964,6 +976,7 @@ function setupWindow(){
  // the list is certainly worth re-reading. Bounded, so alt-tabbing is not a request stream.
  setup.on('focus',()=>{
   if(!company?.authorized())return;
+  void refreshTailnet();
   const now=Date.now();
   if(now-lastInstanceRefresh<INSTANCE_FOCUS_MIN_MS)return;
   lastInstanceRefresh=now;
@@ -1315,6 +1328,7 @@ ipcMain.handle('client:back-to-servers',async event=>{
  // in Electron's plumbing ("Error invoking remote method ..."), which is not.
  const answered=work=>async(event,...args)=>{local(event);try{company.require();return await work(...args);}catch(error){return {ok:false,error:sentence(error)};}};
  ipcMain.handle('client:servers-refresh',answered(()=>refreshServers()));
+ ipcMain.handle('client:tailnet-refresh',answered(()=>refreshTailnet()));
  ipcMain.handle('client:servers-add',answered(payload=>addServer(payload||{})));
  ipcMain.handle('client:servers-remove',answered((id,label)=>removeServer(String(id||''),String(label||''))));
  ipcMain.handle('client:servers-use',answered(async id=>{await connectionsClient().touch(String(id||'')).catch(()=>{});return {ok:true};}));

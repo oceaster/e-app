@@ -84,7 +84,7 @@ test('the instance menu is the first screen of a signed-in boot, with no auto-co
   assert.equal(/config\.openOnStart\s*=/.test(MAIN), false, 'nothing sets openOnStart any more');
   assert.equal(/openOnStart\s*&&/.test(MAIN), false, 'nothing branches on openOnStart any more');
   assert.match(MAIN, /if\(company\?\.authorized\(\)\)await afterCompany\(\);else await connect\(\);/, 'a signed-in boot opens the account screens');
-  assert.match(MAIN, /setupWindow\(\);await Promise\.all\(\[refreshServers\(\),refreshInstances\(\)\]\)/, 'the menu reads both sources when it opens');
+  assert.match(MAIN, /setupWindow\(\);await Promise\.all\(\[refreshServers\(\),refreshInstances\(\),refreshTailnet\(\)\]\)/, 'the menu reads both sources when it opens');
 });
 
 test('the measured journey is committable, parses, and is not swept into node --test', () => {

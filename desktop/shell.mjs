@@ -245,9 +245,16 @@ function mergeRows(state){
   const entry=rows.get(key)||{connection:null,instance:null,origin:inst.origin};
   entry.instance=inst;entry.origin=inst.origin||entry.origin;rows.set(key,entry);
  }
+ // TAILNET DISCOVERY, address-only until the person joins. The same origin already in the
+ // account list is not drawn twice: discovery only adds places this account has not listed.
+ for(const found of (state.tailnet?.rows||[])){
+  const key=found.origin?hostnameOf(found.origin):'';
+  if(!key||rows.has(key))continue;
+  rows.set(key,{connection:null,instance:null,origin:found.origin,discovered:true,label:found.label});
+ }
  // OWNED FIRST, THEN MEMBERSHIPS, THEN ADDRESSES ONLY THIS MACHINE KNOWS. The sort is stable, so
  // within a group the service's own order (created soonest first) survives.
- const rank=entry=>entry.instance?(entry.instance.owned?0:1):2;
+ const rank=entry=>entry.instance?(entry.instance.owned?0:1):entry.discovered?3:2;
  return [...rows.values()].sort((a,b)=>rank(a)-rank(b));
 }
 function instanceDay(value){
@@ -266,7 +273,7 @@ function billingLine(inst){
 }
 function rowNode(entry){
  const inst=entry.instance,conn=entry.connection;
- const label=inst?inst.displayName:(conn?.label||hostOf(entry.origin));
+ const label=inst?inst.displayName:(conn?.label||entry.label||hostOf(entry.origin));
  const where=inst?(inst.domain||'No domain yet'):hostOf(entry.origin);
  const item=document.createElement('li');item.className='server-row';item.dataset.origin=entry.origin;
  if(inst)item.dataset.instance=inst.id;
@@ -278,14 +285,28 @@ function rowNode(entry){
  // before.
  if(inst||name.textContent!==hostOf(entry.origin)){const line=document.createElement('span');line.className='server-origin';line.textContent=where;choose.append(line);}
  if(inst){const role=document.createElement('span');role.className='server-role';role.dataset.role=inst.role;role.textContent=inst.owned?'Owner':'Member';choose.append(role);}
+ if(entry.discovered&&!inst&&!conn){const role=document.createElement('span');role.className='server-role';role.dataset.role='tailnet';role.textContent='Tailnet';choose.append(role);}
  const billing=billingLine(inst);
  if(billing){const line=document.createElement('span');line.className='server-billing';line.textContent=billing;choose.append(line);}
  // No address, no connection: a legacy instance with neither a domain nor an origin is a row
  // whose owner can still rename and delete it, and whose Connect cannot lie about a place.
- if(entry.origin)choose.onclick=()=>action(()=>bridge.connect(entry.origin));
+ const join=async()=>{
+  // JOIN IS ACCOUNT-SCOPED WHERE POSSIBLE: the address is saved to this account first, then
+  // the server's PIN gate opens. If the account service cannot save it, the direct connection
+  // is still offered — discovery must not be gated on a list write.
+  if(!inst&&!conn){const saved=await bridge.addServer({origin:entry.origin,label:entry.label});if(saved&&saved.ok)say('Added '+label+' to your e-servers.');}
+  return bridge.connect(entry.origin);
+ };
+ if(entry.origin)choose.onclick=()=>action(join);
  else{choose.disabled=true;choose.setAttribute('aria-disabled','true');choose.title='This instance has no domain yet.';}
 
  const actions=document.createElement('div');actions.className='server-actions';
+ if(entry.discovered&&!inst&&!conn){
+  const joinButton=document.createElement('button');joinButton.type='button';joinButton.className='server-connect-action';
+  joinButton.textContent='Join';joinButton.setAttribute('aria-label','Join '+label);
+  joinButton.onclick=()=>action(join);
+  actions.append(joinButton);
+ }
  if(inst&&inst.owned){
   const rename=document.createElement('button');rename.type='button';rename.className='server-rename';
   rename.textContent='Rename';rename.setAttribute('aria-label','Rename '+label);
@@ -332,7 +353,7 @@ function drawServers(state,shown){
  $('client-servers').dataset.state=stateName;
  // The rows are rebuilt only when the list they came from changed, so a keystroke in a form or a
  // publish from the updater cannot move the person's focus out of a row.
- const key=JSON.stringify(rows.map(entry=>[entry.origin,entry.instance?.id||'',entry.instance?.displayName||'',
+ const key=JSON.stringify(rows.map(entry=>[entry.origin,entry.instance?.id||'',entry.instance?.displayName||'',entry.discovered?entry.label||'':'',
   entry.instance?.role||'',entry.instance?.billing?.status||'',entry.connection?.label||'']));
  if(key!==drawn){
   drawn=key;
