@@ -265,7 +265,7 @@ function instanceDay(value){
 /** The quiet sentence under a row: what the plan is doing, if anything. */
 function planNameOf(key){
  const row=(state.plans?.rows||[]).find(plan=>plan.key===key);
- return row?row.name:key;
+ return row?row.name:(key?key.charAt(0).toUpperCase()+key.slice(1):'Plan');
 }
 function billingLine(inst){
  if(!inst)return '';
