@@ -345,7 +345,7 @@ function drawServers(state,shown){
  $('client-servers').hidden=!shown;
  if(!shown)return;
  watchLoading();
- const rows=mergeRows({servers,instances});
+ const rows=mergeRows({servers,instances,tailnet:state.tailnet||{state:'idle',rows:[]}});
  // THE VISIBLE STATE is the menu's, not the connections list's: an account whose instances exist
  // but whose address list is empty is a list with rows, not an empty pane.
  const stateName=rows.length?'ready':
