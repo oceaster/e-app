@@ -90,10 +90,12 @@ async function discover(now = Date.now()) {
     cache = { at: now, value };
     return value;
   }
-  const peers = Object.values(raw.Peer || {})
+  // THIS MACHINE COUNTS TOO. `Self` is not in `Peer`; a person running e-app on the same host
+  // as an e-server should still see it in the list.
+  const candidates = [raw.Self, ...Object.values(raw.Peer || {})]
     .filter((peer) => peer && peer.Online === true && String(peer.DNSName || '').trim())
     .slice(0, MAX_PEERS);
-  const found = await Promise.all(peers.map(async (peer) => {
+  const found = await Promise.all(candidates.map(async (peer) => {
     const origin = endpointOf(peer);
     if (!origin) return null;
     return (await probe(origin)) ? { origin, label: labelOf(peer) } : null;
