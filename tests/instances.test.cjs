@@ -53,6 +53,7 @@ test('the list is read from the account route, in the shape the menu renders',as
   id:'cy',displayName:'Cy',domain:'cy.instance.easter.company',origin:'https://cy.instance.easter.company',
   role:'owner',owned:true,state:'active',
   plan:{key:'family',name:'Family',includedTokensBillions:0},
+  pendingPlan:null,
   billing:{status:'active',cancelAtPeriodEnd:false,currentPeriodEnd:'2026-12-01T00:00:00Z'},
   deletion:{scheduledFor:null},createdAt:'2026-11-01T00:00:00Z',updatedAt:'2026-11-01T00:00:00Z'
  });
@@ -66,6 +67,7 @@ test('a member is not an owner, and a row with no plan or billing says so with n
  assert.equal(row.plan,null);
  assert.deepEqual(row.billing,{status:'none',cancelAtPeriodEnd:false,currentPeriodEnd:null});
  assert.deepEqual(row.deletion,{scheduledFor:null});
+ assert.equal(row.pendingPlan,null);
 });
 
 test('an unrouted list is a capability answer, not a failure sentence',async()=>{

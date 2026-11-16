@@ -263,8 +263,13 @@ function instanceDay(value){
  try{return at.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});}catch{return '';}
 }
 /** The quiet sentence under a row: what the plan is doing, if anything. */
+function planNameOf(key){
+ const row=(state.plans?.rows||[]).find(plan=>plan.key===key);
+ return row?row.name:key;
+}
 function billingLine(inst){
  if(!inst)return '';
+ if(inst.pendingPlan?.effectiveAt)return planNameOf(inst.pendingPlan.key)+' starts on '+instanceDay(inst.pendingPlan.effectiveAt);
  if(inst.deletion?.scheduledFor)return 'Deletes when the paid period ends on '+instanceDay(inst.deletion.scheduledFor);
  if(inst.billing?.cancelAtPeriodEnd&&inst.billing.currentPeriodEnd)return 'Plan ends on '+instanceDay(inst.billing.currentPeriodEnd);
  if(inst.billing?.status==='pending')return 'Waiting for the plan payment';
@@ -480,6 +485,12 @@ function startPlanChange(inst){
 function drawPlanChange(state){
  if(!planChanging)return;
  $('change-plan-title').textContent='Change plan for '+planChanging.name;
+ const pending=$('change-plan-pending');
+ const current=state.instances?.rows?.find(item=>item.id===planChanging.id);
+ if(current?.pendingPlan?.effectiveAt){
+  pending.hidden=false;
+  pending.textContent=planNameOf(current.pendingPlan.key)+' is scheduled to start on '+instanceDay(current.pendingPlan.effectiveAt)+'. The current plan stays active until then.';
+ }else pending.hidden=true;
  const plans=state.plans||{loaded:false,configured:false,rows:[]};
  const list=$('change-plan-list');
  const key=JSON.stringify((plans.rows||[]).map(plan=>[plan.key,plan.name,plan.price,plan.monthlyPence,plan.currency]));

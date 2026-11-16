@@ -103,6 +103,8 @@ function instance(row){
   state:text(row.state)||'active',
   plan:plan?{key:text(plan.key)||'',name:text(plan.name)||text(plan.key)||'',
    includedTokensBillions:number(plan.includedTokensBillions)}:null,
+  pendingPlan:(row.pendingPlan&&typeof row.pendingPlan==='object')?{
+   key:text(row.pendingPlan.key),effectiveAt:iso(row.pendingPlan.effectiveAt)}:null,
   billing:billing?{status:text(billing.status)||'none',cancelAtPeriodEnd:billing.cancelAtPeriodEnd===true,
    currentPeriodEnd:iso(billing.currentPeriodEnd)}:{status:'none',cancelAtPeriodEnd:false,currentPeriodEnd:null},
   deletion:{scheduledFor:deletion?iso(deletion.scheduledFor):null},
