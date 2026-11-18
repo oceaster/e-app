@@ -1343,6 +1343,11 @@ ipcMain.handle('client:back-to-servers',async event=>{
  ipcMain.handle('client:instance-create',answered(payload=>createInstance(payload||{})));
  ipcMain.handle('client:instance-rename',answered((id,name)=>renameInstance(String(id||''),String(name||''))));
  ipcMain.handle('client:instance-plan',answered((id,plan)=>changePlanInstance(String(id||''),String(plan||''))));
+ // THE SETUP BAR'S ACCOUNT ROWS. Before an instance is connected there is no server account
+ // document to frame; the Company account page is the one surface that owns My Profile,
+ // Linked Accounts and Settings, so the row opens it in the OS browser. The URL is fixed here
+ // and the caller names a row, never an address.
+ ipcMain.handle('client:account-page',answered(()=>openExternal('https://easter.company/account/')));
  ipcMain.handle('client:instance-delete',answered(id=>deleteInstance(String(id||''))));
  ipcMain.handle('client:instance-leave',answered(id=>leaveInstance(String(id||''))));
  // THE PERMISSION SCREEN'S TWO CALLS (desktop/preload.cjs wires them, so Diana's document carries

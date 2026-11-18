@@ -67,35 +67,62 @@ function drawAccountPill(account){
  const pill=$('account-pill');if(!pill)return;
  const button=$('account-button');
  const name=account&&typeof account.name==='string'?account.name.trim():'';
+ const username=account&&typeof account.username==='string'?account.username.trim():'';
  const signedIn=!!account;
  document.body.dataset.accountState=signedIn?'signed-in':'signed-out';
- // NO ONE SIGNED IN, NO USER BUTTON: the login view's bar is intentionally empty.
- if(!signedIn){pill.hidden=true;closeAccountMenu();return;}
+ // THE CONTROL IS PRESENT IN BOTH MOODS. Signed out it is the app's own mark with the one
+ // accessible name "Account", and pressing it puts the cursor on the sign-in options, exactly
+ // as the site's account control does. It never prints a name it does not have.
  pill.hidden=false;
- if(!button)return;
- const label=name||'Account';
+ if(!signedIn){
+  pill.classList.add('web-account-face-mark');
+  button.setAttribute('aria-label','Account');button.title='Account';
+  const nameSlot=button.querySelector('.web-account-name');if(nameSlot)nameSlot.textContent='';
+  const face=button.querySelector('.web-account-face');if(face)face.classList.add('web-account-face-mark');
+  const initial=button.querySelector('.web-account-initial');if(initial)initial.textContent='';
+  const picture=button.querySelector('.web-account-picture');
+  if(picture){picture.removeAttribute('src');picture.hidden=true;}
+  const identity=$('account-identity'),rule=$('account-menu-rule');
+  if(identity)identity.hidden=true;if(rule)rule.hidden=true;
+  closeAccountMenu();
+  return;
+ }
+ pill.classList.remove('web-account-face-mark');
+ const label=name||username||'Account';
  button.setAttribute('aria-label',label);button.title=label;
- const nameSlot=button.querySelector('.web-account-name');
- if(nameSlot)nameSlot.textContent=name;
- const face=button.querySelector('.web-account-face');
+ const nameSlot=button.querySelector('.web-account-name');if(nameSlot)nameSlot.textContent=label;
+ const face=button.querySelector('.web-account-face');if(face)face.classList.remove('web-account-face-mark');
  const initial=button.querySelector('.web-account-initial');
  const picture=button.querySelector('.web-account-picture');
  if(!face||!initial||!picture)return;
- initial.textContent=(name||(account.username||'')).slice(0,1);
+ initial.textContent=(name||username).slice(0,1);
  const portrait=typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
  if(portrait){if(picture.getAttribute('src')!==portrait)picture.src=portrait;picture.hidden=false;face.classList.add('has-picture');}
  else{picture.removeAttribute('src');picture.hidden=true;face.classList.remove('has-picture');}
+ // THE IDENTITY PAIR LEADS THE MENU: display name over the username, and never the same word
+ // twice. This is the launcher's rule and the one the site's account control draws.
+ const identity=$('account-identity'),rule=$('account-menu-rule');
+ const identityName=$('account-identity-name'),identityUser=$('account-identity-username');
+ if(identity){identity.hidden=false;}
+ if(rule){rule.hidden=false;}
+ if(identityName)identityName.textContent=name||username;
+ if(identityUser){identityUser.textContent=username===name?'':username;identityUser.hidden=!identityUser.textContent;}
 }
 function closeAccountMenu(){
  const menu=$('account-menu'),button=$('account-button');
- if(!menu)return;
- menu.hidden=true;
+ if(menu)menu.hidden=true;
  if(button)button.setAttribute('aria-expanded','false');
 }
-/** The setup view's user button: the standardised pill, with only Sign out beneath it. */
+/** The setup view's user button: the standardised pill, the identity pair and the four rows. */
 function showAccount(){
  const menu=$('account-menu'),button=$('account-button');
- if(!menu||!button||$('account-pill').hidden)return;
+ if(!menu||!button)return;
+ // SIGNED OUT: the control is the door to the sign-in options, not an empty menu.
+ if(!current.account){
+  const first=$('account-root').querySelector('button:not([hidden]),input:not([hidden])');
+  if(first)first.focus();
+  return;
+ }
  if(!menu.hidden){closeAccountMenu();return;}
  const box=button.getBoundingClientRect();
  menu.hidden=false;
@@ -114,6 +141,13 @@ document.addEventListener('keydown',function(event){
  if(event.key==='Escape'&&$('account-menu')&&!$('account-menu').hidden){closeAccountMenu();$('account-button').focus();}
 });
 $('account-button').addEventListener('click',showAccount);
+for(const row of document.querySelectorAll('[data-account-row]')){
+ row.onclick=async()=>{
+  closeAccountMenu();
+  const answer=await bridge.accountPage?.(row.dataset.accountRow);
+  if(answer===false)say('Your account page could not be opened.');
+ };
+}
 function render(state){
  current=state;
  // THE ACCOUNT'S THEME, in the same publish that carries the account card and the e-server list.

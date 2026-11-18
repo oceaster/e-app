@@ -1,4 +1,4 @@
-The Plan button on an owned e-server now opens the change-plan page. It was throwing a ReferenceError before it could switch views, so the button looked inert; the page now reads the last published plan list, shows the current plan, and leaves the change button disabled until a different plan is chosen.
+The top-bar user button follows the product's profile rules again. The pre-connection bar is visible signed out, names the signed-in person with the face/name pill, and opens the identity pair with My Profile, Linked Accounts, Settings and Sign out; the connected chrome now uses the server's one account control instead of a second menu. The Plan button on an owned e-server also opens the change-plan page again.
 
 The camera and microphone question can be answered again. In 1.0.24 the screen reloaded itself as fast as it could load, so Allow and Deny could not be reached; 1.0.25 asks once, remembers your answer for that e-server on this device, and keeps the camera publishing after you allow it.
 

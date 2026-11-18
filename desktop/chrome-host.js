@@ -411,6 +411,11 @@ function buildAccountMenu(){
  var name=document.createElement("span");name.className="web-account-identity-name";
  name.textContent=who||"Easter Company account";
  identity.appendChild(name);
+ var username=document.createElement("span");username.className="web-account-identity-username";
+ var user=slot?slot.getAttribute("data-account-username")||"":"";
+ username.textContent=user&&user!==who?user:"";
+ username.hidden=!username.textContent;
+ identity.appendChild(username);
  var rule=document.createElement("hr");rule.className="web-account-menu-rule";
  menu.appendChild(identity);menu.appendChild(rule);
  menu.appendChild(accountRow("My Profile","profile"));
@@ -422,10 +427,15 @@ function buildAccountMenu(){
 }
 function closeAccountMenu(){if(accountMenu)accountMenu.hidden=true;}
 function openAccount(){
- if(!accountMenu)accountMenu=buildAccountMenu();
- if(!accountMenu.hidden){closeAccountMenu();return;}
  var slot=document.querySelector(".sf-bar .sf-account");
  if(!slot)return;
+ // THE SERVER'S ACCOUNT CONTROL IS THE ONE CONTROL. When it has mounted, its own pill and its
+ // own four-row menu are the profile rules; the local menu below is only the fallback for a
+ // chrome whose instance did not serve the module.
+ var real=slot.querySelector(".web-account-nav");
+ if(real){real.focus();if(typeof real.click==="function")real.click();return;}
+ if(!accountMenu)accountMenu=buildAccountMenu();
+ if(!accountMenu.hidden){closeAccountMenu();return;}
  var box=slot.getBoundingClientRect();
  accountMenu.hidden=false;
  accountMenu.style.left=Math.round(box.left)+"px";

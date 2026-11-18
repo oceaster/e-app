@@ -278,7 +278,7 @@ async function main() {
   assert.equal(glass.state, 'signed-out', 'the document knows nobody is signed in');
   assert.ok(glass.alpha < 1, `the signed-out bar is translucent, measured ${glass.background}`);
   assert.match(glass.backdrop, /blur/, `and blurs what is behind it, measured "${glass.backdrop}"`);
-  assert.equal(glass.pill, 0, 'the signed-out bar is empty: no account pill to click');
+  assert.equal(glass.pill, 32, 'the signed-out bar still carries the account control');
 
   console.log(JSON.stringify({ ok: true, ...report }, null, 1));
   console.log('SHOTS ' + SHOTS);

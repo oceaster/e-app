@@ -15,6 +15,9 @@ if(location.protocol==='file:'||chromeDocument){
   createInstance:payload=>ipcRenderer.invoke('client:instance-create',payload),
   renameInstance:(id,name)=>ipcRenderer.invoke('client:instance-rename',id,name),
   changePlan:(id,plan)=>ipcRenderer.invoke('client:instance-plan',id,plan),
+  // The setup bar's account rows open the Company account page in the OS browser: there is
+  // no instance yet whose own account document could be framed.
+  accountPage:surface=>ipcRenderer.invoke('client:account-page',surface),
   deleteInstance:id=>ipcRenderer.invoke('client:instance-delete',id),
   leaveInstance:id=>ipcRenderer.invoke('client:instance-leave',id),
   retry:()=>ipcRenderer.invoke('client:retry'),download:()=>ipcRenderer.invoke('client:installer'),

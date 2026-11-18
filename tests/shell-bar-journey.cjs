@@ -61,8 +61,8 @@ const MEASURE = `(() => {
     barBorderBottom: bar ? getComputedStyle(bar).borderBottomWidth : null,
     barBackground: bar ? getComputedStyle(bar).backgroundColor : null,
     pill: rect(pill),
-    pillLabel: pill ? pill.getAttribute('aria-label') : null,
-    pillTitle: pill ? pill.getAttribute('title') : null,
+    pillLabel: document.getElementById('account-button')?.getAttribute('aria-label') || null,
+    pillTitle: document.getElementById('account-button')?.getAttribute('title') || null,
     pillState: pill ? pill.dataset.state : null,
     face: rect(face),
     faceText: face ? face.textContent : null,
@@ -131,7 +131,7 @@ async function main() {
   assert.equal(signedOut.orb, false, 'no orb: there is no instance whose state could be read');
   assert.equal(signedOut.marks, 0, 'no agent marks, no menu and no destinations before an instance is connected');
   assert.equal(signedOut.menu, false, 'no menu before an instance is connected');
-  assert.deepEqual(signedOut.barFocusables, ['account-pill'], `the only focusable thing in the bar is the account pill, found ${JSON.stringify(signedOut.barFocusables)}`);
+  assert.deepEqual(signedOut.barFocusables, ['account-button'], `the only focusable thing in the bar is the account button, found ${JSON.stringify(signedOut.barFocusables)}`);
   assert.ok(signedOut.panels.card, 'the sign-in card is still the screen');
   assert.equal(signedOut.local.y, 56, `the page content starts at the bar's own edge, measured y=${signedOut.local && signedOut.local.y}`);
   assert.equal(signedOut.localScroll.overflowY, 'auto', 'the page owns its scrolling in its own row');
@@ -146,28 +146,34 @@ async function main() {
   report.states.signedIn = signedIn;
   report.shots.push(await shot('680x860-servers'));
   assert.equal(signedIn.bar.height, 56, 'the bar is the same height on the instance list');
-  assert.deepEqual(signedIn.pill, signedOut.pill, 'the account pill sits in exactly the same box on both screens');
+  assert.equal(signedIn.pill.x, signedOut.pill.x, 'the account pill starts at the same x');
+  assert.equal(signedIn.pill.y, signedOut.pill.y, 'and the same y');
+  assert.equal(signedIn.pill.height, signedOut.pill.height, 'and the same height');
+  assert.ok(signedIn.pill.width >= 52, 'the signed-in pill grows for the name');
   assert.deepEqual(signedIn.bar, signedOut.bar, 'the bar itself did not move between the screens');
   assert.equal(signedIn.barNodeIdentity, barId, 'the bar is the SAME DOM node, not a redrawn one');
   assert.equal(signedIn.pillLabel, 'Owen Easter', 'the pill carries the account name as its accessible name');
   assert.equal(signedIn.pillTitle, 'Owen Easter', 'and as its tooltip');
   assert.equal(signedIn.faceText, 'O', 'the face is the first letter of the name when the account carries no picture');
   assert.equal(signedIn.panels.rows, 2, 'the e-server list still draws its rows');
-  assert.equal(signedIn.panels.accountRow, true, 'the account row this window already had is unchanged');
   assert.equal(signedIn.rightCluster, false, 'still nothing on the right');
-  assert.deepEqual(signedIn.barFocusables, ['account-pill'], 'still the account pill is the bar’s only control');
+  assert.deepEqual(signedIn.barFocusables, ['account-button'], 'still the account button is the bar’s only control');
   assert.equal(signedIn.localScroll.overflowY, 'auto', 'the list scrolls in the page’s row, not the document');
   assert.equal(signedIn.documentScroll.bodyScroll <= signedIn.viewport.height + 1, true,
     `the document itself must not grow taller than the window (body ${signedIn.documentScroll.bodyScroll} vs ${signedIn.viewport.height})`);
 
   // ── the pill works: it takes the person to the account this window shows ────────────────────
   const focused = await win.webContents.executeJavaScript(`(() => {
-    document.getElementById('account-pill').click();
+    document.getElementById('account-button').click();
     const active = document.activeElement;
-    return { id: active && active.id, text: active ? (active.textContent || '').trim().slice(0, 60) : '' };
+    const menu = document.getElementById('account-menu');
+    return { id: active && active.id, text: active ? (active.textContent || '').trim().slice(0, 60) : '',
+      open: !!menu && !menu.hidden, rows: menu ? [...menu.querySelectorAll('[role=menuitem]')].map((b) => b.textContent) : [] };
   })()`, true);
   report.pillAction = focused;
-  assert.equal(focused.id, 'account-status', `pressing the pill must land on the account row, focus went to ${focused.id || focused.text}`);
+  assert.equal(focused.open, true, 'pressing the account button opens the account menu');
+  assert.deepEqual(focused.rows, ['My Profile', 'Linked Accounts', 'Settings', 'Sign out'], 'the four account rows, in the established order');
+  assert.equal(focused.text, 'My Profile', `focus lands on the first row, went to ${focused.text}`);
 
   // ── the add view, and a list that failed ───────────────────────────────────────────────────
   await push({ view: 'add' });
@@ -175,7 +181,8 @@ async function main() {
   report.states.add = addView;
   report.shots.push(await shot('680x860-add'));
   assert.equal(addView.panels.addView, true, 'the add view is the screen');
-  assert.deepEqual(addView.pill, signedOut.pill, 'and the pill is in the same place again');
+  assert.equal(addView.pill.x, signedOut.pill.x, 'and the pill is in the same place again');
+  assert.equal(addView.pill.y, signedOut.pill.y, 'and the same y');
   assert.equal(addView.barNodeIdentity, barId, 'the bar survives the view change');
 
   await push({ view: 'servers', servers: { state: 'error', rows: [], error: 'Your e-servers did not load. Try again.', fallback: '' } });

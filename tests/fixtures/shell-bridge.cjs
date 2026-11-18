@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('eServerSetup', {
   refresh: async () => {}, connect: async (origin) => { calls.push(['connect', origin]); return { ok: true }; },
   addServer: async () => ({ ok: false, error: 'fixture' }), removeServer: async () => {}, retry: async () => {},
   download: async () => {},
+  accountPage: async (surface) => { calls.push(['accountPage', surface]); return true; },
   // THE INSTANCE MENU. Each call is recorded so a journey can assert WHAT the page asked the
   // main process to do, then answers the shape desktop/instances.cjs would answer.
   instances: async () => { calls.push(['instances']); return { ok: true }; },

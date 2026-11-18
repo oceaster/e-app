@@ -109,6 +109,9 @@ body.account {
   font-size: 12px; font-weight: 700; line-height: 1;
 }
 #account-pill .web-account-face.has-picture .web-account-initial { visibility: hidden; }
+#account-pill .web-account-face.web-account-face-mark { background: #536b66 url(icon.png) center/76% no-repeat; }
+body.account[data-account-state="signed-out"] #account-pill .web-account-nav { width: 52px; padding: 0; justify-content: center; }
+#account-pill .web-account-face.web-account-face-mark .web-account-initial { visibility: hidden; }
 #account-pill .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #account-pill .web-account-name {
   max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

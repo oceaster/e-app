@@ -80,14 +80,14 @@ test('the document carries Diana’s pre-connection fragment and nothing on the 
   assert.match(html, /<header class="sf-bar" aria-label="Application">/, 'her header, her accessible name');
   assert.match(html, /<div class="sf-left">/, 'her left cluster');
   assert.match(html, /<div class="topbar-account" id="account-pill" hidden>/,
-    'the account control is the standardised topbar button, hidden while signed out');
+    'the account control is the standardised topbar button, hidden until the main process answers');
   assert.match(html, /<button class="web-account-nav" id="account-button" type="button" aria-haspopup="menu"/,
     'the account button is the site control button');
   // THE INNER IDENTITY MARKUP, NOT A NESTED CONTROL: a face span holding the initial and a picture.
   assert.match(html, /<span class="web-account-face" aria-hidden="true"><span class="web-account-initial"><\/span><img class="web-account-picture" alt="" decoding="async" hidden><\/span>/,
     'the pill holds the identity markup');
-  assert.match(html, /<div class="desktop-profile-menu" id="account-menu"[^>]*role="menu"[^>]*><button id="signout"[^>]*role="menuitem">Sign out<\/button><\/div>/,
-    'the setup menu contains only Sign out');
+  assert.match(html, /<div class="desktop-profile-menu" id="account-menu"[^>]*role="menu"[^>]*><div class="web-account-identity"[^>]*>.*?<\/div><hr class="web-account-menu-rule".*?data-account-row="profile">My Profile<\/button>.*?data-account-row="accounts">Linked Accounts<\/button>.*?data-account-row="settings">Settings<\/button>.*?<button id="signout"[^>]*role="menuitem">Sign out<\/button><\/div>/s,
+    'the setup menu carries the identity pair and the four rows');
   assert.equal(/<button[^>]*>\s*<button/.test(html), false, 'no control may be nested inside the account button');
   // NOTHING ON THE RIGHT: no orb, no marks, no menu, no destinations, no placeholder.
   for (const forbidden of ['sf-right', 'sf-orb', 'sf-menu', 'sf-menu-wrap', 'sf-agents', 'agent-pill', 'swarm-pill', 'processes-pill', 'sf-skip', 'shell-page', 'sf-status']) {
@@ -126,7 +126,8 @@ test('the pill is filled from the account the main process publishes, and never 
   assert.match(source, /picture\.removeAttribute\('src'\)/, 'a signed-out window drops the source rather than leaving a stale face');
   assert.match(source, /id="account-pill"|'account-pill'/, 'the pill is the document’s own id');
   assert.match(source, /\$\('account-button'\)\.addEventListener\('click',showAccount\)/, 'the account button is a working control');
-  assert.match(source, /if\(!signedIn\)\{pill\.hidden=true;closeAccountMenu\(\);return;\}/, 'signed out leaves the bar empty');
+  assert.match(source, /pill\.hidden=false;/, 'signed out still shows the account control');
+  assert.equal(/pill\.hidden=true/.test(source), false, 'the account control is never hidden by the account state');
 });
 
 test('the journey that measures all of this is committable and parses', () => {
