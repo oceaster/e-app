@@ -174,6 +174,11 @@ async function main() {
   assert.equal(focused.open, true, 'pressing the account button opens the account menu');
   assert.deepEqual(focused.rows, ['My Profile', 'Linked Accounts', 'Settings', 'Sign out'], 'the four account rows, in the established order');
   assert.equal(focused.text, 'My Profile', `focus lands on the first row, went to ${focused.text}`);
+  const asked = await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('[data-account-row="profile"]').click();
+    return window.__barTest.calls().filter((call) => call[0] === 'accountPage');
+  })()`, true);
+  assert.deepEqual(asked.at(-1), ['accountPage', 'profile'], 'My Profile asks the app for the Company account page');
 
   // ── the add view, and a list that failed ───────────────────────────────────────────────────
   await push({ view: 'add' });
