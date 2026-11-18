@@ -283,7 +283,9 @@ test('the model is ALWAYS a local path: -m, never -hf, anywhere in the module', 
 
 test('the app test entry reaches these suites', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.strictEqual(pkg.scripts.test, 'node --test tests/*.test.cjs');
+  // Force-exit AFTER the runner has reported every test: a Windows job object can keep the
+  // process alive after a passing suite, which is a hang in cleanup, not a test result.
+  assert.strictEqual(pkg.scripts.test, 'node --test --test-force-exit tests/*.test.cjs');
   for (const suite of ['local-ai-planner', 'local-ai-hardware', 'local-ai-matrix', 'local-ai-store', 'local-ai-runtime', 'local-ai-wiring']) {
     assert.ok(fs.existsSync(path.join(ROOT, 'tests', `${suite}.test.cjs`)), `tests/${suite}.test.cjs is missing`);
   }
