@@ -13,12 +13,15 @@ const HOST = read('desktop/chrome-host.js').toString('utf8');
 const MAIN = read('desktop/main.cjs').toString('utf8');
 const E_SERVER = process.env.E_SERVER_ROOT || '/root/e-server';
 
-test('Diana’s bar markup and her sheet are the e-server copies, byte for byte', () => {
-  for (const [mine, theirs] of [
-    ['desktop/vendor/launcher/theme/shell-frame.html', 'api/profile_assets/shell-frame.html'],
-    ['desktop/vendor/launcher/theme/shell-frame.css', 'api/profile_assets/shell-frame.css'],
-    ['desktop/vendor/launcher/account-control.mjs', '../easter-co-smp.github.io/site/account-control.mjs'],
-  ]) {
+const VENDOR_SOURCES = [
+  ['desktop/vendor/launcher/theme/shell-frame.html', 'api/profile_assets/shell-frame.html'],
+  ['desktop/vendor/launcher/theme/shell-frame.css', 'api/profile_assets/shell-frame.css'],
+  ['desktop/vendor/launcher/account-control.mjs', '../easter-co-smp.github.io/site/account-control.mjs'],
+];
+const VENDOR_SOURCE_READY = VENDOR_SOURCES.every(([, theirs]) => fs.existsSync(theirs.startsWith('../') ? path.join(ROOT, theirs) : path.join(E_SERVER, theirs)));
+
+test('Diana’s bar markup and her sheet are the e-server copies, byte for byte', { skip: VENDOR_SOURCE_READY ? false : `the source checkouts are not here; set E_SERVER_ROOT` }, () => {
+  for (const [mine, theirs] of VENDOR_SOURCES) {
     const source = theirs.startsWith('../') ? path.join(ROOT, theirs) : path.join(E_SERVER, theirs);
     assert.ok(fs.existsSync(source), `the source is missing: ${source}`);
     assert.equal(read(mine).equals(fs.readFileSync(source)), true, `${mine} has drifted from ${theirs} — re-vendor it, never edit the copy`);
