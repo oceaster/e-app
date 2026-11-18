@@ -479,7 +479,10 @@ let planChanging=null, chosenChangePlan='';
 function startPlanChange(inst){
  planChanging={id:inst.id,name:inst.displayName,current:inst.plan?.key||''};
  chosenChangePlan=planChanging.current;
- if(!(state.plans?.rows||[]).length&&typeof bridge.plans==='function')void bridge.plans();
+ const problem=$('change-plan-problem');if(problem)problem.textContent='';
+ // `current` is the last published state; there is no module-level `state` name. The old
+ // reference threw a ReferenceError before `bridge.view`, so the Plan button looked inert.
+ if(!(current.plans?.rows||[]).length&&typeof bridge.plans==='function')void bridge.plans();
  bridge.view('change-plan');
 }
 function drawPlanChange(state){

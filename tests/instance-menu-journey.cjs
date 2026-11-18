@@ -138,8 +138,8 @@ async function main() {
   assert.equal(menu.state, 'ready', 'the menu is a ready list');
   assert.equal(menu.heading, 'Your e-servers.', 'the first screen is the account’s e-servers');
   assert.equal(menu.rows.length, 5, `four instances and one address-only row, measured ${JSON.stringify(menu.rows.map(r => r.name))}`);
-  assert.deepEqual(menu.rows[0], { name: 'Cy', domain: 'cy.instance.easter.company', role: 'Owner', actions: ['Rename', 'Delete'], connect: true }, 'the owned instance: display name, domain, and only the owner actions');
-  assert.deepEqual(menu.rows[1], { name: 'Studio', domain: 'studio.instance.easter.company', role: 'Owner', actions: ['Rename', 'Delete'], connect: true }, 'a SECOND owned instance is a normal row with the owner actions (no cap)');
+  assert.deepEqual(menu.rows[0], { name: 'Cy', domain: 'cy.instance.easter.company', role: 'Owner', actions: ['Plan', 'Rename', 'Delete'], connect: true }, 'the owned instance: display name, domain, and the owner actions');
+  assert.deepEqual(menu.rows[1], { name: 'Studio', domain: 'studio.instance.easter.company', role: 'Owner', actions: ['Plan', 'Rename', 'Delete'], connect: true }, 'a SECOND owned instance is a normal row with the owner actions (no cap)');
   assert.deepEqual(menu.rows[2], { name: 'Workshop', domain: 'workshop.instance.easter.company', role: 'Member', actions: ['Leave'], connect: true }, 'the member instance offers Leave and no owner action');
   assert.deepEqual(menu.rows[3], { name: 'Legacy', domain: 'No domain yet', role: 'Member', actions: ['Leave'], connect: true }, 'an instance that predates domains says so, rather than inventing an address');
   assert.equal(await run(`document.querySelectorAll('#server-list .server-row')[3].querySelector('.server-connect').disabled`), true, 'and its Connect is disabled: there is nowhere to go');
@@ -183,6 +183,25 @@ async function main() {
   await settle(300);
   const afterLeave = await calls();
   assert.deepEqual(afterLeave.find(call => call[0] === 'leaveInstance'), ['leaveInstance', 'workshop'], 'the page asked to leave that instance');
+
+  // ── plan: an owner's row opens the change-plan page, with the service's plans ───────────────
+  await push({ ...BASE, plans: PLANS });
+  await run(`document.querySelectorAll('#server-list .server-row')[0].querySelector('.server-plan').click()`);
+  await settle(300);
+  const planOpen = await run(`(() => ({
+    shown: !document.getElementById('change-plan-view').hidden,
+    title: document.getElementById('change-plan-title').textContent,
+    plans: [...document.querySelectorAll('#change-plan-list .plan-option')].map(o => o.querySelector('.plan-name')?.textContent || ''),
+    submitDisabled: document.getElementById('change-plan-submit').disabled,
+    calls: window.__barTest.calls(),
+  }))()`);
+  report.plan = planOpen;
+  report.shots.push(await shot('680x900-change-plan'));
+  assert.equal(planOpen.shown, true, 'Plan opens the change-plan page');
+  assert.equal(planOpen.title, 'Change plan for Cy', 'the page names the instance');
+  assert.deepEqual(planOpen.plans, ['Family', 'Personal'], 'the plans are the service’s');
+  assert.equal(planOpen.submitDisabled, true, 'the current plan is not an action');
+  assert.deepEqual(planOpen.calls.filter(call => call[0] === 'view').at(-1), ['view', 'change-plan'], 'the page asked for the change-plan view');
 
   // ── create: a full page, the service's plans, and one request that names all three fields ───
   await push({ ...BASE, view: 'servers', plans: PLANS });
@@ -259,7 +278,7 @@ async function main() {
   assert.equal(glass.state, 'signed-out', 'the document knows nobody is signed in');
   assert.ok(glass.alpha < 1, `the signed-out bar is translucent, measured ${glass.background}`);
   assert.match(glass.backdrop, /blur/, `and blurs what is behind it, measured "${glass.backdrop}"`);
-  assert.equal(glass.pill, 32, 'the account pill is still the glass row’s one control');
+  assert.equal(glass.pill, 0, 'the signed-out bar is empty: no account pill to click');
 
   console.log(JSON.stringify({ ok: true, ...report }, null, 1));
   console.log('SHOTS ' + SHOTS);

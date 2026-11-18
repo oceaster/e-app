@@ -32,9 +32,9 @@ test('the document carries the menu, the create page and the rename page', () =>
   assert.equal(/server-rename"|server-delete"|server-leave"/.test(CHROME), false, 'row actions are not frozen into the markup');
 });
 
-test('the renderer names the six calls and draws every part of a row', () => {
+test('the renderer names the seven calls and draws every part of a row', () => {
   for (const call of ['bridge.instances()', 'bridge.plans()', 'bridge.createInstance(',
-    'bridge.renameInstance(', 'bridge.deleteInstance(', 'bridge.leaveInstance(']) {
+    'bridge.renameInstance(', 'bridge.changePlan(', 'bridge.deleteInstance(', 'bridge.leaveInstance(']) {
     assert.ok(SHELL.includes(call), `shell.mjs must call ${call}`);
   }
   // One row carries the requirement's two identifiers and the role: display name, domain, role.
@@ -51,6 +51,11 @@ test('the renderer names the six calls and draws every part of a row', () => {
   // THE ERROR STATE'S WAY THROUGH. This handler was dropped once in a rewrite and the
   // button kept its label while doing nothing; a static gate is cheap and the journey clicks it.
   assert.match(SHELL, /\$\('servers-fallback'\)\.onclick=/, 'the remembered-server fallback is wired');
+  // THE PLAN ACTION OPENS THE CHANGE-PLAN PAGE. It used to throw a ReferenceError on a
+  // module-level `state` name that does not exist, so the button kept its label and did
+  // nothing; the journey clicks it, and this asserts the shape the journey depends on.
+  assert.match(SHELL, /plan\.onclick=\(\)=>\{startPlanChange\(inst\);\}/, 'the Plan button opens the change-plan page');
+  assert.match(SHELL, /function startPlanChange[\s\S]*?current\.plans\?\.rows[\s\S]*?bridge\.view\('change-plan'\)/, 'the plan page reads the last published state and switches the view');
 });
 
 test('the preload exposes the instance calls and nothing secret', () => {
@@ -59,14 +64,15 @@ test('the preload exposes the instance calls and nothing secret', () => {
   assert.match(setup, /plans:\(\)=>ipcRenderer\.invoke\('client:instance-plans'\)/);
   assert.match(setup, /createInstance:payload=>ipcRenderer\.invoke\('client:instance-create',payload\)/);
   assert.match(setup, /renameInstance:\(id,name\)=>ipcRenderer\.invoke\('client:instance-rename',id,name\)/);
+  assert.match(setup, /changePlan:\(id,plan\)=>ipcRenderer\.invoke\('client:instance-plan',id,plan\)/);
   assert.match(setup, /deleteInstance:id=>ipcRenderer\.invoke\('client:instance-delete',id\)/);
   assert.match(setup, /leaveInstance:id=>ipcRenderer\.invoke\('client:instance-leave',id\)/);
   assert.doesNotMatch(setup, /token|bearer|authorization|credential/i, 'no credential crosses this bridge');
 });
 
-test('the main process registers all six behind the setup window door', () => {
+test('the main process registers all seven behind the setup window door', () => {
   for (const channel of ['client:instances-refresh', 'client:instance-plans', 'client:instance-create',
-    'client:instance-rename', 'client:instance-delete', 'client:instance-leave']) {
+    'client:instance-rename', 'client:instance-plan', 'client:instance-delete', 'client:instance-leave']) {
     assert.ok(MAIN.includes(`ipcMain.handle('${channel}'`), `main.cjs must handle ${channel}`);
   }
   // EVERY handler is wrapped in `answered`, which is `local(event)` + a sentence-shaped refusal.
@@ -93,7 +99,7 @@ test('the measured journey is committable, parses, and is not swept into node --
   execFileSync(process.execPath, ['--check', path.join(__dirname, 'fixtures', 'shell-bridge.cjs')], { stdio: 'pipe' });
   const journey = fs.readFileSync(JOURNEY, 'utf8');
   for (const claim of ['submitting the form asks the main process to sign in',
-    'the owned instance: display name, domain, and only the owner actions',
+    'the owned instance: display name, domain, and the owner actions',
     'the member instance offers Leave and no owner action',
     'the page asked for one rename',
     'the sentence names the deadline',
