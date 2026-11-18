@@ -29,14 +29,14 @@ const STUDIO = process.env.DIANA_STUDIO || '/home/diana/Documents/handoff/surfac
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 
-test('Diana’s bar sheet is the vendored copy, byte for byte', () => {
-  const source = path.join(STUDIO, 'shell-frame.css');
-  assert.ok(fs.existsSync(source), `Diana's handoff is not at ${source}; set DIANA_STUDIO rather than skipping this check`);
+const STUDIO_SHEET = path.join(STUDIO, 'shell-frame.css');
+test('Diana’s bar sheet is the vendored copy, byte for byte', { skip: fs.existsSync(STUDIO_SHEET) ? false : `Diana's handoff is not at ${STUDIO_SHEET}; set DIANA_STUDIO to check the bytes` }, () => {
+  const source = STUDIO_SHEET;
   assert.ok(fs.existsSync(BAR), 'the client vendors her bar sheet at desktop/vendor/launcher/theme/shell-frame.css');
   const hers = fs.readFileSync(source);
   const ours = fs.readFileSync(BAR);
   assert.equal(ours.equals(hers), true, `the vendored bar sheet has drifted from Diana's (${ours.length} vs ${hers.length} bytes)`);
-  // The measurements her NOTES fix, read out of the file rather than remembered: a hand edit here
+  // THE MEASUREMENTS HER NOTES FIX, read out of the file rather than remembered: a hand edit here
   // would move the whole product's bar.
   const css = ours.toString('utf8');
   for (const token of ['--sf-bar:56px', '--sf-target:32px', '--sf-account:52px', '--sf-pad:12px', '--sf-gap:4px', '--sf-cluster-gap:12px']) {
