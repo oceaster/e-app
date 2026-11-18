@@ -29,6 +29,7 @@ jobs:
       - name: Run npm test (Windows advisory)
         if: runner.os == 'Windows'
         continue-on-error: true
+        timeout-minutes: 5
         run: npm test 2>&1 | tee test.log
       - name: Show the failing tests
         if: failure()
