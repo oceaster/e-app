@@ -137,10 +137,14 @@ class Runtime extends EventEmitter {
     const args = [...modelArgs, ...buildServerArgs(plan, { port, apiKey, cfg, overrides })];
     this.diag.argv = this._redact([binaryPath, ...args].join(' '));
 
+    // A .cmd/.bat launcher is a shell script to Windows, not an executable image: Node refuses
+    // it with EINVAL unless it is run through the shell. The shipped engine is a real .exe, so
+    // this branch only covers an installed launcher/fixture; it is not a second execution path.
+    const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(binaryPath);
     const child = spawn(binaryPath, args, {
       cwd: path.dirname(binaryPath), env: { ...process.env, ...buildEnv(plan), ...env },
       windowsHide: true, detached: process.platform !== 'win32', // own process group on POSIX -> killable as a tree
-      stdio: ['ignore', 'pipe', 'pipe'],
+      shell, stdio: ['ignore', 'pipe', 'pipe'],
     });
     this.child = child; this.pid = child.pid;
     let exit = null;
