@@ -63,6 +63,24 @@ let current={};
 // account client is the only thing allowed to hand this window), else the first letter of the name
 // on the teal tile. Never a remote URL: the document's CSP allows `self` and `data:` and nothing
 // else, and a portrait that cannot be painted must not become a request.
+let headSkin=null, headPending=null;
+function cropHead(skin){
+ if(headSkin!==skin){headSkin=skin;headPending=new Promise((resolve,reject)=>{
+  const image=new Image();
+  image.onload=()=>{
+   try{
+    const canvas=document.createElement('canvas');canvas.width=32;canvas.height=32;
+    canvas.getContext('2d').drawImage(image,8,8,8,8,0,0,32,32);
+    const head=canvas.toDataURL('image/png');
+    if(!head.startsWith('data:image/png;base64,'))throw Error('no head');
+    resolve(head);
+   }catch(error){reject(error);}
+  };
+  image.onerror=()=>reject(Error('the skin did not decode'));
+  image.src=skin;
+ }).catch(()=>'');}
+ return headPending;
+}
 function drawAccountPill(account){
  const pill=$('account-pill');if(!pill)return;
  const button=$('account-button');
@@ -96,9 +114,19 @@ function drawAccountPill(account){
  const picture=button.querySelector('.web-account-picture');
  if(!face||!initial||!picture)return;
  initial.textContent=(name||username).slice(0,1);
+ const paint=(src,head)=>{
+  if(!src){picture.removeAttribute('src');picture.hidden=true;face.classList.remove('has-picture');picture.classList.remove('web-account-head');return;}
+  if(picture.getAttribute('src')!==src)picture.src=src;
+  picture.hidden=false;face.classList.add('has-picture');
+  picture.classList.toggle('web-account-head',head===true);
+ };
  const portrait=typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
- if(portrait){if(picture.getAttribute('src')!==portrait)picture.src=portrait;picture.hidden=false;face.classList.add('has-picture');}
- else{picture.removeAttribute('src');picture.hidden=true;face.classList.remove('has-picture');}
+ const skin=typeof account.skin==='string'&&account.skin.startsWith('data:image/png;base64,')?account.skin:null;
+ if(portrait){paint(portrait,false);}
+ else if(skin){
+  const id=String(account.id||account.username||'');
+  void cropHead(skin).then(head=>{if(String(current.account?.id||current.account?.username||'')===id)paint(head,true);});
+ }else{paint('',false);}
  // THE IDENTITY PAIR LEADS THE MENU: display name over the username, and never the same word
  // twice. This is the launcher's rule and the one the site's account control draws.
  const identity=$('account-identity'),rule=$('account-menu-rule');

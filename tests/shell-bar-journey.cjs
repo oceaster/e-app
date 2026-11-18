@@ -162,6 +162,18 @@ async function main() {
   assert.equal(signedIn.documentScroll.bodyScroll <= signedIn.viewport.height + 1, true,
     `the document itself must not grow taller than the window (body ${signedIn.documentScroll.bodyScroll} vs ${signedIn.viewport.height})`);
 
+  // ── a Minecraft skin is the fallback when the account has no picture ─────────────────────
+  const SKIN='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAASUlEQVR4nO3QQQ3AIBREQYoaJOD/VAm4AQdw6zZh5gr5edlSAIBbPacPb2tz997HON74s5oOSDNAOiDNAOmANAOkAwAAAAC+tgDv0AQQ/kGxGgAAAABJRU5ErkJggg==';
+  await push({ account: { ...ACCOUNT, picture: null, skin: SKIN } });
+  await settle(500);
+  const skinFace = await win.webContents.executeJavaScript(`(() => {
+    const picture = document.querySelector('#account-button .web-account-picture');
+    return { hidden: picture.hidden, head: picture.classList.contains('web-account-head'), src: picture.src.slice(0, 30) };
+  })()`, true);
+  assert.equal(skinFace.hidden, false, 'a skin with no picture paints a face');
+  assert.equal(skinFace.head, true, 'the cropped head keeps the pixel-art class');
+  assert.match(skinFace.src, /^data:image\/png;base64,/, 'and the crop is an inline PNG');
+
   // ── the pill works: it takes the person to the account this window shows ────────────────────
   const focused = await win.webContents.executeJavaScript(`(() => {
     document.getElementById('account-button').click();
