@@ -26,8 +26,8 @@ jobs:
         if: failure()
         run: |
           if [ -f test.log ]; then
-            grep -E '^(✖|not ok|Error:|[^ ]*AssertionError)' test.log | head -20 | while IFS= read -r line; do
-              echo "::error title=Test failure::$line"
+            tail -120 test.log | while IFS= read -r line; do
+              echo "::error title=TEST::$line"
             done
           fi
       - if: runner.os == 'Linux'
