@@ -26,9 +26,13 @@ jobs:
         if: failure()
         run: |
           if [ -f test.log ]; then
-            tail -120 test.log | while IFS= read -r line; do
-              echo "::error title=TEST::$line"
-            done
+            {
+              echo '## Test tail'
+              echo '```'
+              tail -200 test.log || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            tail -20 test.log || true
           fi
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools xvfb
