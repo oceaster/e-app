@@ -28,6 +28,13 @@ test('Diana’s bar markup and her sheet are the e-server copies, byte for byte'
   }
 });
 
+test('the chrome pill asks the instance for its one face route', () => {
+  const mount = read('desktop/account-mount.js').toString('utf8');
+  assert.match(mount, /\/profiles\/avatar\//,
+    'the pill uses the server avatar route, not only the Company picture');
+  assert.match(mount, /\^EC-/, 'the Company id EC-3 is reduced to the profile key 3');
+});
+
 test('the chrome document is boxed: its own CSP, and the connected window’s sandbox', () => {
   const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(CHROME);
   assert.ok(csp, 'the chrome carries a CSP meta of its own');
