@@ -94,19 +94,19 @@ body.account {
 }
 #account-pill { display: inline-flex; }
 #account-pill .web-account-nav {
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 6px;
   height: 32px; padding: 0 9px 0 4px;
-  border: 1px solid var(--account-line); border-radius: 8px;
-  background: var(--account-panel); color: var(--account-ink);
+  border: var(--sf-line-size) solid var(--sf-line); border-radius: var(--sf-radius);
+  background: var(--sf-panel); color: var(--sf-ink);
   font: inherit; cursor: pointer;
 }
-#account-pill .web-account-nav:hover { border-color: var(--account-gold); }
-#account-pill .web-account-nav:focus-visible { outline: 2px solid var(--account-gold); outline-offset: 2px; }
+#account-pill .web-account-nav:hover { border-color: var(--sf-accent); }
+#account-pill .web-account-nav:focus-visible { outline: var(--sf-focus) solid var(--sf-accent); outline-offset: var(--sf-focus); }
 #account-pill .web-account-face {
   position: relative; flex: none; display: grid; place-items: center;
   width: 24px; height: 24px; overflow: hidden;
-  border-radius: 6px; background: var(--account-gold); color: var(--account-panel);
-  font-size: 12px; font-weight: 700; line-height: 1;
+  border-radius: 6px; background: var(--sf-accent); color: var(--ec-on-accent, var(--sf-panel));
+  font-size: 13px; font-weight: 700; line-height: 1;
 }
 #account-pill .web-account-face.has-picture .web-account-initial { visibility: hidden; }
 #account-pill .web-account-face.web-account-face-mark { background: #536b66 url(icon.png) center/76% no-repeat; }
@@ -115,6 +115,6 @@ body.account[data-account-state="signed-out"] #account-pill .web-account-nav { w
 #account-pill .web-account-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #account-pill .web-account-name {
   max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--account-ink); font-size: 12px; font-weight: 600; line-height: 1;
+  color: var(--sf-ink); font-size: 12px; font-weight: 600; line-height: 1;
 }
 #account-menu { z-index: 20; }
