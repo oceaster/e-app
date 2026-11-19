@@ -15,7 +15,13 @@
   if (node && account) {
     node.dataset.accountName = account.name || account.username || '';
     node.dataset.accountUsername = account.username || '';
-    node.dataset.accountAvatar = account.picture || '';
+    // THE INSTANCE'S OWN FACE ROUTE, not only the account document's picture. That route
+    // resolves the same precedence every e-server surface uses (uploaded photo, Company
+    // picture, Minecraft head, letter tile); the Company document has no skin field on this
+    // seam, so using `account.picture` alone left a Minecraft-only account on the letter tile.
+    node.dataset.accountAvatar = account.id
+      ? '/profiles/avatar/' + encodeURIComponent(String(account.id))
+      : (account.picture || '');
     // The dialogs read the public account document, including providers and details, on their
     // first paint. E-app's account object already is that document; carry only its public half.
     node.dataset.account = JSON.stringify({
