@@ -21,9 +21,18 @@
     // seam, so using `account.picture` alone left a Minecraft-only account on the letter tile.
     // The Company client spells its account id `EC-3`; this server's profile key is `3`.
     const profileId = String(account.id || '').replace(/^EC-/i, '');
-    node.dataset.accountAvatar = profileId
+    // PRIORITY 1 IS THE UPLOADED PHOTO, and the Company document already carries it as the
+    // data URI the control can paint. Use it first; the instance's avatar route (which also
+    // resolves an e-server upload and the Minecraft head) is the fallback when there is no
+    // uploaded photo. This also keeps the connected pill on the same face the setup pill uses.
+    const photo = typeof account.picture === 'string'
+      && account.picture.startsWith('data:image/png;base64,') ? account.picture : '';
+    // PRIORITY 2 REQUIRES A CONNECTED MICROSOFT ACCOUNT. The route can resolve a stored
+    // Minecraft head, but a skin without that link is not the person's verified face here.
+    const linked = account.microsoftLinked === true;
+    node.dataset.accountAvatar = photo || (linked && profileId
       ? '/profiles/avatar/' + encodeURIComponent(profileId)
-      : (account.picture || '');
+      : '');
     // The dialogs read the public account document, including providers and details, on their
     // first paint. E-app's account object already is that document; carry only its public half.
     node.dataset.account = JSON.stringify({

@@ -121,7 +121,7 @@ function drawAccountPill(account){
   picture.classList.toggle('web-account-head',head===true);
  };
  const portrait=typeof account.picture==='string'&&account.picture.startsWith('data:image/png;base64,')?account.picture:null;
- const skin=typeof account.skin==='string'&&account.skin.startsWith('data:image/png;base64,')?account.skin:null;
+ const skin=account.microsoftLinked===true&&typeof account.skin==='string'&&account.skin.startsWith('data:image/png;base64,')?account.skin:null;
  if(portrait){paint(portrait,false);}
  else if(skin){
   const id=String(account.id||account.username||'');

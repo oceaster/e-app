@@ -280,7 +280,10 @@ export async function mountAccountControl({nav, seam, auth: providedAuth = null,
   const showFace=(user,generation)=>{
    const picture=typeof user.picture==='string'?user.picture:'';
    if(picture){showPicture(picture);return;}
-   const skin=typeof user.skin==='string'?user.skin:'';
+   // THE MINECRAFT FALLBACK REQUIRES A CONNECTED MICROSOFT ACCOUNT. Owen, 2026-11-19:
+   // "Minecraft skin, if exists & microsoft account connected." A skin without that link is
+   // not this person's verified face on this surface, so it falls through to the tile.
+   const skin=user.microsoftLinked===true&&typeof user.skin==='string'?user.skin:'';
    if(!skin){showPicture('');return;}
    void headFor(skin).then(head=>{if(generation===faceGeneration)showPicture(head,true);});
   };
